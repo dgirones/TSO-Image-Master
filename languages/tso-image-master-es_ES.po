@@ -1,0 +1,288 @@
+# TSO Image Master - Spanish (Spain) translation
+# Copyright (C) 2026 Tu Soporte Online
+# This file is distributed under the GPL-2.0-or-later license.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: TSO Image Master 1.5.8\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/tso-image-master\n"
+"POT-Creation-Date: 2026-04-17 21:10+0000\n"
+"PO-Revision-Date: 2026-04-17 21:10+0000\n"
+"Last-Translator: Tu Soporte Online <info@tusoporteonline.es>\n"
+"Language-Team: Spanish (Spain)\n"
+"Language: es_ES\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: TSO Image Master build\n"
+
+msgid "TSO Image Master"
+msgstr "TSO Image Master"
+
+msgid "Complete image optimization suite for WordPress: convert to WebP/JPG, resize, compress PDFs, find orphaned images, scan rogue files, fix broken image URLs, and manage SEO fields. Requires PHP GD library."
+msgstr "Suite completa de optimización de imágenes para WordPress: convierte a WebP/JPG, redimensiona, comprime PDFs, encuentra imágenes huérfanas, analiza archivos huérfanos, corrige URLs de imágenes rotas y gestiona campos SEO. Requiere la biblioteca PHP GD."
+
+msgid "All problem files deleted!"
+msgstr "¡Todos los archivos problemáticos han sido eliminados!"
+
+msgid "Auto-fixable"
+msgstr "Reparable automáticamente"
+
+msgid "Auto-optimization ENABLED"
+msgstr "Auto-optimización ACTIVADA"
+
+msgid "Auto-optimization disabled"
+msgstr "Auto-optimización desactivada"
+
+msgid "Backup available"
+msgstr "Copia de seguridad disponible"
+
+msgid "Broken URLs"
+msgstr "URLs rotas"
+
+msgid "Click to select"
+msgstr "Haz clic para seleccionar"
+
+msgid "Compress"
+msgstr "Comprimir"
+
+msgid "Confirmed orphan: not referenced anywhere."
+msgstr "Huérfana confirmada: no referenciada en ningún lugar."
+
+msgid "Converted but larger than original."
+msgstr "Convertida pero más grande que el original."
+
+msgid "Correct URL (file exists)"
+msgstr "URL correcta (archivo existente)"
+
+msgid "Current size"
+msgstr "Tamaño actual"
+
+msgid "Delete"
+msgstr "Eliminar"
+
+msgid "Delete ALL history? This is irreversible."
+msgstr "¿Eliminar TODO el historial? Esta acción es irreversible."
+
+msgid "Delete backup"
+msgstr "Eliminar copia de seguridad"
+
+msgid "Delete backup? You will not be able to revert."
+msgstr "¿Eliminar el backup? No podrás revertir la imagen."
+
+msgid "Delete entries older than 30 days?"
+msgstr "¿Eliminar entradas de hace más de 30 días?"
+
+msgid "Delete selected"
+msgstr "Eliminar seleccionados"
+
+msgid "Delete selected images? This cannot be undone."
+msgstr "¿Eliminar las imágenes seleccionadas? Esta acción es irreversible."
+
+msgid "Deleting..."
+msgstr "Eliminando..."
+
+msgid "Done"
+msgstr "Hecho"
+
+msgid "Edit"
+msgstr "Editar"
+
+msgid "Enable to optimize automatically."
+msgstr "Activa para optimizar automáticamente."
+
+msgid "Enter the new name."
+msgstr "Introduce el nuevo nombre."
+
+msgid "Error loading history."
+msgstr "Error al cargar el historial."
+
+msgid "Featured image"
+msgstr "Imagen destacada"
+
+msgid "Fix selected"
+msgstr "Reparar seleccionadas"
+
+msgid "Fixing..."
+msgstr "Reparando..."
+
+msgid "GhostScript available"
+msgstr "GhostScript disponible"
+
+msgid "GhostScript timed out. Check FTP - file may already be compressed. Reload the page."
+msgstr "GhostScript tardó demasiado. Comprueba el FTP — puede estar comprimido. Recarga la página."
+
+msgid "History is empty."
+msgstr "El historial está vacío."
+
+msgid "Loading PDFs..."
+msgstr "Cargando PDFs..."
+
+msgid "Loading images..."
+msgstr "Cargando imágenes..."
+
+msgid "Loading..."
+msgstr "Cargando..."
+
+msgid "Missing file - alternative found"
+msgstr "Archivo ausente — alternativa encontrada"
+
+msgid "Missing file - no automatic fix"
+msgstr "Archivo ausente — sin solución automática"
+
+msgid "New images will be converted automatically on upload."
+msgstr "Las nuevas imágenes se convertirán automáticamente al subirlas."
+
+msgid "No PDFs found."
+msgstr "No se han encontrado PDFs."
+
+msgid "No alt text"
+msgstr "Sin texto alternativo"
+
+msgid "No alternative found. Manual restore required."
+msgstr "No se ha encontrado ninguna alternativa. Hay que restaurar manualmente."
+
+msgid "No auto-optimization entries."
+msgstr "No hay entradas de auto-optimización."
+
+msgid "No broken URLs found. All correct!"
+msgstr "Ninguna URL rota encontrada. ¡Todo correcto!"
+
+msgid "No compression engine available. Install GhostScript."
+msgstr "Ningún motor de compresión disponible. Instala GhostScript."
+
+msgid "No entries found."
+msgstr "No se han encontrado entradas."
+
+msgid "No ghost attachments found."
+msgstr "No se han encontrado adjuntos fantasma."
+
+msgid "No images found."
+msgstr "No se han encontrado imágenes."
+
+msgid "No issues found. All attachments are correct."
+msgstr "Sin discrepancias. Todos los adjuntos están correctos."
+
+msgid "No orphaned images found."
+msgstr "No se han encontrado imágenes huérfanas."
+
+msgid "No problem files found."
+msgstr "No se han encontrado archivos problemáticos."
+
+msgid "No results."
+msgstr "Sin resultados."
+
+msgid "Not available (GD without WebP)"
+msgstr "No disponible (GD sin WebP)"
+
+msgid "Not found in post_content."
+msgstr "No encontrado en post_content."
+
+msgid "Obsolete thumbnail (file exists in new format)"
+msgstr "Miniatura obsoleta (archivo existente en nuevo formato)"
+
+msgid "Optimize now"
+msgstr "Optimizar ahora"
+
+msgid "Optimized (not replaced)."
+msgstr "Optimizada (sin reemplazar)."
+
+msgid "Optimized!"
+msgstr "¡Optimizada!"
+
+msgid "Optimizing thumbnails..."
+msgstr "Optimizando miniaturas..."
+
+msgid "Posts scanned"
+msgstr "Entradas escaneadas"
+
+msgid "Processing"
+msgstr "Procesando"
+
+msgid "Processing..."
+msgstr "Procesando..."
+
+msgid "Real format"
+msgstr "Formato real"
+
+msgid "Rename file"
+msgstr "Renombrar archivo"
+
+msgid "Repair broken paths"
+msgstr "Reparar rutas rotas"
+
+msgid "Repairing..."
+msgstr "Reparando..."
+
+msgid "Revert to original"
+msgstr "Revertir al original"
+
+msgid "Revert to original? Optimized version will be lost."
+msgstr "¿Revertir al original? La versión optimizada se perderá."
+
+msgid "Reverted!"
+msgstr "¡Revertida!"
+
+msgid "Reverting..."
+msgstr "Revirtiendo..."
+
+msgid "Save SEO"
+msgstr "Guardar SEO"
+
+msgid "Saved!"
+msgstr "¡Guardado!"
+
+msgid "Scan entire site"
+msgstr "Escanear todo el sitio"
+
+msgid "Scan ghost attachments"
+msgstr "Escanear adjuntos fantasma"
+
+msgid "Scan problem files"
+msgstr "Escanear archivos problemáticos"
+
+msgid "Scanning..."
+msgstr "Escaneando..."
+
+msgid "Select at least one image."
+msgstr "Selecciona al menos una imagen."
+
+msgid "Space freed"
+msgstr "Espacio liberado"
+
+msgid "Supported"
+msgstr "Soportado"
+
+msgid "Thumbnails processed."
+msgstr "Miniaturas procesadas."
+
+msgid "Total operations"
+msgstr "Total de operaciones"
+
+msgid "URL in content (obsolete)"
+msgstr "URL en el contenido (obsoleta)"
+
+msgid "URLs fixed correctly."
+msgstr "URLs reparadas correctamente."
+
+msgid "Used in"
+msgstr "Usada en"
+
+msgid "attachments repaired."
+msgstr "adjuntos reparados."
+
+msgid "images deleted."
+msgstr "imágenes eliminadas."
+
+msgid "images repaired. Reload SEO & Names to see them."
+msgstr "imágenes reparadas. Recarga SEO & Nombres para verlas."
+
+msgid "saved"
+msgstr "ahorrado"
+
+msgid "selected"
+msgstr "seleccionadas"
+
+msgid "🔧 Fix incorrect mime types"
+msgstr "🔧 Reparar tipos MIME incorrectos"
