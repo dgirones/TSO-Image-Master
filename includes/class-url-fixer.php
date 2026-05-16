@@ -17,6 +17,82 @@ class TSOIMMA_URL_Fixer {
         return $base;
     }
 
+    /**
+     * Whether a URL points to the site uploads directory (encoded or decoded).
+     *
+     * @param string $url URL to check.
+     * @return bool
+     */
+    private static function is_uploads_media_url( $url ) {
+        $url = (string) $url;
+        if ( '' === $url ) {
+            return false;
+        }
+
+        $base     = self::uploads_base();
+        $prefixes = array(
+            untrailingslashit( $base['url'] ),
+            untrailingslashit( rawurldecode( $base['url'] ) ),
+        );
+
+        foreach ( array_unique( array( $url, rawurldecode( $url ) ) ) as $candidate ) {
+            foreach ( $prefixes as $prefix ) {
+                if ( $candidate === $prefix || 0 === strpos( $candidate, $prefix . '/' ) ) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Resolve an uploads URL to a filesystem path that must stay inside uploads.
+     *
+     * @param string $url Media URL under uploads.
+     * @param bool   $must_exist Require the file to exist on disk.
+     * @return string|null Absolute path, or null when invalid/outside uploads.
+     */
+    private static function uploads_path_from_url( $url, $must_exist = true ) {
+        if ( ! self::is_uploads_media_url( $url ) ) {
+            return null;
+        }
+
+        $base = self::uploads_base();
+        $rel  = rawurldecode( ltrim( str_replace( $base['url'], '', $url ), '/' ) );
+        if ( '' === $rel || false !== strpos( $rel, '..' ) ) {
+            return null;
+        }
+
+        $candidate = wp_normalize_path( $base['dir'] . $rel );
+        $real_base = realpath( $base['dir'] );
+        if ( false === $real_base ) {
+            return null;
+        }
+
+        $norm_base = wp_normalize_path( $real_base ) . '/';
+
+        if ( $must_exist ) {
+            $real_path = realpath( $candidate );
+            if ( false === $real_path || ! is_file( $real_path ) ) {
+                return null;
+            }
+            $candidate = $real_path;
+        } else {
+            $real_path = realpath( $candidate );
+            if ( false !== $real_path ) {
+                $candidate = $real_path;
+            }
+        }
+
+        $norm_candidate = wp_normalize_path( $candidate );
+        if ( 0 !== strpos( $norm_candidate, $norm_base ) ) {
+            return null;
+        }
+
+        return $candidate;
+    }
+
     private static function encode_rel_path_for_url( $rel_path ) {
         $rel_path = str_replace( '\\', '/', ltrim( (string) $rel_path, '/' ) );
         if ( '' === $rel_path ) return '';
@@ -305,16 +381,24 @@ class TSOIMMA_URL_Fixer {
         $fixed   = 0;
         $skipped = 0;
         $errors  = array();
-        $base    = self::uploads_base();
 
         foreach ( $fixes as $fix ) {
             $old = esc_url_raw( $fix['old_url'] );
             $new = esc_url_raw( $fix['new_url'] );
-            if ( ! $old || ! $new || $old === $new ) { $skipped++; continue; }
+            if ( ! $old || ! $new || $old === $new ) {
+                $skipped++;
+                continue;
+            }
 
-            $new_rel  = rawurldecode( ltrim( str_replace( $base['url'], '', $new ), '/' ) );
-            $new_path = wp_normalize_path( $base['dir'] . $new_rel );
-            if ( ! file_exists( $new_path ) ) {
+            if ( ! self::is_uploads_media_url( $old ) || ! self::is_uploads_media_url( $new ) ) {
+                $path     = wp_parse_url( $old, PHP_URL_PATH );
+                $errors[] = 'URL fora de uploads: ' . basename( '' !== $path ? (string) $path : $old );
+                $skipped++;
+                continue;
+            }
+
+            $new_path = self::uploads_path_from_url( $new, true );
+            if ( null === $new_path ) {
                 $errors[] = 'Fitxer desti no trobat: ' . basename( $new );
                 $skipped++;
                 continue;

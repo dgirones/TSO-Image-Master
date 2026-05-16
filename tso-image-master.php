@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       TSO Image Master
  * Description:       Complete image optimization suite for WordPress: convert to WebP/JPG, resize, compress PDFs, find orphaned images, scan rogue files, fix broken image URLs, and manage SEO fields. Requires PHP GD library.
- * Version:           1.5.8
+ * Version:           1.5.9
  * Requires at least: 5.9
  * Requires PHP:      7.4
  * Tested up to:      6.9
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // ── Constants ────────────────────────────────────────────────────────
-define( 'TSOIMMA_VERSION',    '1.5.8' );
+define( 'TSOIMMA_VERSION',    '1.5.9' );
 define( 'TSOIMMA_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'TSOIMMA_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -58,14 +58,47 @@ function tsoimma_init() {
 add_action( 'plugins_loaded', 'tsoimma_init' );
 
 /**
- * Load bundled translations for the site locale (Plugins screen headers and admin UI).
+ * Load translations for the site locale (bundled `.mo` or WP language packs).
+ * Uses load_textdomain() explicitly: JIT loading from wp.org happens too late for the Plugins screen headers.
+ *
+ * @return void
  */
 function tsoimma_load_textdomain() {
-    load_plugin_textdomain(
-        'tso-image-master',
-        false,
-        dirname( plugin_basename( __FILE__ ) ) . '/languages'
-    );
+    static $did_load = false;
+    if ( $did_load ) {
+        return;
+    }
+
+    $domain     = 'tso-image-master';
+    $locale     = function_exists( 'determine_locale' ) ? determine_locale() : get_locale();
+    $candidates = array( (string) $locale );
+
+    if ( false !== strpos( (string) $locale, '_' ) ) {
+        $candidates[] = substr( (string) $locale, 0, strpos( (string) $locale, '_' ) );
+    }
+    if ( 0 === strpos( (string) $locale, 'es' ) ) {
+        $candidates[] = 'es_ES';
+    }
+    if ( 0 === strpos( (string) $locale, 'ca' ) ) {
+        $candidates[] = 'ca';
+    }
+
+    foreach ( array_unique( array_filter( $candidates ) ) as $candidate ) {
+        $mofile = WP_LANG_DIR . '/plugins/' . $domain . '-' . $candidate . '.mo';
+        if ( file_exists( $mofile ) ) {
+            load_textdomain( $domain, $mofile );
+            $did_load = true;
+            return;
+        }
+        $mofile = TSOIMMA_PLUGIN_DIR . 'languages/' . $domain . '-' . $candidate . '.mo';
+        if ( file_exists( $mofile ) ) {
+            load_textdomain( $domain, $mofile );
+            $did_load = true;
+            return;
+        }
+    }
+
+    $did_load = true;
 }
 add_action( 'plugins_loaded', 'tsoimma_load_textdomain', 0 );
 

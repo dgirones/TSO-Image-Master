@@ -621,10 +621,8 @@ class TSOIMMA_Ajax_Handler {
         $raw_b64s = isset( $_POST['paths_b64'] )
             ? array_map( 'sanitize_text_field', wp_unslash( (array) $_POST['paths_b64'] ) )
             : array();
-        $deleted    = 0;
-        $errors     = array();
-        $upload_dir = wp_upload_dir();
-        $base_path  = trailingslashit( $upload_dir['basedir'] );
+        $deleted = 0;
+        $errors  = array();
 
         foreach ( $raw_b64s as $b64 ) {
             // Decodificar el path absolut original (preserva encoding original del filesystem)
@@ -634,25 +632,18 @@ class TSOIMMA_Ajax_Handler {
                 continue;
             }
 
-            // Seguretat: el fitxer ha d'estar dins de uploads
-            $norm_abs  = wp_normalize_path( $abs_path );
-            $norm_base = wp_normalize_path( $base_path );
-            if ( strpos( $norm_abs, $norm_base ) !== 0 ) {
+            // Seguretat: realpath() dins de uploads (evita ../ i enllaços simbòlics).
+            $safe_path = self::resolve_uploads_file_path( $abs_path );
+            if ( false === $safe_path ) {
                 $errors[] = basename( $abs_path ) . ' (path invalid)';
                 continue;
             }
 
-            // Verificar que existeix físicament
-            if ( ! file_exists( $abs_path ) || ! is_file( $abs_path ) ) {
-                $errors[] = basename( $abs_path ) . ' (fitxer no existeix)';
-                continue;
-            }
-
-            wp_delete_file( $abs_path );
-            if ( ! file_exists( $abs_path ) ) {
+            wp_delete_file( $safe_path );
+            if ( ! file_exists( $safe_path ) ) {
                 $deleted++;
             } else {
-                $errors[] = basename( $abs_path ) . ' (no es pot eliminar)';
+                $errors[] = basename( $safe_path ) . ' (no es pot eliminar)';
             }
         }
         wp_send_json_success( array( 'deleted' => $deleted, 'errors' => $errors ) );
@@ -869,6 +860,39 @@ class TSOIMMA_Ajax_Handler {
             wp_send_json_error( 'Sense permisos.', 403 );
             wp_die();
         }
+    }
+
+    /**
+     * Verify an absolute path resolves to a regular file inside wp-content/uploads.
+     *
+     * @param string $abs_path Candidate absolute path.
+     * @return string|false Resolved real path, or false when not allowed.
+     */
+    private static function resolve_uploads_file_path( $abs_path ) {
+        $abs_path = (string) $abs_path;
+        if ( '' === $abs_path ) {
+            return false;
+        }
+
+        $upload_dir = wp_upload_dir();
+        $base_path  = trailingslashit( $upload_dir['basedir'] );
+        $real_base  = realpath( $base_path );
+        if ( false === $real_base ) {
+            return false;
+        }
+
+        $real_path = realpath( $abs_path );
+        if ( false === $real_path || ! is_file( $real_path ) ) {
+            return false;
+        }
+
+        $norm_base = wp_normalize_path( $real_base ) . '/';
+        $norm_file = wp_normalize_path( $real_path );
+        if ( 0 !== strpos( $norm_file, $norm_base ) ) {
+            return false;
+        }
+
+        return $real_path;
     }
 
     /**

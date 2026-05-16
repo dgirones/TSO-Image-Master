@@ -5,7 +5,7 @@ Tags: image optimization, webp, media library, seo, pdf compression
 Requires at least: 5.9
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.5.8
+Stable tag: 1.5.9
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -29,7 +29,7 @@ TSO Image Master is a complete media management and image optimization plugin fo
 
 **History** — Full audit log of all operations performed by the plugin: optimizations, renames, SEO updates, PDF compressions, and reversions. Filterable by action type, date range, and filename. Configurable automatic cleanup.
 
-**URL Fixer** — Scans all posts and pages for broken image URLs caused by format conversions (e.g. references to .jpg files that have been converted to .webp). Automatically finds the correct replacement and updates the database in one click.
+**URL Fixer** — Scans all public content types (posts, pages, and custom post types such as portfolio or slides) for broken image URLs caused by format conversions (e.g. references to .jpg files that have been converted to .webp). Renders blocks and shortcodes when needed so embedded images are detected. Automatically finds the correct replacement and updates the database in one click.
 
 **Cache Compatibility** — After any operation that modifies file URLs or content, the plugin automatically purges LiteSpeed Cache, WP Rocket, W3 Total Cache, and WP Fastest Cache when they are active.
 
@@ -104,9 +104,18 @@ This can happen with images that are already well-optimized, very small images, 
 
 == Changelog ==
 
+= 1.5.9 =
+* Security: URL Fixer only applies database replacements when both URLs point to the site uploads directory; destination files are resolved with `realpath()` so paths cannot escape uploads.
+* Security: Rogue file deletion resolves each path with `realpath()` and requires the file to stay inside `wp-content/uploads`.
+* Improved: translations load via `load_textdomain()` with bundled or language-pack `.mo` files (Plugin Check compatibility; avoids discouraged `load_plugin_textdomain()` call).
+* Fixed: use `wp_parse_url()` instead of `parse_url()` for error messages (coding standards).
+
 = 1.5.8 =
 * Fixed: plugin name and description on the WordPress Plugins screen now appear in Catalan and Spanish when the site language is set accordingly.
 * Added: bundled `languages/*.mo` files and early textdomain loading for site-locale translations.
+* Fixed: URL Fixer now scans all public custom post types (e.g. portfolio, portfolio-item, diapositivas), not only posts and pages.
+* Improved: URL Fixer also inspects rendered block/shortcode output and post excerpts so broken image URLs inside CPT content are detected.
+* Improved: URL Fixer summary label now refers to scanned content items instead of posts only.
 
 = 1.5.7 =
 * Updated: screenshot descriptions in readme to match the current plugin UI.
@@ -161,8 +170,11 @@ This can happen with images that are already well-optimized, very small images, 
 
 == Upgrade Notice ==
 
+= 1.5.9 =
+Hardens URL Fixer and rogue file deletion (upload-only URLs, realpath checks) and aligns translation loading with Plugin Check guidance.
+
 = 1.5.8 =
-Fixes the plugin description on the Plugins screen so it displays in Catalan or Spanish when your WordPress site uses those languages.
+Fixes the plugin description on the Plugins screen (CA/ES) and expands URL Fixer scanning to all public content types, including portfolio-style CPTs and rendered block/shortcode content.
 
 = 1.5.7 =
 Minor readme update to align screenshot descriptions with the current admin interface.
