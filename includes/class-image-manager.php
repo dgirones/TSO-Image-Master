@@ -45,7 +45,25 @@ class TSOIMMA_Image_Manager {
             return new WP_Error( 'name_collision', 'Ja existeix un fitxer amb aquest nom.' );
         }
 
-        $old_url = wp_get_attachment_url( $attachment_id );
+        $old_url      = wp_get_attachment_url( $attachment_id );
+        $old_dir_url  = trailingslashit( dirname( (string) $old_url ) );
+        $old_basename = $pi['filename'];
+        $meta         = wp_get_attachment_metadata( $attachment_id );
+        $url_pairs    = array();
+
+        if ( ! is_array( $meta ) ) {
+            $meta = array();
+        }
+
+        // Snapshot thumbnail filenames before any filesystem change.
+        $old_thumb_files = array();
+        if ( ! empty( $meta['sizes'] ) && is_array( $meta['sizes'] ) ) {
+            foreach ( $meta['sizes'] as $size_key => $size_data ) {
+                if ( ! empty( $size_data['file'] ) ) {
+                    $old_thumb_files[ $size_key ] = (string) $size_data['file'];
+                }
+            }
+        }
 
         // Moure fitxer principal (copy+delete és més fiable que rename en entorns WordPress)
         if ( ! @copy( $file_path, $new_path ) || ! file_exists( $new_path ) ) {
@@ -53,19 +71,66 @@ class TSOIMMA_Image_Manager {
         }
         wp_delete_file( $file_path );
 
-        // Reanomenar thumbnails
-        $meta = wp_get_attachment_metadata( $attachment_id );
-        if ( ! empty( $meta['sizes'] ) ) {
+        // Reanomenar thumbnails (preservem el sufix de dimensions del nom real del fitxer).
+        if ( ! empty( $meta['sizes'] ) && is_array( $meta['sizes'] ) ) {
             foreach ( $meta['sizes'] as $size_key => $size_data ) {
-                $old_thumb = $base_dir . '/' . $size_data['file'];
-                if ( ! file_exists( $old_thumb ) ) continue;
-                $thumb_pi  = pathinfo( $old_thumb );
-                // Mantenim les dimensions al nom del thumbnail
-                $new_thumb_name = $target_name . '-' . $size_data['width'] . 'x' . $size_data['height'] . '.' . strtolower( $thumb_pi['extension'] );
+                if ( empty( $old_thumb_files[ $size_key ] ) ) {
+                    continue;
+                }
+
+                $old_thumb_file = $old_thumb_files[ $size_key ];
+                $old_thumb      = $base_dir . '/' . $old_thumb_file;
+                if ( ! file_exists( $old_thumb ) ) {
+                    continue;
+                }
+
+                $thumb_pi   = pathinfo( $old_thumb );
+                $thumb_ext  = strtolower( isset( $thumb_pi['extension'] ) ? $thumb_pi['extension'] : $ext );
+                $dims_suffix = '';
+
+                if ( preg_match( '/-(\d+x\d+)$/', $thumb_pi['filename'], $dims_match ) ) {
+                    $dims_suffix = '-' . $dims_match[1];
+                } elseif ( ! empty( $size_data['width'] ) && ! empty( $size_data['height'] ) ) {
+                    $dims_suffix = '-' . absint( $size_data['width'] ) . 'x' . absint( $size_data['height'] );
+                }
+
+                $new_thumb_name = $target_name . $dims_suffix . '.' . $thumb_ext;
                 $new_thumb_path = $base_dir . '/' . $new_thumb_name;
+
                 if ( @copy( $old_thumb, $new_thumb_path ) && file_exists( $new_thumb_path ) ) {
                     wp_delete_file( $old_thumb );
                     $meta['sizes'][ $size_key ]['file'] = $new_thumb_name;
+
+                    $old_thumb_url = $old_dir_url . self::encode_rel_path_for_url( $old_thumb_file );
+                    $new_thumb_url = $old_dir_url . self::encode_rel_path_for_url( $new_thumb_name );
+                    if ( $old_thumb_url !== $new_thumb_url ) {
+                        $url_pairs[ md5( $old_thumb_url ) ] = array( $old_thumb_url, $new_thumb_url );
+                    }
+                }
+            }
+        }
+
+        // Reanomenar variants "-scaled" de WordPress si existeixen.
+        foreach ( array( $ext, 'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif' ) as $scaled_ext ) {
+            $scaled_ext = strtolower( (string) $scaled_ext );
+            if ( '' === $scaled_ext ) {
+                continue;
+            }
+            $old_scaled_name = $old_basename . '-scaled.' . $scaled_ext;
+            $old_scaled_path = $base_dir . '/' . $old_scaled_name;
+            if ( ! file_exists( $old_scaled_path ) ) {
+                continue;
+            }
+
+            $new_scaled_name = $target_name . '-scaled.' . $scaled_ext;
+            $new_scaled_path = $base_dir . '/' . $new_scaled_name;
+            if ( @copy( $old_scaled_path, $new_scaled_path ) && file_exists( $new_scaled_path ) ) {
+                wp_delete_file( $old_scaled_path );
+
+                $old_scaled_url = $old_dir_url . self::encode_rel_path_for_url( $old_scaled_name );
+                $new_scaled_url = $old_dir_url . self::encode_rel_path_for_url( $new_scaled_name );
+                if ( $old_scaled_url !== $new_scaled_url ) {
+                    $url_pairs[ md5( $old_scaled_url ) ] = array( $old_scaled_url, $new_scaled_url );
                 }
             }
         }
@@ -80,86 +145,28 @@ class TSOIMMA_Image_Manager {
         if ( ! is_string( $attached_rel ) || $attached_rel === '' ) {
             $attached_rel = ltrim( str_replace( wp_normalize_path( trailingslashit( $upload_dir['basedir'] ) ), '', wp_normalize_path( $new_path ) ), '/' );
         }
-        $new_url      = trailingslashit( $upload_dir['baseurl'] ) . self::encode_rel_path_for_url( $attached_rel );
-        $old_dir_url  = trailingslashit( dirname( $old_url ) );
-        $new_dir_url  = trailingslashit( dirname( $new_url ) );
-        $old_basename = pathinfo( rawurldecode( $old_url ), PATHINFO_FILENAME ); // sense extensió
+        $new_url     = trailingslashit( $upload_dir['baseurl'] ) . self::encode_rel_path_for_url( $attached_rel );
+        $new_dir_url = trailingslashit( dirname( $new_url ) );
+
+        if ( $old_url && $new_url && $old_url !== $new_url ) {
+            $url_pairs[ md5( $old_url ) ] = array( $old_url, $new_url );
+        }
 
         // Actualitzar guid
         global $wpdb;
         $wpdb->update( $wpdb->posts, array( 'guid' => $new_url ), array( 'ID' => $attachment_id ) );  // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
-        // ── Reemplaçar URLs a tot el contingut ──────────────────────────
-        // 1. URL del fitxer principal
-        TSOIMMA_Optimizer::replace_url_in_content( $old_url, $new_url );
-
-        // 2. URLs de thumbnails: wordpress genera noms com "nom-antigues-300x200.webp"
-        //    Hem de reemplaçar cada URL de thumbnail individualment.
-        //    Reconstruïm l'URL vell de cada thumbnail a partir del nom de fitxer a la metadata.
-        $meta_after = wp_get_attachment_metadata( $attachment_id );
-        if ( ! empty( $meta_after['sizes'] ) ) {
-            foreach ( $meta_after['sizes'] as $size_data ) {
-                if ( empty( $size_data['file'] ) ) continue;
-                $new_thumb_file = $size_data['file']; // p.ex: slug-nou-300x200.webp
-                $w = isset( $size_data['width'] )  ? $size_data['width']  : 0;
-                $h = isset( $size_data['height'] ) ? $size_data['height'] : 0;
-                if ( ! $w || ! $h ) continue;
-
-                // Reconstruir el nom antic del thumbnail (nom base antic + dimensions + extensió)
-                $old_thumb_file = $old_basename . '-' . $w . 'x' . $h . '.' . $ext;
-                $old_thumb_url  = $old_dir_url . $old_thumb_file;
-                $new_thumb_url  = $new_dir_url . $new_thumb_file;
-
-                if ( $old_thumb_url !== $new_thumb_url ) {
-                    TSOIMMA_Optimizer::replace_url_in_content( $old_thumb_url, $new_thumb_url );
-                }
-            }
+        // Reemplaçar URLs a posts, postmeta i options (pares exactes + variants -WxH/-scaled).
+        if ( ! empty( $url_pairs ) ) {
+            TSOIMMA_Optimizer::replace_url_pairs_in_content( array_values( $url_pairs ) );
         }
-
-        // 3. Reemplaçament addicional per variants no previstes de thumbnails
-        //    (p.ex: srcset amb dimensions no registrades a metadata).
-        $old_base_variants = array_values( array_unique( array_filter( array(
-            $old_dir_url . $old_basename,
-            rawurldecode( $old_dir_url . $old_basename ),
-        ) ) ) );
-        $posts_with_old = array();
-        foreach ( $old_base_variants as $old_base_variant ) {
-            $like_old = '%' . $wpdb->esc_like( $old_base_variant . '-' ) . '%';
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-            $variant_rows = $wpdb->get_results( $wpdb->prepare(
-                "SELECT ID, post_content FROM {$wpdb->posts}
-                 WHERE post_content LIKE %s AND post_status != 'trash'",
-                $like_old
-            ) );
-            foreach ( (array) $variant_rows as $post_row ) {
-                $posts_with_old[ (int) $post_row->ID ] = $post_row;
-            }
-        }
-        foreach ( $posts_with_old as $post_row ) {
-            $updated = $post_row->post_content;
-            foreach ( $old_base_variants as $old_base_variant ) {
-                $updated = preg_replace_callback(
-                    '/' . preg_quote( $old_base_variant, '/' ) . '(-\d+x\d+)?\.' . preg_quote( $ext, '/' ) . '/i',
-                    function( $matches ) use ( $new_dir_url, $target_name, $ext ) {
-                        $dims = isset( $matches[1] ) ? $matches[1] : '';
-                        return $new_dir_url . $target_name . $dims . '.' . $ext;
-                    },
-                    $updated
-                );
-            }
-            if ( $updated !== $post_row->post_content ) {
-                // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-                // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-                $wpdb->update(
-                    $wpdb->posts,
-                    array( 'post_content' => $updated ),
-                    array( 'ID'           => (int) $post_row->ID ),
-                    array( '%s' ),
-                    array( '%d' )
-                );
-                clean_post_cache( (int) $post_row->ID );
-            }
-        }
+        TSOIMMA_Optimizer::replace_basename_dimension_urls_in_storage(
+            $old_dir_url,
+            $old_basename,
+            $new_dir_url,
+            $target_name,
+            $ext
+        );
 
         // Actualitzar el post_name (slug) de l'attachment
         wp_update_post( [

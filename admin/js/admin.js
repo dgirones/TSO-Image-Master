@@ -34,6 +34,7 @@
     // Init
     // ================================================================
     $(function() {
+        initImpCustomSelects();
         initLanguageSwitcher();
         initTabs();
         initQualitySliders();
@@ -778,6 +779,7 @@
         $('.imp-lang-btn[data-lang="' + lang + '"]').addClass('active');
         applyTranslations(lang);
         refreshDynamicI18nBits();
+        refreshImpCustomSelects();
     }
 
     function uiText(key, fallback) {
@@ -953,7 +955,106 @@
         } else {
             $('#imp-webp-status').html(uiText('webp_label', 'WebP') + ': <span class="nok">✗ ' + uiText('webp_nok', 'Not available') + '</span>');
             $('#imp-format, #imp-modal-format').find('option[value="webp"]').prop('disabled', true);
+            refreshImpCustomSelects('#imp-format, #imp-modal-format');
         }
+    }
+
+    // Custom dropdowns (PHP markup + JS bind; native menus unreadable on Windows).
+    function closeImpCustomSelects() {
+        $('.imp-csel.is-open').removeClass('is-open')
+            .find('.imp-csel-trigger').attr('aria-expanded', 'false');
+    }
+
+    function refreshImpCustomSelects(context) {
+        var $wraps = context ? $(context).closest('.imp-csel').add($(context).filter('.imp-csel')) : $('.imp-csel');
+        if (context && !$(context).closest('.imp-csel').length && $(context).hasClass('imp-csel')) {
+            $wraps = $(context);
+        }
+        $wraps.each(function() {
+            var $w = $(this);
+            var api = $w.data('impCselApi');
+            if (api) {
+                api.rebuild();
+                api.sync();
+            } else {
+                bindImpCustomSelect($w);
+            }
+        });
+    }
+
+    function initImpCustomSelects() {
+        $('.imp-csel').each(function() {
+            bindImpCustomSelect($(this));
+        });
+        $(document).on('click.impCsel', function() {
+            closeImpCustomSelects();
+        });
+        $(document).on('keydown.impCsel', function(e) {
+            if (e.key === 'Escape') {
+                closeImpCustomSelects();
+            }
+        });
+    }
+
+    function bindImpCustomSelect($wrap) {
+        if ($wrap.data('impCselBound')) {
+            return;
+        }
+        var $select = $wrap.find('select.imp-csel-native');
+        var $label  = $wrap.find('.imp-csel-label');
+        var $list   = $wrap.find('.imp-csel-list');
+
+        function rebuildList() {
+            $list.empty();
+            $select.find('option').each(function() {
+                var $opt = $(this);
+                var $li  = $('<li role="option" tabindex="-1"></li>');
+                $li.text($opt.text()).attr('data-value', $opt.val());
+                if ($opt.prop('disabled')) {
+                    $li.addClass('is-disabled');
+                }
+                if ($opt.prop('selected')) {
+                    $li.addClass('is-selected');
+                }
+                $list.append($li);
+            });
+        }
+
+        function syncFromSelect() {
+            $label.text($select.find('option:selected').first().text());
+            $list.find('[role="option"]').removeClass('is-selected');
+            $list.find('[role="option"]').each(function() {
+                if (String($(this).attr('data-value')) === String($select.val())) {
+                    $(this).addClass('is-selected');
+                }
+            });
+        }
+
+        $wrap.find('.imp-csel-trigger').on('click.impCsel', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var wasOpen = $wrap.hasClass('is-open');
+            closeImpCustomSelects();
+            if (!wasOpen) {
+                $wrap.addClass('is-open');
+                $(this).attr('aria-expanded', 'true');
+            }
+        });
+
+        $list.on('click.impCsel', '[role="option"]:not(.is-disabled)', function(e) {
+            e.stopPropagation();
+            $select.val($(this).attr('data-value')).trigger('change');
+            $wrap.removeClass('is-open');
+            syncFromSelect();
+        });
+
+        $select.on('change.impCsel', syncFromSelect);
+
+        $wrap.data('impCselBound', 1);
+        $wrap.data('impCselApi', { rebuild: rebuildList, sync: syncFromSelect });
+
+        rebuildList();
+        syncFromSelect();
     }
 
     // ================================================================
@@ -2139,7 +2240,7 @@
     function loadAutoSettings() {
         ajax('tso_im_get_auto_settings', {}, function(data) {
             $('#imp-auto-enabled').prop('checked', !!data.enabled);
-            $('#imp-auto-format').val(data.format || 'webp');
+            $('#imp-auto-format').val(data.format || 'webp').trigger('change');
             $('#imp-auto-quality').val(data.quality || 82);
             $('#imp-auto-quality-val').text(data.quality || 82);
             $('.imp-auto-src-format').prop('checked', false);
@@ -2375,7 +2476,7 @@
                     '<div class="imp-url-paths">' +
                     '<div class="imp-url-path imp-url-path-bad"><span class="imp-url-ext-badge" style="background:rgba(255,77,109,.2);color:var(--imp-danger)">.' + escHtml(issue.old_ext) + '</span><span class="imp-url-fname">' + escHtml(issue.filename) + '.' + escHtml(issue.old_ext) + '</span><span class="imp-url-label">' + uiText('url_content_label', 'URL in content (obsolete)') + '</span></div>' +
                     (fixable
-                        ? '<div class="imp-url-path imp-url-path-good"><span class="imp-url-ext-badge" style="background:rgba(6,214,160,.2);color:var(--imp-success)">.' + escHtml(issue.new_ext) + '</span><span class="imp-url-fname">' + escHtml(issue.filename) + '.' + escHtml(issue.new_ext) + '</span><span class="imp-url-label">' + uiText('url_correct_label', 'Correct URL (file exists)') + '</span></div>'
+                        ? '<div class="imp-url-path imp-url-path-good"><span class="imp-url-ext-badge" style="background:rgba(6,214,160,.2);color:var(--imp-success)">.' + escHtml(issue.new_ext) + '</span><span class="imp-url-fname">' + escHtml(issue.new_filename || issue.filename) + '.' + escHtml(issue.new_ext) + '</span><span class="imp-url-label">' + uiText('url_correct_label', 'Correct URL (file exists)') + '</span></div>'
                         : '<div class="imp-url-path imp-url-path-nofix"><span class="imp-url-label" style="color:var(--imp-text-muted)">' + uiText('url_no_fix_label', 'No alternative found.') + '</span></div>') +
                     '</div>' +
                     '<div class="imp-url-posts">' + uiText('appears_in', 'Appears in') + ': ' + postsHtml + '</div>' +

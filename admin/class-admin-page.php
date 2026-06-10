@@ -21,32 +21,37 @@ class TSOIMMA_Admin_Page {
     }
 
     public static function enqueue_assets( $hook ) {
-        if ( strpos( $hook, 'tso-image-master' ) === false ) return;
+        if ( strpos( $hook, 'tso-image-master' ) === false ) {
+            return;
+        }
 
-        // wp_enqueue_style must come BEFORE wp_add_inline_style for the handle to exist.
+        $css_file = TSOIMMA_PLUGIN_DIR . 'admin/css/admin.css';
+        $js_file  = TSOIMMA_PLUGIN_DIR . 'admin/js/admin.js';
+        $css_ver  = TSOIMMA_VERSION . '.' . ( file_exists( $css_file ) ? (string) filemtime( $css_file ) : '0' );
+        $js_ver   = TSOIMMA_VERSION . '.' . ( file_exists( $js_file ) ? (string) filemtime( $js_file ) : '0' );
+
         wp_enqueue_style(
             'tso-im-admin-css',
             TSOIMMA_PLUGIN_URL . 'admin/css/admin.css',
             [],
-            TSOIMMA_VERSION
+            $css_ver
         );
 
-        // Eliminate the white bars shown by WordPress admin around the plugin page.
-        // These styles are only output on this specific admin page (hook check above),
-        // so simple selectors without body-class prefix are safe and correct.
-        // wp_add_inline_style() is used instead of echo '<style>' to comply with WP.org guidelines.
         $inline_css  = '#wpwrap,#wpcontent,#wpbody,#wpbody-content{background:#0f1117 !important;}';
         $inline_css .= '#wpcontent{padding-left:0 !important;}';
         $inline_css .= '#wpbody-content>.wrap,#wpbody-content>div.wrap{';
         $inline_css .= 'max-width:none !important;padding:0 !important;margin:0 !important;}';
+        $inline_css .= self::custom_select_inline_css();
         wp_add_inline_style( 'tso-im-admin-css', $inline_css );
+
         wp_enqueue_script(
             'tso-im-admin-js',
             TSOIMMA_PLUGIN_URL . 'admin/js/admin.js',
             [ 'jquery' ],
-            TSOIMMA_VERSION,
+            $js_ver,
             true
         );
+
         wp_localize_script( 'tso-im-admin-js', 'TSOIMMA', array(
             'ajax_url' => admin_url( 'admin-ajax.php' ),
             'nonce'    => wp_create_nonce( 'tso_im_nonce' ),
@@ -152,6 +157,143 @@ class TSOIMMA_Admin_Page {
         ) );
     }
 
+    /**
+     * Critical CSS for custom dropdowns (native OS menus stay unreadable on Windows).
+     *
+     * @return string
+     */
+    private static function custom_select_inline_css() {
+        $accent = '#6c63ff';
+        return '.imp-csel{position:relative;display:block;width:100%;}'
+            . '.imp-csel-native{position:absolute;width:1px;height:1px;margin:-1px;padding:0;'
+            . 'overflow:hidden;clip:rect(0,0,0,0);border:0;opacity:0;pointer-events:none;}'
+            . '.imp-wrap button.imp-csel-trigger{background:#fff!important;color:#1a1d27!important;'
+            . 'border:1px solid #9ca3af!important;}'
+            . '.imp-wrap .imp-csel.is-open button.imp-csel-trigger,'
+            . '.imp-wrap button.imp-csel-trigger:hover{border:2px solid ' . $accent . '!important;'
+            . 'padding:8px 11px!important;background:#fff!important;}'
+            . '.imp-wrap .imp-csel-label{color:#1a1d27!important;}'
+            . '.imp-wrap .imp-csel-list{background:#fff!important;border:2px solid ' . $accent . '!important;}'
+            . '.imp-wrap .imp-csel-list [role=option]{color:#1a1d27!important;background:#fff!important;}'
+            . '.imp-wrap .imp-csel-list [role=option].is-selected{background:' . $accent . '!important;'
+            . 'color:#fff!important;}';
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private static function format_output_options( $keep_label, $keep_i18n ) {
+        $webp_ok = TSOIMMA_Optimizer::webp_supported();
+        return array(
+            array(
+                'value'    => 'webp',
+                'label'    => 'WebP (recomanat)',
+                'i18n'     => 'fmt_webp',
+                'disabled' => ! $webp_ok,
+            ),
+            array(
+                'value' => 'jpg',
+                'label' => 'JPG',
+            ),
+            array(
+                'value' => 'original',
+                'label' => $keep_label,
+                'i18n'  => $keep_i18n,
+            ),
+        );
+    }
+
+    /**
+     * @param array $args id, class, wrap_style, selected, options[].
+     */
+    public static function render_custom_select( $args ) {
+        $args = wp_parse_args(
+            $args,
+            array(
+                'id'         => '',
+                'class'      => '',
+                'wrap_style' => '',
+                'selected'   => null,
+                'options'    => array(),
+            )
+        );
+
+        $selected_label = '';
+        foreach ( $args['options'] as $opt ) {
+            $val         = isset( $opt['value'] ) ? (string) $opt['value'] : '';
+            $is_selected = ! empty( $opt['selected'] );
+            if ( null !== $args['selected'] ) {
+                $is_selected = ( (string) $args['selected'] === $val );
+            }
+            if ( $is_selected ) {
+                $selected_label = $opt['label'];
+                break;
+            }
+        }
+        if ( '' === $selected_label && ! empty( $args['options'] ) ) {
+            $selected_label = $args['options'][0]['label'];
+        }
+
+        $wrap_class = 'imp-csel';
+        if ( ! empty( $args['class'] ) ) {
+            $wrap_class .= ' ' . $args['class'];
+        }
+
+        echo '<div class="' . esc_attr( $wrap_class ) . '"';
+        if ( ! empty( $args['wrap_style'] ) ) {
+            echo ' style="' . esc_attr( $args['wrap_style'] ) . '"';
+        }
+        echo '>';
+
+        echo '<select id="' . esc_attr( $args['id'] ) . '" class="imp-csel-native">';
+        foreach ( $args['options'] as $opt ) {
+            $val         = isset( $opt['value'] ) ? (string) $opt['value'] : '';
+            $is_selected = ! empty( $opt['selected'] );
+            if ( null !== $args['selected'] ) {
+                $is_selected = ( (string) $args['selected'] === $val );
+            }
+            echo '<option value="' . esc_attr( $val ) . '"';
+            if ( $is_selected ) {
+                echo ' selected';
+            }
+            if ( ! empty( $opt['disabled'] ) ) {
+                echo ' disabled';
+            }
+            if ( ! empty( $opt['i18n'] ) ) {
+                echo ' data-i18n="' . esc_attr( $opt['i18n'] ) . '"';
+            }
+            echo '>' . esc_html( $opt['label'] ) . '</option>';
+        }
+        echo '</select>';
+
+        echo '<button type="button" class="imp-csel-trigger" aria-haspopup="listbox" aria-expanded="false">';
+        echo '<span class="imp-csel-label">' . esc_html( $selected_label ) . '</span>';
+        echo '<span class="imp-csel-chevron" aria-hidden="true">▾</span>';
+        echo '</button>';
+
+        echo '<ul class="imp-csel-list" role="listbox">';
+        foreach ( $args['options'] as $opt ) {
+            $val         = isset( $opt['value'] ) ? (string) $opt['value'] : '';
+            $is_selected = ! empty( $opt['selected'] );
+            if ( null !== $args['selected'] ) {
+                $is_selected = ( (string) $args['selected'] === $val );
+            }
+            $li_class = 'imp-csel-option';
+            if ( $is_selected ) {
+                $li_class .= ' is-selected';
+            }
+            if ( ! empty( $opt['disabled'] ) ) {
+                $li_class .= ' is-disabled';
+            }
+            echo '<li role="option" class="' . esc_attr( $li_class ) . '" data-value="' . esc_attr( $val ) . '" tabindex="-1">';
+            echo esc_html( $opt['label'] );
+            echo '</li>';
+        }
+        echo '</ul>';
+
+        echo '</div>';
+    }
+
     public static function render_page() {
         ?>
         <div id="imp-app" class="imp-wrap">
@@ -210,11 +352,7 @@ class TSOIMMA_Admin_Page {
                     <div class="imp-settings-grid">
                         <div class="imp-field">
                             <label for="imp-format" data-i18n="format_label">Format de sortida</label>
-                            <select id="imp-format">
-                                <option value="webp" data-i18n="fmt_webp">WebP (recomanat)</option>
-                                <option value="jpg">JPG</option>
-                                <option value="original" data-i18n="fmt_keep">Mantenir format original</option>
-                            </select>
+                            <?php self::render_custom_select( array( 'id' => 'imp-format', 'options' => self::format_output_options( 'Mantenir format original', 'fmt_keep' ) ) ); ?>
                         </div>
                         <div class="imp-field">
                             <label for="imp-quality"><span data-i18n="quality_label">Qualitat</span> <span id="imp-quality-val">82</span>%</label>
@@ -277,12 +415,20 @@ class TSOIMMA_Admin_Page {
                     <div class="imp-settings-grid">
                         <div class="imp-field">
                             <label for="imp-orphan-limit" data-i18n="orphan_limit_label">Imatges a escanejar per lot</label>
-                            <select id="imp-orphan-limit">
-                                <option value="100">100</option>
-                                <option value="200" selected>200</option>
-                                <option value="500">500</option>
-                                <option value="0" data-i18n="all_slow">Totes (lent)</option>
-                            </select>
+                            <?php
+                            self::render_custom_select(
+                                array(
+                                    'id'       => 'imp-orphan-limit',
+                                    'selected' => '200',
+                                    'options'  => array(
+                                        array( 'value' => '100', 'label' => '100' ),
+                                        array( 'value' => '200', 'label' => '200', 'selected' => true ),
+                                        array( 'value' => '500', 'label' => '500' ),
+                                        array( 'value' => '0', 'label' => 'Totes (lent)', 'i18n' => 'all_slow' ),
+                                    ),
+                                )
+                            );
+                            ?>
                         </div>
                     </div>
                     <button id="imp-scan-orphans" class="imp-btn imp-btn-primary" data-i18n="scan_now">🔍 Escanejar ara</button>
@@ -343,11 +489,21 @@ class TSOIMMA_Admin_Page {
                 <div class="imp-toolbar">
                     <div class="imp-toolbar-left">
                         <input type="text" id="imp-search-seo" class="imp-search" placeholder="🔎 Cercar imatge..." data-i18n-placeholder="search_image_ph">
-                        <select id="imp-seo-sort" class="imp-select" style="width:auto;min-width:180px;">
-                            <option value="filesize" data-i18n="sort_size">📦 Ordenar per pes (major primer)</option>
-                            <option value="date" data-i18n="sort_date">📅 Ordenar per data de creació</option>
-                            <option value="modified" data-i18n="sort_modified">✏️ Ordenar per data de modificació</option>
-                        </select>
+                        <?php
+                        self::render_custom_select(
+                            array(
+                                'id'         => 'imp-seo-sort',
+                                'class'      => 'imp-select',
+                                'wrap_style' => 'width:auto;min-width:180px;',
+                                'selected'   => 'filesize',
+                                'options'    => array(
+                                    array( 'value' => 'filesize', 'label' => '📦 Ordenar per pes (major primer)', 'i18n' => 'sort_size' ),
+                                    array( 'value' => 'date', 'label' => '📅 Ordenar per data de creació', 'i18n' => 'sort_date' ),
+                                    array( 'value' => 'modified', 'label' => '✏️ Ordenar per data de modificació', 'i18n' => 'sort_modified' ),
+                                ),
+                            )
+                        );
+                        ?>
                     </div>
                     <div class="imp-toolbar-right">
                         <span id="imp-seo-count" class="imp-count-badge"></span>
@@ -433,11 +589,7 @@ class TSOIMMA_Admin_Page {
                                     <div class="imp-opt-row">
                                         <div class="imp-opt-field">
                                             <label class="imp-opt-label" data-i18n="format_label">Format de sortida</label>
-                                            <select id="imp-modal-format" class="imp-select">
-                                                <option value="webp" data-i18n="fmt_webp">WebP (recomanat)</option>
-                                                <option value="jpg">JPG</option>
-                                                <option value="original" data-i18n="fmt_keep_current">Mantenir format actual</option>
-                                            </select>
+                                            <?php self::render_custom_select( array( 'id' => 'imp-modal-format', 'class' => 'imp-select', 'options' => self::format_output_options( 'Mantenir format actual', 'fmt_keep_current' ) ) ); ?>
                                         </div>
                                         <div class="imp-opt-field">
                                             <label class="imp-opt-label"><span data-i18n="quality_label">Qualitat</span>: <strong id="imp-modal-quality-val">82</strong>%</label>
@@ -517,12 +669,20 @@ class TSOIMMA_Admin_Page {
                     <div class="imp-settings-grid">
                         <div class="imp-field">
                             <label for="imp-pdf-quality" data-i18n="pdf_quality_label">Qualitat / DPI</label>
-                            <select id="imp-pdf-quality">
-                                <option value="72" data-i18n="dpi_72">72 DPI — Molt lleuger (pantalla)</option>
-                                <option value="96" selected data-i18n="dpi_96">96 DPI — Recomanat (web)</option>
-                                <option value="150" data-i18n="dpi_150">150 DPI — Alta qualitat</option>
-                                <option value="300" data-i18n="dpi_300">300 DPI — Impressió</option>
-                            </select>
+                            <?php
+                            self::render_custom_select(
+                                array(
+                                    'id'       => 'imp-pdf-quality',
+                                    'selected' => '96',
+                                    'options'  => array(
+                                        array( 'value' => '72', 'label' => '72 DPI — Molt lleuger (pantalla)', 'i18n' => 'dpi_72' ),
+                                        array( 'value' => '96', 'label' => '96 DPI — Recomanat (web)', 'i18n' => 'dpi_96' ),
+                                        array( 'value' => '150', 'label' => '150 DPI — Alta qualitat', 'i18n' => 'dpi_150' ),
+                                        array( 'value' => '300', 'label' => '300 DPI — Impressió', 'i18n' => 'dpi_300' ),
+                                    ),
+                                )
+                            );
+                            ?>
                         </div>
                         <div class="imp-field imp-field-check">
                             <label>
@@ -575,11 +735,7 @@ class TSOIMMA_Admin_Page {
                     <div class="imp-settings-grid" style="margin-top:20px;">
                         <div class="imp-field">
                             <label for="imp-auto-format" data-i18n="format_label">Format de sortida</label>
-                            <select id="imp-auto-format">
-                                <option value="webp" data-i18n="fmt_webp">WebP (recomanat)</option>
-                                <option value="jpg">JPG</option>
-                                <option value="original" data-i18n="fmt_keep">Mantenir format original</option>
-                            </select>
+                            <?php self::render_custom_select( array( 'id' => 'imp-auto-format', 'options' => self::format_output_options( 'Mantenir format original', 'fmt_keep' ) ) ); ?>
                         </div>
                         <div class="imp-field">
                             <label for="imp-auto-quality"><span data-i18n="quality_label">Qualitat</span> <span id="imp-auto-quality-val">82</span>%</label>
@@ -656,15 +812,23 @@ class TSOIMMA_Admin_Page {
                     <div class="imp-settings-grid">
                         <div class="imp-field">
                             <label data-i18n="history_filter_label">Filtrar per acció</label>
-                            <select id="imp-history-filter-type">
-                                <option value="" data-i18n="all_actions">Totes les accions</option>
-                                <option value="optimize" data-i18n="filter_optimize">⚡ Optimitzades</option>
-                                <option value="auto_optimize" data-i18n="filter_auto">🤖 Auto-optimitzades</option>
-                                <option value="rename" data-i18n="filter_rename">✏️ Reanomenades</option>
-                                <option value="seo_update" data-i18n="filter_seo">🏷️ SEO actualitzat</option>
-                                <option value="delete" data-i18n="filter_delete">🗑️ Eliminades</option>
-                                <option value="pdf_compress" data-i18n="filter_pdf">📄 PDFs comprimits</option>
-                            </select>
+                            <?php
+                            self::render_custom_select(
+                                array(
+                                    'id'       => 'imp-history-filter-type',
+                                    'selected' => '',
+                                    'options'  => array(
+                                        array( 'value' => '', 'label' => 'Totes les accions', 'i18n' => 'all_actions' ),
+                                        array( 'value' => 'optimize', 'label' => '⚡ Optimitzades', 'i18n' => 'filter_optimize' ),
+                                        array( 'value' => 'auto_optimize', 'label' => '🤖 Auto-optimitzades', 'i18n' => 'filter_auto' ),
+                                        array( 'value' => 'rename', 'label' => '✏️ Reanomenades', 'i18n' => 'filter_rename' ),
+                                        array( 'value' => 'seo_update', 'label' => '🏷️ SEO actualitzat', 'i18n' => 'filter_seo' ),
+                                        array( 'value' => 'delete', 'label' => '🗑️ Eliminades', 'i18n' => 'filter_delete' ),
+                                        array( 'value' => 'pdf_compress', 'label' => '📄 PDFs comprimits', 'i18n' => 'filter_pdf' ),
+                                    ),
+                                )
+                            );
+                            ?>
                         </div>
                         <div class="imp-field">
                             <label data-i18n="date_from">Des de</label>

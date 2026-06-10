@@ -306,12 +306,13 @@ class TSOIMMA_URL_Fixer {
                 } else {
                     $seen_urls[ $url ] = true;
                     $all_issues[] = array(
-                        'old_url'     => $url,
-                        'new_url'     => $new_url,
-                        'old_ext'     => $old_ext,
-                        'new_ext'     => $new_ext,
-                        'filename'    => pathinfo( $url, PATHINFO_FILENAME ),
-                        'has_fix'     => ( $new_url !== null ),
+                        'old_url'      => $url,
+                        'new_url'      => $new_url,
+                        'old_ext'      => $old_ext,
+                        'new_ext'      => $new_ext,
+                        'filename'     => pathinfo( $url, PATHINFO_FILENAME ),
+                        'new_filename' => $new_url ? pathinfo( $new_url, PATHINFO_FILENAME ) : '',
+                        'has_fix'      => ( $new_url !== null ),
                         'type'        => $type,
                         'reason'      => $reason,
                         'occurrences' => 1,

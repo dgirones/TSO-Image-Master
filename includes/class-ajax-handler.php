@@ -99,28 +99,35 @@ class TSOIMMA_Ajax_Handler {
                 return;
             }
 
-            // FASE 3: thumbnails al WP-Cron (background, no bloqueja)
-            $cron_args = array( $id, $format, $quality );
-            if ( ! wp_next_scheduled( 'tsoimma_process_thumbnails', $cron_args ) ) {
-                wp_schedule_single_event( time() - 1, 'tsoimma_process_thumbnails', $cron_args );
-            }
-            // Trigger WP-Cron via a non-blocking HTTP request to wp-cron.php.
-            // This is the standard WP plugin method (spawn_cron() is private/core-only).
-            if ( ! defined( 'DISABLE_WP_CRON' ) || ! DISABLE_WP_CRON ) {
-                wp_remote_post(
-                    site_url( 'wp-cron.php' ),
-                    array(
-                        'timeout'   => 0.01,
-                        'blocking'  => false,
-                        'sslverify' => apply_filters( 'https_local_ssl_verify', false ), // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WordPress core filter, not defined by this plugin
-                        'cookies'   => array(),
-                    )
-                );
-            }
-            // Fallback: if WP-Cron is disabled (DISABLE_WP_CRON), process thumbnails inline.
-            // This is slower but guarantees thumbnails are always generated.
-            if ( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON ) {
+            $ext_changed = ! empty( $result['old_ext'] ) && ! empty( $result['new_ext'] )
+                && ! TSOIMMA_Optimizer::extensions_match( $result['old_ext'], $result['new_ext'] );
+
+            // FASE 3: when the extension changes, regenerate thumbnails synchronously so
+            // gallery/content URLs (e.g. -1024x608.jpg) exist before the editor reloads.
+            if ( $ext_changed ) {
+                // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
+                @set_time_limit( 300 );
                 TSOIMMA_Optimizer::process_thumbnails_background( $id, $format, $quality );
+            } else {
+                // Same format: keep async WP-Cron to avoid blocking the optimize request.
+                $cron_args = array( $id, $format, $quality );
+                if ( ! wp_next_scheduled( 'tsoimma_process_thumbnails', $cron_args ) ) {
+                    wp_schedule_single_event( time() - 1, 'tsoimma_process_thumbnails', $cron_args );
+                }
+                if ( ! defined( 'DISABLE_WP_CRON' ) || ! DISABLE_WP_CRON ) {
+                    wp_remote_post(
+                        site_url( 'wp-cron.php' ),
+                        array(
+                            'timeout'   => 0.01,
+                            'blocking'  => false,
+                            'sslverify' => apply_filters( 'https_local_ssl_verify', false ), // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WordPress core filter, not defined by this plugin
+                            'cookies'   => array(),
+                        )
+                    );
+                }
+                if ( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON ) {
+                    TSOIMMA_Optimizer::process_thumbnails_background( $id, $format, $quality );
+                }
             }
         }
 
@@ -195,18 +202,34 @@ class TSOIMMA_Ajax_Handler {
             $res = TSOIMMA_Optimizer::optimize( $id, $format, $quality, true );
             if ( is_wp_error( $res ) ) {
                 $results[] = array( 'id' => $id, 'error' => $res->get_error_message() );
-            } else {
-                TSOIMMA_Optimizer::optimize_thumbnails( $id, $format, $quality );
-                $bulk_file = get_attached_file( $id );
-                TSOIMMA_History::log( $id, 'optimize', array(
-                    'filename'      => $bulk_file ? basename( $bulk_file ) : '',
-                    'format'        => $format,
-                    'quality'       => $quality,
-                    'savings_bytes' => $res['savings_bytes'] ?? 0,
-                    'savings_pct'   => $res['savings_pct'] ?? 0,
-                ) );
-                $results[] = $res;
+                continue;
             }
+
+            if ( ! empty( $res['replaced'] ) ) {
+                TSOIMMA_Optimizer::update_wp_metadata_only( $id, $res, $format );
+
+                $ext_changed = ! empty( $res['old_ext'] ) && ! empty( $res['new_ext'] )
+                    && ! TSOIMMA_Optimizer::extensions_match( $res['old_ext'], $res['new_ext'] );
+
+                if ( $ext_changed ) {
+                    // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
+                    @set_time_limit( 300 );
+                    TSOIMMA_Optimizer::process_thumbnails_background( $id, $format, $quality );
+                } else {
+                    TSOIMMA_Optimizer::optimize_thumbnails( $id, $format, $quality );
+                    TSOIMMA_Optimizer::repair_content_urls_for_attachment( $id );
+                }
+            }
+
+            $bulk_file = get_attached_file( $id );
+            TSOIMMA_History::log( $id, 'optimize', array(
+                'filename'      => $bulk_file ? basename( $bulk_file ) : '',
+                'format'        => $format,
+                'quality'       => $quality,
+                'savings_bytes' => $res['savings_bytes'] ?? 0,
+                'savings_pct'   => $res['savings_pct'] ?? 0,
+            ) );
+            $results[] = $res;
         }
         wp_send_json_success( $results );
     }

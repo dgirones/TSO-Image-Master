@@ -3,9 +3,9 @@ Contributors: deadko
 Donate link: https://ko-fi.com/deadko_cat
 Tags: image optimization, webp, media library, seo, pdf compression
 Requires at least: 5.9
-Tested up to: 6.9
+Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.5.9
+Stable tag: 1.7.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -36,7 +36,7 @@ TSO Image Master is a complete media management and image optimization plugin fo
 = Requirements =
 
 * PHP 7.4 or higher (tested up to 8.3)
-* WordPress 5.9 or higher (tested up to 6.9)
+* WordPress 5.9 or higher (tested up to 7.0)
 * PHP GD library with JPEG, PNG, GIF, and WebP support
 * GhostScript (optional, required for PDF compression)
 * Imagick PHP extension (optional, fallback for PDF compression)
@@ -104,6 +104,23 @@ This can happen with images that are already well-optimized, very small images, 
 
 == Changelog ==
 
+= 1.7.0 =
+* Fixed: WebP/JPG conversion keeps post and media URLs in sync after thumbnail regeneration (manual, bulk, and auto-upload) — legacy sizes, `-scaled` variants, cross-extension links, relative upload paths, postmeta and widgets.
+* Fixed: file rename updates URLs from real filenames, renames `-scaled` files, and syncs posts, postmeta, excerpts, and options.
+* Fixed: URL Fixer shows the correct destination filename; admin dropdowns readable on Windows and dark admin.
+* Fixed: Plugin Check compliance — postmeta updates use `update_metadata()` instead of direct `meta_value` writes.
+* Improved: WordPress 7.0 compatibility (readme).
+
+= 1.6.0 =
+* Fixed: manual WebP/JPG conversion repairs broken image URLs after thumbnail regeneration — all legacy sizes (`-150x150`, `-300x200`, `-1024x768`, `-scaled`, etc.), cross-extension links (`.jpg` in content / `.webp` on disk), relative `/wp-content/uploads/` paths, postmeta and widget options.
+* Fixed: bulk optimize runs the same URL repair pass when the output format does not change.
+* Fixed: auto-optimizer on upload passes pre-regeneration metadata to URL repair (same pipeline as manual optimize).
+* Fixed: file rename updates thumbnail URLs from real filenames (not reconstructed dimensions), renames `-scaled` variants, and updates postmeta/excerpts/widgets — not only post content.
+* Fixed: thumbnail conversion quality during metadata update; dimension-variant regex updates postmeta and excerpts, not only post content.
+* Fixed: URL Fixer shows the correct destination filename when the suggested replacement uses a different size or base name.
+* Fixed: admin UI — custom dropdown lists readable on Windows and dark admin; restored settings toolbar layout and search field styling; clearer auto-convert format options.
+* Improved: WordPress 7.0 compatibility (readme).
+
 = 1.5.9 =
 * Security: URL Fixer only applies database replacements when both URLs point to the site uploads directory; destination files are resolved with `realpath()` so paths cannot escape uploads.
 * Security: Rogue file deletion resolves each path with `realpath()` and requires the file to stay inside `wp-content/uploads`.
@@ -169,6 +186,12 @@ This can happen with images that are already well-optimized, very small images, 
 * Initial release.
 
 == Upgrade Notice ==
+
+= 1.7.0 =
+Fixes broken image links after format conversion, rename, and auto-upload; improves URL repair across posts, widgets, and Plugin Check compliance.
+
+= 1.6.0 =
+Fixes manual format conversion (broken gallery/post image links after WebP conversion), admin dropdowns, and WordPress 7.0 support.
 
 = 1.5.9 =
 Hardens URL Fixer and rogue file deletion (upload-only URLs, realpath checks) and aligns translation loading with Plugin Check guidance.

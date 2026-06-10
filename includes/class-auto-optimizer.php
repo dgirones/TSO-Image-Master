@@ -150,6 +150,7 @@ class TSOIMMA_Auto_Optimizer {
             // Necessari per a WP < 6.1 (genera JPEG) o si el format triat no és WebP.
             // En WP 6.1+ amb font WebP és un no-op (thumbnails ja són WebP).
             TSOIMMA_Optimizer::optimize_thumbnails( $attachment_id, $format, $quality );
+            TSOIMMA_Optimizer::repair_content_urls_for_attachment( $attachment_id, $current_meta );
 
             // ── Registrar al historial ────────────────────────────────────
             $log_file = isset( $result['new_path'] ) ? $result['new_path'] : get_attached_file( $attachment_id );

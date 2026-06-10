@@ -17,8 +17,9 @@ class TSOIMMA_Optimizer {
         $max_height    = 0,
         $make_backup   = true
     ) {
-        $attachment_id = absint( $attachment_id );
-        $file_path     = get_attached_file( $attachment_id );
+        $attachment_id   = absint( $attachment_id );
+        $output_format   = self::normalize_output_format( $output_format );
+        $file_path       = get_attached_file( $attachment_id );
 
         if ( ! $file_path || ! file_exists( $file_path ) ) {
             return new WP_Error( 'file_not_found', 'Fitxer no trobat.' );
@@ -84,12 +85,9 @@ class TSOIMMA_Optimizer {
         $new_ext  = self::get_extension( $output_format, $old_ext );
         $new_mime = self::ext_to_mime( $new_ext );
 
-        // Guardar fitxer temporal
+        // Guardar fitxer temporal (flatten alpha when targeting JPEG).
         $temp_path = $path_info['dirname'] . '/' . $path_info['filename'] . '_tso_im_opt.' . $new_ext;
-        $saved     = self::save_image( $image, $temp_path, $new_ext, $quality );
-        imagedestroy( $image );
-
-        if ( ! $saved || ! file_exists( $temp_path ) ) {
+        if ( ! self::save_image_resource_to_path( $image, $temp_path, $new_ext, $quality ) ) {
             return new WP_Error( 'save_failed', 'No s\'ha pogut guardar la imatge optimitzada.' );
         }
 
@@ -118,6 +116,7 @@ class TSOIMMA_Optimizer {
             'old_ext'       => strtolower( $old_ext ),
             'new_ext'       => strtolower( $new_ext ),
             'new_mime'      => $new_mime,
+            'quality'       => absint( $quality ),
         );
 
         if ( ! $replace ) {
@@ -147,9 +146,12 @@ class TSOIMMA_Optimizer {
             return new WP_Error( 'move_failed', 'No s\'ha pogut escriure el fitxer final. Verifica permisos.' );
         }
 
-        // Eliminar original si l'extensió ha canviat
-        if ( strtolower( $old_ext ) !== strtolower( $new_ext ) && file_exists( $old_path ) ) {
-            wp_delete_file( $old_path );
+        // Eliminar original (i variant -scaled de WordPress) si l'extensió ha canviat.
+        if ( ! self::extensions_match( $old_ext, $new_ext ) ) {
+            if ( file_exists( $old_path ) ) {
+                wp_delete_file( $old_path );
+            }
+            self::delete_scaled_variant_if_exists( $path_info['dirname'], $path_info['filename'], $old_ext );
         }
 
         clearstatcache( true, $final_path );
@@ -194,6 +196,7 @@ class TSOIMMA_Optimizer {
         $old_ext       = $result['old_ext'];
         $new_ext       = $result['new_ext'];
         $backup_path   = $result['backup_path'];
+        $quality       = isset( $result['quality'] ) ? absint( $result['quality'] ) : 82;
 
         // Desar metes del backup
         if ( $backup_path && file_exists( $backup_path ) ) {
@@ -218,43 +221,53 @@ class TSOIMMA_Optimizer {
         }
 
         $thumb_replacements = array();
-        if ( $old_ext !== $new_ext && ! empty( $meta['sizes'] ) ) {
-            $old_dir_url = trailingslashit( dirname( $old_url ) );
-            $new_dir_url = trailingslashit( dirname( $new_url ) );
-            foreach ( $meta['sizes'] as $sz_data ) {
-                $tfile = isset( $sz_data['file'] ) ? $sz_data['file'] : '';
-                if ( ! $tfile ) {
+        $thumb_dir          = trailingslashit( dirname( $new_path ) );
+        $old_dir_url        = trailingslashit( dirname( $old_url ) );
+        $new_dir_url        = trailingslashit( dirname( $new_url ) );
+
+        // Convert existing thumbnail files on disk BEFORE updating content URLs.
+        if ( ! self::extensions_match( $old_ext, $new_ext ) && ! empty( $meta['sizes'] ) ) {
+            foreach ( $meta['sizes'] as $sz => $sz_data ) {
+                $tfile = isset( $sz_data['file'] ) ? (string) $sz_data['file'] : '';
+                if ( '' === $tfile ) {
                     continue;
                 }
+
                 $pi_t = pathinfo( $tfile );
-                if ( empty( $pi_t['extension'] ) || strtolower( $pi_t['extension'] ) !== strtolower( $old_ext ) ) {
+                if ( empty( $pi_t['extension'] ) || ! self::extensions_match( $pi_t['extension'], $old_ext ) ) {
                     continue;
                 }
+
                 $new_thumb_file = $pi_t['filename'] . '.' . $new_ext;
-                $old_thumb_url  = $old_dir_url . self::encode_rel_path_for_url( $tfile );
-                $new_thumb_url  = $new_dir_url . self::encode_rel_path_for_url( $new_thumb_file );
+                $old_thumb_path = $thumb_dir . $tfile;
+                $new_thumb_path = $thumb_dir . $new_thumb_file;
+
+                if ( file_exists( $old_thumb_path ) ) {
+                    self::convert_file_to_format( $old_thumb_path, $new_thumb_path, $format, $quality );
+                    if ( file_exists( $new_thumb_path ) && wp_normalize_path( $old_thumb_path ) !== wp_normalize_path( $new_thumb_path ) ) {
+                        wp_delete_file( $old_thumb_path );
+                    }
+                }
+
+                // Do not point metadata/content to a thumbnail that was not created successfully.
+                if ( ! file_exists( $new_thumb_path ) || filesize( $new_thumb_path ) < 1 ) {
+                    continue;
+                }
+
+                $old_thumb_url = $old_dir_url . self::encode_rel_path_for_url( $tfile );
+                $new_thumb_url = $new_dir_url . self::encode_rel_path_for_url( $new_thumb_file );
                 if ( $old_thumb_url !== $new_thumb_url ) {
                     $thumb_replacements[] = array( $old_thumb_url, $new_thumb_url );
                 }
+
+                $meta['sizes'][ $sz ]['file']      = $new_thumb_file;
+                $meta['sizes'][ $sz ]['mime-type'] = $new_mime;
             }
         }
+
         $meta['file']   = $relative_path;
         $meta['width']  = $new_w;
         $meta['height'] = $new_h;
-
-        // Actualitzar noms de thumbnail a la metadata si l'extensió ha canviat
-        if ( $old_ext !== $new_ext && ! empty( $meta['sizes'] ) ) {
-            foreach ( $meta['sizes'] as $sz => $sz_data ) {
-                $tfile = isset( $sz_data['file'] ) ? $sz_data['file'] : '';
-                if ( $tfile ) {
-                    $pi_t = pathinfo( $tfile );
-                    if ( isset( $pi_t['extension'] ) && strtolower( $pi_t['extension'] ) === $old_ext ) {
-                        $meta['sizes'][ $sz ]['file']      = $pi_t['filename'] . '.' . $new_ext;
-                        $meta['sizes'][ $sz ]['mime-type'] = $new_mime;
-                    }
-                }
-            }
-        }
         wp_update_attachment_metadata( $attachment_id, $meta );
 
         // Mime type via $wpdb directe (evita hooks save_post d'altres plugins)
@@ -354,12 +367,483 @@ class TSOIMMA_Optimizer {
         // wp_generate pot crear thumbnails en format natiu (JPEG en WP < 6.1); convertim si cal
         self::optimize_thumbnails( $attachment_id, $format, $quality );
 
+        // After regeneration, dimension URLs in posts (e.g. -1024x951.webp) may no longer exist
+        // because the new source image is smaller. Point them to the closest valid file.
+        self::repair_content_urls_for_attachment( $attachment_id, $old_meta );
+
         clean_attachment_cache( $attachment_id );
         if ( function_exists( 'wp_cache_flush' ) ) wp_cache_flush();
         do_action( 'litespeed_purge_post', $attachment_id );  // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Third-party LiteSpeed Cache integration hook, name is defined by that plugin.
         do_action( 'litespeed_purge_all' );  // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Third-party LiteSpeed Cache integration hook, name is defined by that plugin.
         if ( function_exists( 'rocket_clean_domain' ) ) rocket_clean_domain();
         if ( function_exists( 'w3tc_flush_all' ) ) w3tc_flush_all();
+    }
+
+    /**
+     * Replace broken attachment URLs in content after thumbnail regeneration.
+     *
+     * @param int        $attachment_id Attachment ID.
+     * @param array|null $old_meta      Metadata snapshot before thumbnail regeneration.
+     * @return int Number of URL pairs repaired.
+     */
+    public static function repair_content_urls_for_attachment( $attachment_id, $old_meta = null ) {
+        $attachment_id = absint( $attachment_id );
+        $file          = get_attached_file( $attachment_id );
+
+        if ( ! $file || ! file_exists( $file ) ) {
+            return 0;
+        }
+
+        $meta       = wp_get_attachment_metadata( $attachment_id );
+        $upload_dir = wp_upload_dir();
+        $pairs      = self::collect_broken_attachment_url_pairs( $attachment_id, $file, $meta, $upload_dir, $old_meta );
+
+        if ( empty( $pairs ) ) {
+            return 0;
+        }
+
+        self::replace_url_pairs_in_content( array_values( $pairs ) );
+        return count( $pairs );
+    }
+
+    /**
+     * Collect stale/broken URL pairs for one attachment (proactive + DB scan).
+     *
+     * @param int        $attachment_id Attachment ID.
+     * @param string     $file          Main file path.
+     * @param array      $meta          Current metadata.
+     * @param array      $upload_dir    wp_upload_dir() result.
+     * @param array|null $old_meta      Metadata before regeneration.
+     * @return array[] Array of [old_url, new_url] pairs keyed by hash.
+     */
+    private static function collect_broken_attachment_url_pairs( $attachment_id, $file, $meta, $upload_dir, $old_meta = null ) {
+        $pairs      = array();
+        $valid_urls = self::collect_attachment_public_urls( $attachment_id, $file, $meta, $upload_dir );
+
+        if ( is_array( $old_meta ) ) {
+            foreach ( self::build_pairs_from_stale_metadata( $file, $meta, $upload_dir, $old_meta, $valid_urls ) as $pair ) {
+                $pairs[ md5( $pair[0] ) ] = $pair;
+            }
+        }
+
+        foreach ( self::discover_broken_urls_in_storage( $file, $meta, $upload_dir, $valid_urls ) as $pair ) {
+            $pairs[ md5( $pair[0] ) ] = $pair;
+        }
+
+        return $pairs;
+    }
+
+    /**
+     * Map URLs from pre-regeneration metadata to the closest existing file.
+     *
+     * @param string   $file       Main file path.
+     * @param array    $meta       Current metadata.
+     * @param array    $upload_dir wp_upload_dir() result.
+     * @param array    $old_meta   Metadata before regeneration.
+     * @param string[] $valid_urls Existing public URLs.
+     * @return array[]
+     */
+    private static function build_pairs_from_stale_metadata( $file, $meta, $upload_dir, $old_meta, $valid_urls ) {
+        $pairs     = array();
+        $base_dir  = wp_normalize_path( $upload_dir['basedir'] );
+        $base_url = untrailingslashit( $upload_dir['baseurl'] );
+        $rel_dir  = self::attachment_rel_dir_from_meta( $old_meta, $file, $base_dir );
+        $dir_url  = $base_url . ( '' !== $rel_dir ? '/' . self::encode_rel_path_for_url( $rel_dir ) : '' );
+
+        $stale_candidates = array();
+
+        if ( ! empty( $old_meta['file'] ) ) {
+            $stale_candidates[] = basename( (string) $old_meta['file'] );
+        }
+
+        if ( ! empty( $old_meta['sizes'] ) && is_array( $old_meta['sizes'] ) ) {
+            foreach ( $old_meta['sizes'] as $size_data ) {
+                if ( empty( $size_data['file'] ) ) {
+                    continue;
+                }
+                $stale_candidates[] = (string) $size_data['file'];
+            }
+        }
+
+        $base_name = pathinfo( $file, PATHINFO_FILENAME );
+        foreach ( self::get_image_extension_list() as $ext ) {
+            $stale_candidates[] = $base_name . '-scaled.' . $ext;
+        }
+
+        $stale_candidates = array_values( array_unique( array_filter( $stale_candidates ) ) );
+
+        foreach ( $stale_candidates as $filename ) {
+            foreach ( self::build_public_url_variants( $dir_url, $filename ) as $stale_url ) {
+                if ( self::uploads_url_exists_on_disk( $stale_url, $base_dir, $base_url ) ) {
+                    continue;
+                }
+
+                $replacement = self::pick_replacement_url_for_broken( $stale_url, $valid_urls, $meta, $upload_dir );
+                if ( ! $replacement || self::urls_equivalent_for_repair( $stale_url, $replacement ) ) {
+                    continue;
+                }
+
+                $pairs[ md5( $stale_url ) ] = array( $stale_url, $replacement );
+            }
+        }
+
+        return $pairs;
+    }
+
+    /**
+     * Scan posts, postmeta and options for broken URLs referencing this attachment.
+     *
+     * @param string   $file       Main file path.
+     * @param array    $meta       Current metadata.
+     * @param array    $upload_dir wp_upload_dir() result.
+     * @param string[] $valid_urls Existing public URLs.
+     * @return array[]
+     */
+    private static function discover_broken_urls_in_storage( $file, $meta, $upload_dir, $valid_urls ) {
+        $pairs      = array();
+        $base_name  = pathinfo( $file, PATHINFO_FILENAME );
+        $base_dir   = wp_normalize_path( $upload_dir['basedir'] );
+        $base_url   = untrailingslashit( $upload_dir['baseurl'] );
+        $ext_pat    = self::get_image_extension_pattern();
+        $patterns   = array(
+            '#(https?://[^\s"\'<>\)]+/' . preg_quote( $base_name, '#' ) . '(?:-scaled|-\d+x\d+)?\.(?:' . $ext_pat . '))#i',
+            '#(/wp-content/uploads/[^\s"\'<>\)]+/' . preg_quote( $base_name, '#' ) . '(?:-scaled|-\d+x\d+)?\.(?:' . $ext_pat . '))#i',
+        );
+
+        global $wpdb;
+        $like = '%' . $wpdb->esc_like( $base_name ) . '%';
+        $chunks = array();
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+        $post_rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT post_content, post_excerpt FROM {$wpdb->posts}
+                 WHERE (post_content LIKE %s OR post_excerpt LIKE %s)
+                 AND post_status IN ('publish','draft','private','pending','future')",
+                $like,
+                $like
+            )
+        );
+        foreach ( (array) $post_rows as $row ) {
+            $chunks[] = (string) $row->post_content;
+            $chunks[] = (string) $row->post_excerpt;
+        }
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Targeted LIKE scan to find broken attachment URLs in custom fields.
+        $meta_rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_value LIKE %s",
+                $like
+            )
+        );
+        foreach ( (array) $meta_rows as $row ) {
+            $chunks[] = (string) $row->meta_value;
+        }
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+        $option_rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT option_value FROM {$wpdb->options}
+                 WHERE option_value LIKE %s AND option_name NOT LIKE %s",
+                $like,
+                $wpdb->esc_like( '_transient' ) . '%'
+            )
+        );
+        foreach ( (array) $option_rows as $row ) {
+            $chunks[] = (string) $row->option_value;
+        }
+
+        $seen_urls = array();
+        foreach ( $chunks as $content ) {
+            if ( '' === $content || false === strpos( $content, $base_name ) ) {
+                continue;
+            }
+
+            foreach ( $patterns as $pattern ) {
+                if ( ! preg_match_all( $pattern, $content, $matches ) ) {
+                    continue;
+                }
+                foreach ( array_unique( $matches[1] ) as $raw_url ) {
+                    $url = self::normalize_discovered_upload_url( $raw_url, $base_url );
+                    if ( ! $url || isset( $seen_urls[ $url ] ) ) {
+                        continue;
+                    }
+                    $seen_urls[ $url ] = true;
+
+                    if ( self::uploads_url_exists_on_disk( $url, $base_dir, $base_url ) ) {
+                        continue;
+                    }
+
+                    $replacement = self::pick_replacement_url_for_broken( $url, $valid_urls, $meta, $upload_dir );
+                    if ( ! $replacement || self::urls_equivalent_for_repair( $url, $replacement ) ) {
+                        continue;
+                    }
+
+                    $pairs[ md5( $url ) ] = array( $url, $replacement );
+                }
+            }
+        }
+
+        return $pairs;
+    }
+
+    /**
+     * @param string $raw_url  URL found in stored content.
+     * @param string $base_url Uploads base URL.
+     * @return string|null
+     */
+    private static function normalize_discovered_upload_url( $raw_url, $base_url ) {
+        $raw_url = (string) $raw_url;
+        if ( '' === $raw_url ) {
+            return null;
+        }
+
+        if ( 0 === strpos( $raw_url, '/wp-content/uploads/' ) ) {
+            return untrailingslashit( $base_url ) . $raw_url;
+        }
+
+        if ( 0 === strpos( $raw_url, 'http://' ) || 0 === strpos( $raw_url, 'https://' ) ) {
+            return $raw_url;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param string $dir_url  Directory URL (no trailing slash).
+     * @param string $filename File basename.
+     * @return string[]
+     */
+    private static function build_public_url_variants( $dir_url, $filename ) {
+        $dir_url  = untrailingslashit( (string) $dir_url );
+        $filename = (string) $filename;
+        $encoded  = $dir_url . '/' . self::encode_rel_path_for_url( $filename );
+        $decoded  = $dir_url . '/' . str_replace( '\\', '/', $filename );
+
+        return array_values( array_unique( array_filter( array( $encoded, $decoded ) ) ) );
+    }
+
+    /**
+     * @param array  $meta     Attachment metadata.
+     * @param string $file     Main file path.
+     * @param string $base_dir Uploads basedir (normalized).
+     * @return string Relative directory (e.g. 2012/06) or empty string.
+     */
+    private static function attachment_rel_dir_from_meta( $meta, $file, $base_dir ) {
+        if ( is_array( $meta ) && ! empty( $meta['file'] ) ) {
+            $rel = str_replace( '\\', '/', (string) $meta['file'] );
+            $dir = dirname( $rel );
+            return ( '.' === $dir ) ? '' : trim( $dir, '/' );
+        }
+
+        $rel_main = ltrim( str_replace( $base_dir, '', wp_normalize_path( $file ) ), '/' );
+        $dir      = dirname( $rel_main );
+        return ( '.' === $dir ) ? '' : trim( str_replace( '\\', '/', $dir ), '/' );
+    }
+
+    /**
+     * @return string[]
+     */
+    private static function get_image_extension_list() {
+        return array( 'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif' );
+    }
+
+    /**
+     * @return string Regex alternation for image extensions.
+     */
+    private static function get_image_extension_pattern() {
+        return implode( '|', self::get_image_extension_list() );
+    }
+
+    /**
+     * @param int    $attachment_id Attachment ID.
+     * @param string $file          Absolute main file path.
+     * @param array  $meta          Attachment metadata.
+     * @param array  $upload_dir    wp_upload_dir() result.
+     * @return string[] Public URLs that exist on disk.
+     */
+    private static function collect_attachment_public_urls( $attachment_id, $file, $meta, $upload_dir ) {
+        $urls       = array();
+        $base_dir   = wp_normalize_path( $upload_dir['basedir'] );
+        $base_url   = untrailingslashit( $upload_dir['baseurl'] );
+        $rel_main   = ltrim( str_replace( $base_dir, '', wp_normalize_path( $file ) ), '/' );
+
+        if ( file_exists( $file ) ) {
+            $urls[] = $base_url . '/' . self::encode_rel_path_for_url( $rel_main );
+        }
+
+        if ( is_array( $meta ) && ! empty( $meta['sizes'] ) ) {
+            $rel_dir = trailingslashit( dirname( $rel_main ) );
+            if ( '.' === $rel_dir ) {
+                $rel_dir = '';
+            }
+            foreach ( $meta['sizes'] as $size_data ) {
+                if ( empty( $size_data['file'] ) ) {
+                    continue;
+                }
+                $thumb_path = trailingslashit( dirname( $file ) ) . $size_data['file'];
+                if ( ! file_exists( $thumb_path ) ) {
+                    continue;
+                }
+                $urls[] = $base_url . '/' . self::encode_rel_path_for_url( $rel_dir . $size_data['file'] );
+            }
+        }
+
+        return array_values( array_unique( $urls ) );
+    }
+
+    /**
+     * @param string   $broken_url Broken URL from content.
+     * @param string[] $valid_urls Existing public URLs for the attachment.
+     * @param array    $meta       Attachment metadata.
+     * @param array    $upload_dir wp_upload_dir() result.
+     * @return string|null
+     */
+    private static function pick_replacement_url_for_broken( $broken_url, $valid_urls, $meta, $upload_dir ) {
+        if ( empty( $valid_urls ) ) {
+            return null;
+        }
+
+        $base_url = untrailingslashit( $upload_dir['baseurl'] );
+        $base_dir = wp_normalize_path( $upload_dir['basedir'] );
+        $fallback = $valid_urls[0];
+
+        // Same path stem but another extension (e.g. content still has .jpg, disk has .webp).
+        $existing_variant = self::resolve_existing_upload_url_variant( $broken_url, $base_dir, $base_url );
+        if ( $existing_variant && ! self::urls_equivalent_for_repair( $broken_url, $existing_variant ) ) {
+            return $existing_variant;
+        }
+
+        $decoded = rawurldecode( (string) $broken_url );
+
+        // WordPress "-scaled" originals map to the current main file.
+        if ( preg_match( '/-scaled\.[a-z0-9]+$/i', $decoded ) ) {
+            return $fallback;
+        }
+
+        if ( ! preg_match( '/-(\d+)x(\d+)\./i', $decoded, $dims ) ) {
+            return $fallback;
+        }
+
+        $want_w    = absint( $dims[1] );
+        $want_h    = absint( $dims[2] );
+        $best_url  = null;
+        $best_diff = PHP_INT_MAX;
+
+        if ( is_array( $meta ) && ! empty( $meta['sizes'] ) ) {
+            $rel_dir = self::attachment_rel_dir_from_meta( $meta, '', $base_dir );
+            $prefix  = ( '' !== $rel_dir ) ? $rel_dir . '/' : '';
+
+            foreach ( $meta['sizes'] as $size_data ) {
+                if ( empty( $size_data['file'] ) ) {
+                    continue;
+                }
+
+                $thumb_path = wp_normalize_path( $base_dir . '/' . $prefix . $size_data['file'] );
+                if ( ! is_file( $thumb_path ) ) {
+                    continue;
+                }
+
+                $w = isset( $size_data['width'] ) ? absint( $size_data['width'] ) : 0;
+                $h = isset( $size_data['height'] ) ? absint( $size_data['height'] ) : 0;
+                if ( ! $w || ! $h ) {
+                    continue;
+                }
+
+                $diff = abs( $w - $want_w ) + abs( $h - $want_h );
+                if ( $diff < $best_diff ) {
+                    $best_diff = $diff;
+                    $best_url  = $base_url . '/' . self::encode_rel_path_for_url( $prefix . $size_data['file'] );
+                }
+            }
+        }
+
+        return $best_url ? $best_url : $fallback;
+    }
+
+    /**
+     * Whether a public uploads URL points to an existing file (any supported extension).
+     *
+     * @param string $url      Public URL.
+     * @param string $base_dir Uploads basedir (normalized).
+     * @param string $base_url Uploads baseurl (no trailing slash).
+     * @return bool
+     */
+    private static function uploads_url_exists_on_disk( $url, $base_dir, $base_url ) {
+        return (bool) self::resolve_existing_upload_url_variant( $url, $base_dir, $base_url );
+    }
+
+    /**
+     * Resolve a broken uploads URL to an existing file URL (extension variants included).
+     *
+     * @param string $url      Public URL.
+     * @param string $base_dir Uploads basedir (normalized).
+     * @param string $base_url Uploads baseurl (no trailing slash).
+     * @return string|null
+     */
+    private static function resolve_existing_upload_url_variant( $url, $base_dir, $base_url ) {
+        $rel = self::uploads_rel_path_from_public_url( $url, $base_url );
+        if ( null === $rel ) {
+            return null;
+        }
+
+        $path = wp_normalize_path( $base_dir . '/' . $rel );
+        if ( is_file( $path ) ) {
+            $dir_rel = dirname( $rel );
+            $dir_rel = ( '.' === $dir_rel ) ? '' : trim( str_replace( '\\', '/', $dir_rel ), '/' );
+            $prefix  = ( '' !== $dir_rel ) ? $dir_rel . '/' : '';
+            return untrailingslashit( $base_url ) . '/' . self::encode_rel_path_for_url( $prefix . basename( $rel ) );
+        }
+
+        $pi = pathinfo( $rel );
+        if ( empty( $pi['filename'] ) ) {
+            return null;
+        }
+
+        $dir_rel = isset( $pi['dirname'] ) ? $pi['dirname'] : '';
+        $dir_rel = ( '.' === $dir_rel ) ? '' : trim( str_replace( '\\', '/', $dir_rel ), '/' );
+        $prefix  = ( '' !== $dir_rel ) ? $dir_rel . '/' : '';
+
+        foreach ( self::get_image_extension_list() as $ext ) {
+            $candidate_rel  = $prefix . $pi['filename'] . '.' . $ext;
+            $candidate_path = wp_normalize_path( $base_dir . '/' . $candidate_rel );
+            if ( is_file( $candidate_path ) ) {
+                return untrailingslashit( $base_url ) . '/' . self::encode_rel_path_for_url( $candidate_rel );
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param string $url      Public URL.
+     * @param string $base_url Uploads baseurl (no trailing slash).
+     * @return string|null Relative path inside uploads, decoded.
+     */
+    private static function uploads_rel_path_from_public_url( $url, $base_url ) {
+        $url      = (string) $url;
+        $base_url = untrailingslashit( (string) $base_url );
+
+        if ( 0 !== strpos( $url, $base_url . '/' ) && 0 !== strpos( rawurldecode( $url ), $base_url . '/' ) ) {
+            return null;
+        }
+
+        $rel = rawurldecode( ltrim( str_replace( $base_url . '/', '', $url ), '/' ) );
+        if ( '' === $rel || false !== strpos( $rel, '..' ) ) {
+            return null;
+        }
+
+        return str_replace( '\\', '/', $rel );
+    }
+
+    private static function urls_equivalent_for_repair( $old_url, $new_url ) {
+        if ( ! $old_url || ! $new_url ) {
+            return false;
+        }
+        if ( $old_url === $new_url ) {
+            return true;
+        }
+        return rawurldecode( $old_url ) === rawurldecode( $new_url );
     }
 
     /**
@@ -388,16 +872,15 @@ class TSOIMMA_Optimizer {
             }
             $new_path = $pi['dirname'] . '/' . $thumb_clean_name . '.' . $new_ext;
 
-            self::save_image( $image, $new_path, $new_ext, $quality );
-            imagedestroy( $image );
+            if ( ! self::save_image_resource_to_path( $image, $new_path, $new_ext, $quality ) ) {
+                continue;
+            }
 
-            if ( strtolower( $pi['extension'] ) !== strtolower( $new_ext ) ) {
+            if ( ! self::extensions_match( $pi['extension'], $new_ext ) ) {
                 wp_delete_file( $thumb_path );
-                // FIX: usar $thumb_clean_name (sense doble-extensió) en lloc de $pi['filename']
                 $metadata['sizes'][ $size ]['file']      = $thumb_clean_name . '.' . $new_ext;
                 $metadata['sizes'][ $size ]['mime-type'] = self::ext_to_mime( $new_ext );
-            } elseif ( $thumb_clean_name !== $pi['filename'] && file_exists( $new_path ) && $new_path !== $thumb_path ) {
-                // Mateix format però nom netejat diferent (doble-extensió al nom): actualitzar path i metadata
+            } elseif ( $thumb_clean_name !== $pi['filename'] && $new_path !== $thumb_path ) {
                 wp_delete_file( $thumb_path );
                 $metadata['sizes'][ $size ]['file'] = $thumb_clean_name . '.' . $new_ext;
             }
@@ -412,6 +895,44 @@ class TSOIMMA_Optimizer {
     public static function replace_url_in_content( $old_url, $new_url ) {
         if ( $old_url === $new_url ) return;
         self::replace_url_pairs_in_content( array( array( $old_url, $new_url ) ) );
+    }
+
+    /**
+     * Replace legacy dimension-suffixed URLs after a basename rename (same extension).
+     *
+     * @param string $old_dir_url   Old directory URL.
+     * @param string $old_basename  Old filename without extension.
+     * @param string $new_dir_url   New directory URL.
+     * @param string $new_basename  New filename without extension.
+     * @param string $ext           File extension (e.g. webp, jpg).
+     */
+    public static function replace_basename_dimension_urls_in_storage( $old_dir_url, $old_basename, $new_dir_url, $new_basename, $ext ) {
+        $ext          = strtolower( (string) $ext );
+        $old_basename = (string) $old_basename;
+        $new_basename = (string) $new_basename;
+        if ( '' === $ext || '' === $old_basename || '' === $new_basename || $old_basename === $new_basename ) {
+            return;
+        }
+
+        $old_dir = trailingslashit( untrailingslashit( (string) $old_dir_url ) );
+        $new_dir = trailingslashit( untrailingslashit( (string) $new_dir_url ) );
+
+        $ext_variants = array( $ext );
+        if ( 'jpg' === $ext ) {
+            $ext_variants[] = 'jpeg';
+        } elseif ( 'jpeg' === $ext ) {
+            $ext_variants[] = 'jpg';
+        }
+        $ext_variants = array_values( array_unique( $ext_variants ) );
+
+        foreach ( $ext_variants as $ext_variant ) {
+            $old_url = $old_dir . self::encode_rel_path_for_url( $old_basename . '.' . $ext_variant );
+            $new_url = $new_dir . self::encode_rel_path_for_url( $new_basename . '.' . $ext_variant );
+            if ( $old_url === $new_url ) {
+                continue;
+            }
+            self::replace_dimension_variant_urls_in_storage( $old_url, $new_url, $ext_variant, $ext_variant );
+        }
     }
 
     private static function replace_url_pairs_in_content( $pairs ) {
@@ -440,7 +961,7 @@ class TSOIMMA_Optimizer {
             $new_ext = strtolower( pathinfo( $new_url, PATHINFO_EXTENSION ) );
 
             // Si l'extensió ha canviat, substituir també les variants de nom simple.
-            if ( $old_ext !== $new_ext ) {
+            if ( ! self::extensions_match( $old_ext, $new_ext ) ) {
                 $basename = pathinfo( $old_url, PATHINFO_FILENAME );
                 $fallback_replacements[] = array(
                     $basename . '.' . $old_ext,
@@ -472,7 +993,7 @@ class TSOIMMA_Optimizer {
                 "UPDATE {$wpdb->posts} SET post_content = REPLACE(post_content, %s, %s) WHERE post_content LIKE %s",
                 $s, $r, $like
             ) );
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Bulk URL swap in meta fields after optimize/rename.
             $wpdb->query( $wpdb->prepare(
                 "UPDATE {$wpdb->postmeta} SET meta_value = REPLACE(meta_value, %s, %s) WHERE meta_value LIKE %s",
                 $s, $r, $like
@@ -484,9 +1005,9 @@ class TSOIMMA_Optimizer {
             ) );
         }
 
-        // Regex pass for scaled variants (-WxH), including encoded and decoded URL forms.
+        // Regex pass for dimension variants (-WxH), including encoded and decoded URL forms.
         foreach ( $dimension_replacements as $dim_pair ) {
-            self::replace_dimension_variant_urls_in_posts( $dim_pair[0], $dim_pair[1], $dim_pair[2], $dim_pair[3] );
+            self::replace_dimension_variant_urls_in_storage( $dim_pair[0], $dim_pair[1], $dim_pair[2], $dim_pair[3] );
         }
 
         if ( function_exists( 'wp_cache_flush' ) ) wp_cache_flush();
@@ -520,7 +1041,7 @@ class TSOIMMA_Optimizer {
         $pairs[ $key ] = array( $old, $new );
     }
 
-    private static function replace_dimension_variant_urls_in_posts( $old_url, $new_url, $old_ext, $new_ext ) {
+    private static function replace_dimension_variant_urls_in_storage( $old_url, $new_url, $old_ext, $new_ext ) {
         global $wpdb;
 
         $old_variants = array_values( array_unique( array_filter( array(
@@ -535,56 +1056,113 @@ class TSOIMMA_Optimizer {
             return;
         }
 
-        $posts_by_id = array();
+        $like_keys = array();
         foreach ( $old_variants as $old_variant ) {
             $old_base = preg_replace( '/\.' . preg_quote( (string) $old_ext, '/' ) . '$/i', '', $old_variant );
-            if ( ! $old_base ) {
-                continue;
-            }
-            $like = '%' . $wpdb->esc_like( $old_base . '-' ) . '%';
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-            $rows = $wpdb->get_results( $wpdb->prepare(
-                "SELECT ID, post_content FROM {$wpdb->posts} WHERE post_content LIKE %s",
-                $like
-            ) );
-            foreach ( (array) $rows as $row ) {
-                $posts_by_id[ (int) $row->ID ] = $row;
+            if ( $old_base ) {
+                $like_keys[ $old_base . '-' ] = true;
             }
         }
-
-        if ( empty( $posts_by_id ) ) {
+        if ( empty( $like_keys ) ) {
             return;
         }
 
-        foreach ( $posts_by_id as $row ) {
-            $updated = $row->post_content;
-            for ( $i = 0; $i < count( $old_variants ); $i++ ) {
-                $old_variant = $old_variants[ $i ];
-                $new_variant = isset( $new_variants[ $i ] ) ? $new_variants[ $i ] : $new_variants[0];
-                $old_base    = preg_replace( '/\.' . preg_quote( (string) $old_ext, '/' ) . '$/i', '', $old_variant );
-                $new_base    = preg_replace( '/\.' . preg_quote( (string) $new_ext, '/' ) . '$/i', '', $new_variant );
-                if ( ! $old_base || ! $new_base || $old_base === $new_base ) {
-                    continue;
-                }
+        $posts_by_id = array();
+        foreach ( array_keys( $like_keys ) as $like_fragment ) {
+            $like = '%' . $wpdb->esc_like( $like_fragment ) . '%';
 
-                $updated = preg_replace(
-                    '/' . preg_quote( $old_base, '/' ) . '-(\d+x\d+)\.' . preg_quote( (string) $old_ext, '/' ) . '/i',
-                    $new_base . '-$1.' . $new_ext,
-                    $updated
-                );
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+            $rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT ID, post_content, post_excerpt FROM {$wpdb->posts}
+                     WHERE (post_content LIKE %s OR post_excerpt LIKE %s) AND post_status != 'trash'",
+                    $like,
+                    $like
+                )
+            );
+            foreach ( (array) $rows as $row ) {
+                $posts_by_id[ (int) $row->ID ] = $row;
             }
 
-            if ( $updated !== $row->post_content ) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Targeted LIKE scan to fix broken image URLs in custom fields/widgets.
+            $meta_rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT post_id, meta_key, meta_value FROM {$wpdb->postmeta} WHERE meta_value LIKE %s",
+                    $like
+                )
+            );
+            foreach ( (array) $meta_rows as $row ) {
+                $updated = self::apply_dimension_variant_regex( (string) $row->meta_value, $old_variants, $new_variants, $old_ext, $new_ext );
+                if ( $updated !== (string) $row->meta_value ) {
+                    update_metadata( 'post', (int) $row->post_id, $row->meta_key, $updated );
+                }
+            }
+
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+            $option_rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT option_name, option_value FROM {$wpdb->options}
+                     WHERE option_value LIKE %s AND option_name NOT LIKE %s",
+                    $like,
+                    $wpdb->esc_like( '_transient' ) . '%'
+                )
+            );
+            foreach ( (array) $option_rows as $row ) {
+                $updated = self::apply_dimension_variant_regex( (string) $row->option_value, $old_variants, $new_variants, $old_ext, $new_ext );
+                if ( $updated !== (string) $row->option_value ) {
+                    update_option( (string) $row->option_name, $updated );
+                }
+            }
+        }
+
+        foreach ( $posts_by_id as $row ) {
+            $content_updated = self::apply_dimension_variant_regex( (string) $row->post_content, $old_variants, $new_variants, $old_ext, $new_ext );
+            $excerpt_updated = self::apply_dimension_variant_regex( (string) $row->post_excerpt, $old_variants, $new_variants, $old_ext, $new_ext );
+
+            if ( $content_updated !== (string) $row->post_content || $excerpt_updated !== (string) $row->post_excerpt ) {
                 // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
                 $wpdb->update(
                     $wpdb->posts,
-                    array( 'post_content' => $updated ),
-                    array( 'ID'           => (int) $row->ID ),
-                    array( '%s' ),
+                    array(
+                        'post_content' => $content_updated,
+                        'post_excerpt' => $excerpt_updated,
+                    ),
+                    array( 'ID' => (int) $row->ID ),
+                    array( '%s', '%s' ),
                     array( '%d' )
                 );
             }
         }
+    }
+
+    /**
+     * @param string   $content      Stored text.
+     * @param string[] $old_variants Old URL variants.
+     * @param string[] $new_variants New URL variants.
+     * @param string   $old_ext      Old extension.
+     * @param string   $new_ext      New extension.
+     * @return string
+     */
+    private static function apply_dimension_variant_regex( $content, $old_variants, $new_variants, $old_ext, $new_ext ) {
+        $updated = (string) $content;
+
+        for ( $i = 0; $i < count( $old_variants ); $i++ ) {
+            $old_variant = $old_variants[ $i ];
+            $new_variant = isset( $new_variants[ $i ] ) ? $new_variants[ $i ] : $new_variants[0];
+            $old_base    = preg_replace( '/\.' . preg_quote( (string) $old_ext, '/' ) . '$/i', '', $old_variant );
+            $new_base    = preg_replace( '/\.' . preg_quote( (string) $new_ext, '/' ) . '$/i', '', $new_variant );
+            if ( ! $old_base || ! $new_base || $old_base === $new_base ) {
+                continue;
+            }
+
+            $updated = preg_replace(
+                '/' . preg_quote( $old_base, '/' ) . '-(\d+x\d+)\.' . preg_quote( (string) $old_ext, '/' ) . '/i',
+                $new_base . '-$1.' . $new_ext,
+                $updated
+            );
+        }
+
+        return $updated;
     }
 
     /**
@@ -616,18 +1194,22 @@ class TSOIMMA_Optimizer {
             );
         }
 
-        $current_path  = get_attached_file( $attachment_id );
-        $current_url   = wp_get_attachment_url( $attachment_id );
-        $pi_backup     = pathinfo( $backup_path );
-        $pi_current    = pathinfo( $current_path );
+        $current_path = get_attached_file( $attachment_id );
+        $current_url  = wp_get_attachment_url( $attachment_id );
+        $old_meta     = wp_get_attachment_metadata( $attachment_id );
+        $pi_backup    = pathinfo( $backup_path );
+        $pi_current   = pathinfo( $current_path );
         $restored_path = $pi_current['dirname'] . '/' . $pi_current['filename'] . '.' . $pi_backup['extension'];
 
         if ( ! @copy( $backup_path, $restored_path ) ) {
             return new WP_Error( 'copy_failed', 'No s\'ha pogut restaurar el fitxer.' );
         }
 
-        if ( strtolower( $pi_current['extension'] ) !== strtolower( $pi_backup['extension'] ) ) {
-            wp_delete_file( $current_path );
+        if ( ! self::extensions_match( $pi_current['extension'], $pi_backup['extension'] ) ) {
+            if ( file_exists( $current_path ) ) {
+                wp_delete_file( $current_path );
+            }
+            self::delete_scaled_variant_if_exists( $pi_current['dirname'], $pi_current['filename'], $pi_current['extension'] );
         }
 
         update_attached_file( $attachment_id, $restored_path );
@@ -641,22 +1223,43 @@ class TSOIMMA_Optimizer {
             array( '%s' ), array( '%d' )
         );
 
-        wp_update_attachment_metadata(
-            $attachment_id,
-            wp_generate_attachment_metadata( $attachment_id, $restored_path )
-        );
+        $new_meta    = array();
+        $generated   = wp_generate_attachment_metadata( $attachment_id, $restored_path );
+        if ( ! is_wp_error( $generated ) && ! empty( $generated ) ) {
+            $new_meta = $generated;
+            wp_update_attachment_metadata( $attachment_id, $new_meta );
+        }
 
         clean_attachment_cache( $attachment_id );
         $restored_url = wp_get_attachment_url( $attachment_id );
 
-        if ( $current_url !== $restored_url ) {
-            self::replace_url_in_content( $current_url, $restored_url );
+        $url_pairs = array();
+        if ( $current_url && $restored_url && $current_url !== $restored_url ) {
+            $url_pairs[] = array( $current_url, $restored_url );
+        }
+        if ( is_array( $old_meta ) && ! empty( $old_meta['sizes'] ) && is_array( $new_meta ) && ! empty( $new_meta['sizes'] ) ) {
+            $old_dir_url = trailingslashit( dirname( (string) $current_url ) );
+            $new_dir_url = trailingslashit( dirname( (string) $restored_url ) );
+            foreach ( $old_meta['sizes'] as $size_key => $old_sz ) {
+                if ( empty( $old_sz['file'] ) || empty( $new_meta['sizes'][ $size_key ]['file'] ) ) {
+                    continue;
+                }
+                $old_thumb_url = $old_dir_url . self::encode_rel_path_for_url( $old_sz['file'] );
+                $new_thumb_url = $new_dir_url . self::encode_rel_path_for_url( $new_meta['sizes'][ $size_key ]['file'] );
+                if ( $old_thumb_url !== $new_thumb_url ) {
+                    $url_pairs[] = array( $old_thumb_url, $new_thumb_url );
+                }
+            }
+        }
+        if ( ! empty( $url_pairs ) ) {
+            self::replace_url_pairs_in_content( $url_pairs );
             // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
             $wpdb->update(
                 $wpdb->posts,
                 array( 'guid' => $restored_url ),
                 array( 'ID'   => $attachment_id ),
-                array( '%s' ), array( '%d' )
+                array( '%s' ),
+                array( '%d' )
             );
         }
 
@@ -713,6 +1316,122 @@ class TSOIMMA_Optimizer {
         }
     }
 
+    /**
+     * Flatten transparency onto white before saving as JPEG (WebP/PNG → JPG).
+     *
+     * @param resource|\GdImage $image     GD image resource.
+     * @param string            $target_ext Target extension.
+     * @return resource|\GdImage
+     */
+    private static function prepare_image_for_output( $image, $target_ext ) {
+        if ( ! in_array( strtolower( (string) $target_ext ), array( 'jpg', 'jpeg' ), true ) ) {
+            return $image;
+        }
+
+        $width  = imagesx( $image );
+        $height = imagesy( $image );
+        if ( $width <= 0 || $height <= 0 ) {
+            return $image;
+        }
+
+        $canvas = imagecreatetruecolor( $width, $height );
+        if ( ! $canvas ) {
+            return $image;
+        }
+
+        $white = imagecolorallocate( $canvas, 255, 255, 255 );
+        imagefill( $canvas, 0, 0, $white );
+        imagealphablending( $canvas, true );
+        imagecopy( $canvas, $image, 0, 0, 0, 0, $width, $height );
+        imagedestroy( $image );
+
+        return $canvas;
+    }
+
+    /**
+     * Convert one image file on disk to another format.
+     *
+     * @param string $source_path  Existing file.
+     * @param string $dest_path    Destination file.
+     * @param string $output_format Output format key (webp, jpg, original).
+     * @param int    $quality      Quality 1-100.
+     * @return bool
+     */
+    private static function convert_file_to_format( $source_path, $dest_path, $output_format, $quality ) {
+        if ( ! file_exists( $source_path ) ) {
+            return false;
+        }
+
+        $mime = mime_content_type( $source_path );
+        if ( false === strpos( (string) $mime, 'image/' ) ) {
+            return false;
+        }
+
+        $image = self::load_image( $source_path, $mime );
+        if ( ! $image ) {
+            return false;
+        }
+
+        $dest_ext = strtolower( pathinfo( $dest_path, PATHINFO_EXTENSION ) );
+        if ( '' === $dest_ext ) {
+            $dest_ext = self::get_extension( $output_format, pathinfo( $source_path, PATHINFO_EXTENSION ) );
+        }
+
+        return self::save_image_resource_to_path( $image, $dest_path, $dest_ext, $quality );
+    }
+
+    /**
+     * Normalize requested output format (fallback when WebP is unavailable).
+     *
+     * @param string $output_format Requested format.
+     * @return string
+     */
+    private static function normalize_output_format( $output_format ) {
+        $output_format = sanitize_key( (string) $output_format );
+        if ( 'webp' === $output_format && ! self::webp_supported() ) {
+            return 'jpg';
+        }
+        return $output_format;
+    }
+
+    /**
+     * Save a GD image resource to disk with validation.
+     *
+     * @param resource|\GdImage $image  GD image.
+     * @param string            $path   Destination path.
+     * @param string            $ext    Target extension.
+     * @param int               $quality Quality.
+     * @return bool
+     */
+    private static function save_image_resource_to_path( $image, $path, $ext, $quality ) {
+        if ( ! $image ) {
+            return false;
+        }
+        $image = self::prepare_image_for_output( $image, $ext );
+        $saved = self::save_image( $image, $path, $ext, $quality );
+        imagedestroy( $image );
+        return $saved && file_exists( $path ) && filesize( $path ) > 0;
+    }
+
+    /**
+     * Delete WordPress "-scaled.{ext}" leftover when the main extension changes.
+     *
+     * @param string $dir      Directory path.
+     * @param string $filename Base filename without extension.
+     * @param string $ext      Old extension.
+     * @return void
+     */
+    private static function delete_scaled_variant_if_exists( $dir, $filename, $ext ) {
+        $ext = strtolower( (string) $ext );
+        if ( '' === $ext ) {
+            return;
+        }
+        $scaled_path = trailingslashit( (string) $dir ) . $filename . '-scaled.' . $ext;
+        if ( file_exists( $scaled_path ) ) {
+            wp_delete_file( $scaled_path );
+        }
+    }
+
     private static function save_image( $image, $path, $ext, $quality ) {
         switch ( strtolower( $ext ) ) {
             case 'webp':
@@ -728,6 +1447,23 @@ class TSOIMMA_Optimizer {
                 return imagegif( $image, $path );
         }
         return false;
+    }
+
+    /**
+     * Compare file extensions (jpg/jpeg treated as equivalent).
+     *
+     * @param string $a Extension A.
+     * @param string $b Extension B.
+     * @return bool
+     */
+    public static function extensions_match( $a, $b ) {
+        $a = strtolower( (string) $a );
+        $b = strtolower( (string) $b );
+        if ( $a === $b ) {
+            return true;
+        }
+        $jpg_family = array( 'jpg', 'jpeg' );
+        return in_array( $a, $jpg_family, true ) && in_array( $b, $jpg_family, true );
     }
 
     private static function get_extension( $output_format, $original_ext ) {
