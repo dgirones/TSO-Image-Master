@@ -336,6 +336,7 @@ class TSOIMMA_URL_Fixer {
             'total'               => count( $all_issues ),
             'total_posts_scanned' => $total_scanned,
             'fixable'             => $fixable,
+            'removable'           => count( $all_issues ) - $fixable,
         );
     }
 
@@ -420,6 +421,238 @@ class TSOIMMA_URL_Fixer {
         return array( 'fixed' => $fixed, 'skipped' => $skipped, 'errors' => $errors );
     }
 
+    /**
+     * Remove broken image URL references from posts, postmeta, and options.
+     *
+     * @param string[] $urls Absolute uploads URLs to strip from storage.
+     * @return array{removed:int,skipped:int,errors:string[]}
+     */
+    public static function remove_urls( $urls ) {
+        $removed = 0;
+        $skipped = 0;
+        $errors  = array();
+
+        foreach ( (array) $urls as $url ) {
+            $url = esc_url_raw( (string) $url );
+            if ( ! $url ) {
+                $skipped++;
+                continue;
+            }
+
+            if ( ! self::is_uploads_media_url( $url ) ) {
+                $path     = wp_parse_url( $url, PHP_URL_PATH );
+                $errors[] = 'URL fora de uploads: ' . basename( '' !== $path ? (string) $path : $url );
+                $skipped++;
+                continue;
+            }
+
+            if ( null !== self::uploads_path_from_url( $url, true ) ) {
+                $errors[] = 'El fitxer encara existeix al disc: ' . basename( $url );
+                $skipped++;
+                continue;
+            }
+
+            $affected = self::remove_url_from_db( $url );
+            if ( $affected > 0 ) {
+                $removed++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        if ( $removed > 0 ) {
+            if ( function_exists( 'wp_cache_flush' ) ) {
+                wp_cache_flush();
+            }
+            do_action( 'litespeed_purge_all' );  // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Third-party LiteSpeed Cache integration hook, name is defined by that plugin.
+            if ( function_exists( 'rocket_clean_domain' ) ) {
+                rocket_clean_domain();
+            }
+            if ( function_exists( 'w3tc_flush_all' ) ) {
+                w3tc_flush_all();
+            }
+            if ( function_exists( 'wpfc_clear_all_cache' ) ) {
+                wpfc_clear_all_cache();
+            }
+        }
+
+        return array( 'removed' => $removed, 'skipped' => $skipped, 'errors' => $errors );
+    }
+
+    /**
+     * Strip one uploads URL from stored text (HTML, blocks, serialized values).
+     *
+     * @param string $value Stored value.
+     * @param string $url   URL to remove.
+     * @return string
+     */
+    private static function remove_url_from_stored_value( $value, $url ) {
+        $value = (string) $value;
+        if ( '' === $value || '' === (string) $url ) {
+            return $value;
+        }
+
+        if ( is_serialized( $value ) ) {
+            $data = maybe_unserialize( $value );
+            if ( is_array( $data ) || is_object( $data ) ) {
+                $data = map_deep(
+                    $data,
+                    function( $item ) use ( $url ) {
+                        return is_string( $item ) ? self::remove_url_from_text( $item, $url ) : $item;
+                    }
+                );
+                return maybe_serialize( $data );
+            }
+        }
+
+        return self::remove_url_from_text( $value, $url );
+    }
+
+    /**
+     * Remove img tags, Gutenberg image blocks, and bare URLs from HTML/text.
+     *
+     * @param string $text  Content fragment.
+     * @param string $url   Broken media URL.
+     * @return string
+     */
+    private static function remove_url_from_text( $text, $url ) {
+        $text = (string) $text;
+        if ( '' === $text || '' === (string) $url ) {
+            return $text;
+        }
+
+        $variants = array_values(
+            array_unique(
+                array_filter(
+                    array( $url, rawurldecode( $url ) ),
+                    'strlen'
+                )
+            )
+        );
+
+        foreach ( $variants as $u ) {
+            $esc = preg_quote( $u, '/' );
+
+            $text = preg_replace_callback(
+                '/<!-- wp:image\b[^>]*-->[\s\S]*?<!-- \/wp:image -->/i',
+                function( $match ) use ( $u ) {
+                    $block = $match[0];
+                    if ( false !== stripos( $block, $u ) || false !== stripos( rawurldecode( $block ), rawurldecode( $u ) ) ) {
+                        return '';
+                    }
+                    return $block;
+                },
+                $text
+            );
+
+            $text = preg_replace(
+                '/<img\b(?=[^>]*(?:\bsrc|\bsrcset)\s*=\s*["\'][^"\']*' . $esc . ')[^>]*\/?>/i',
+                '',
+                $text
+            );
+
+            $text = preg_replace(
+                '/<a\b[^>]*\bhref=(["\'])' . $esc . '\1[^>]*>[\s\S]*?<\/a>/i',
+                '',
+                $text
+            );
+
+            $text = str_replace( $u, '', $text );
+        }
+
+        $text = preg_replace( '/<figure\b[^>]*>\s*<\/figure>/i', '', $text );
+        $text = preg_replace( '/<p>\s*<\/p>/i', '', $text );
+
+        return $text;
+    }
+
+    /**
+     * Remove one broken URL everywhere it appears in public storage.
+     *
+     * @param string $url Media URL.
+     * @return int Number of storage updates performed.
+     */
+    private static function remove_url_from_db( $url ) {
+        global $wpdb;
+        $affected = 0;
+
+        $variants = array_values(
+            array_unique(
+                array_filter(
+                    array( $url, rawurldecode( $url ) ),
+                    'strlen'
+                )
+            )
+        );
+
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+        foreach ( $variants as $u ) {
+            $like = '%' . $wpdb->esc_like( $u ) . '%';
+
+            $rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT ID, post_content, post_excerpt FROM {$wpdb->posts}
+                     WHERE (post_content LIKE %s OR post_excerpt LIKE %s) AND post_status != 'trash'",
+                    $like,
+                    $like
+                )
+            );
+            foreach ( (array) $rows as $row ) {
+                $content_updated = self::remove_url_from_text( (string) $row->post_content, $url );
+                $excerpt_updated = self::remove_url_from_text( (string) $row->post_excerpt, $url );
+                if ( $content_updated !== (string) $row->post_content || $excerpt_updated !== (string) $row->post_excerpt ) {
+                    $wpdb->update(
+                        $wpdb->posts,
+                        array(
+                            'post_content' => $content_updated,
+                            'post_excerpt' => $excerpt_updated,
+                        ),
+                        array( 'ID' => (int) $row->ID ),
+                        array( '%s', '%s' ),
+                        array( '%d' )
+                    );
+                    $affected++;
+                }
+            }
+
+            $meta_rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT post_id, meta_key, meta_value FROM {$wpdb->postmeta} WHERE meta_value LIKE %s",
+                    $like
+                )
+            );
+            foreach ( (array) $meta_rows as $row ) {
+                $updated = self::remove_url_from_stored_value( (string) $row->meta_value, $url );
+                if ( $updated !== (string) $row->meta_value ) {
+                    update_metadata( 'post', (int) $row->post_id, $row->meta_key, $updated );
+                    $affected++;
+                }
+            }
+
+            $option_rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT option_name, option_value FROM {$wpdb->options}
+                     WHERE option_value LIKE %s
+                     AND option_name NOT LIKE %s
+                     AND option_name NOT LIKE %s",
+                    $like,
+                    $wpdb->esc_like( '_transient' ) . '%',
+                    $wpdb->esc_like( '_site_transient' ) . '%'
+                )
+            );
+            foreach ( (array) $option_rows as $row ) {
+                $updated = self::remove_url_from_stored_value( (string) $row->option_value, $url );
+                if ( $updated !== (string) $row->option_value ) {
+                    update_option( (string) $row->option_name, $updated );
+                    $affected++;
+                }
+            }
+        }
+        // phpcs:enable
+
+        return $affected;
+    }
+
     private static function replace_in_db( $old_url, $new_url ) {
         global $wpdb;
         $affected = 0;
@@ -446,21 +679,38 @@ class TSOIMMA_URL_Fixer {
                 $old, $new, $old, $new, $like, $like
             ) );
 
-            $affected += (int) $wpdb->query( $wpdb->prepare(  // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-                "UPDATE {$wpdb->postmeta} SET meta_value = REPLACE(meta_value, %s, %s) WHERE meta_value LIKE %s",
-                $old, $new, $like
-            ) );
+            $meta_rows = $wpdb->get_results(  // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+                $wpdb->prepare(
+                    "SELECT post_id, meta_key, meta_value FROM {$wpdb->postmeta} WHERE meta_value LIKE %s",
+                    $like
+                )
+            );
+            foreach ( (array) $meta_rows as $row ) {
+                $updated = TSOIMMA_Optimizer::replace_in_stored_value( (string) $row->meta_value, $old, $new );
+                if ( $updated !== (string) $row->meta_value ) {
+                    update_metadata( 'post', (int) $row->post_id, $row->meta_key, $updated );
+                    $affected++;
+                }
+            }
 
-            $affected += (int) $wpdb->query( $wpdb->prepare(  // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-                "UPDATE {$wpdb->options}
-                 SET option_value = REPLACE(option_value, %s, %s)
-                 WHERE option_value LIKE %s
-                 AND option_name NOT LIKE %s
-                 AND option_name NOT LIKE %s",
-                $old, $new, $like,
-                $wpdb->esc_like( '_transient' ) . '%',
-                $wpdb->esc_like( '_site_transient' ) . '%'
-            ) );
+            $option_rows = $wpdb->get_results(  // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+                $wpdb->prepare(
+                    "SELECT option_name, option_value FROM {$wpdb->options}
+                     WHERE option_value LIKE %s
+                     AND option_name NOT LIKE %s
+                     AND option_name NOT LIKE %s",
+                    $like,
+                    $wpdb->esc_like( '_transient' ) . '%',
+                    $wpdb->esc_like( '_site_transient' ) . '%'
+                )
+            );
+            foreach ( (array) $option_rows as $row ) {
+                $updated = TSOIMMA_Optimizer::replace_in_stored_value( (string) $row->option_value, $old, $new );
+                if ( $updated !== (string) $row->option_value ) {
+                    update_option( (string) $row->option_name, $updated );
+                    $affected++;
+                }
+            }
         }
         // phpcs:enable
 

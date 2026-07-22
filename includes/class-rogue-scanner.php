@@ -73,12 +73,12 @@ class TSOIMMA_Rogue_Scanner {
                 continue;
             }
 
-            // 1. Comprovar patrons coneguts (màxima prioritat)
+            // 1. Comprovar patrons coneguts
             foreach ( self::$known_patterns as $pattern => $code ) {
                 if ( preg_match( $pattern, $filename ) ) {
                     $reason_code = $code;
                     $reason      = self::reason_label_from_code( $code );
-                    $priority = 'high';
+                    $priority    = in_array( $code, array( 'double_extension', 'tso_temp' ), true ) ? 'high' : 'normal';
                     $by_type['known_pattern']++;
                     break;
                 }
@@ -97,22 +97,27 @@ class TSOIMMA_Rogue_Scanner {
                 // Guardem el path absolut original (no normalitzat) en base64
                 // per preservar l'encoding del filesystem en l'eliminació.
                 $rogue[] = array(
-                    'path'      => self::safe_utf8( $rel_path ),
-                    'path_b64'  => base64_encode( $full_path ),
-                    'filename'  => self::safe_utf8( $filename ),
-                    'reason'    => $reason,
+                    'path'        => self::safe_utf8( $rel_path ),
+                    'path_b64'    => base64_encode( $full_path ),
+                    'filename'    => self::safe_utf8( $filename ),
+                    'reason'      => $reason,
                     'reason_code' => $reason_code,
-                    'priority'  => $priority,
-                    'size'      => $size,
-                    'size_h'    => size_format( $size ),
-                    'url'       => $base_url . self::safe_utf8( $rel_path ),
-                    'date'      => gmdate( 'd/m/Y H:i', filemtime( $full_path ) ),
+                    'priority'    => $priority,
+                    'size'        => $size,
+                    'size_h'      => size_format( $size ),
+                    'url'         => $base_url . self::safe_utf8( $rel_path ),
+                    'mtime'       => (int) filemtime( $full_path ),
+                    'date'        => gmdate( 'd/m/Y H:i', filemtime( $full_path ) ),
                 );
             }
         }
 
-        // Ordenar A→Z per nom de fitxer
+        // Ordenar per data de modificació (més recent primer).
         usort( $rogue, function( $a, $b ) {
+            $mtime_cmp = ( $b['mtime'] ?? 0 ) <=> ( $a['mtime'] ?? 0 );
+            if ( 0 !== $mtime_cmp ) {
+                return $mtime_cmp;
+            }
             return strcasecmp( $a['filename'], $b['filename'] );
         } );
 
@@ -136,7 +141,7 @@ class TSOIMMA_Rogue_Scanner {
             'generic_backup'     => 'Backup genèric (.bk)',
             'unregistered_wp_db' => 'Fitxer no registrat a la BD de WordPress',
         );
-        return isset( $labels[ $code ] ) ? $labels[ $code ] : 'Fitxer problemàtic';
+        return isset( $labels[ $code ] ) ? $labels[ $code ] : 'Fitxer extra';
     }
 
     /**
@@ -242,7 +247,9 @@ class TSOIMMA_Rogue_Scanner {
              AND meta_value != ''"
         );
         foreach ( (array) $backups as $path ) {
-            $registered[ wp_normalize_path( $path ) ] = true;
+            if ( $path && file_exists( $path ) ) {
+                $registered[ wp_normalize_path( $path ) ] = true;
+            }
         }
 
         return $registered;

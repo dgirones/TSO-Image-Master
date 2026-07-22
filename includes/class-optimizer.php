@@ -30,11 +30,6 @@ class TSOIMMA_Optimizer {
             return new WP_Error( 'not_image', 'El fitxer no és una imatge.' );
         }
 
-        $image = self::load_image( $file_path, $mime );
-        if ( ! $image ) {
-            return new WP_Error( 'load_failed', 'No s\'ha pogut carregar la imatge amb GD.' );
-        }
-
         $original_size = filesize( $file_path );
         $path_info     = pathinfo( $file_path );
         $old_ext       = strtolower( $path_info['extension'] );
@@ -49,6 +44,24 @@ class TSOIMMA_Optimizer {
             $clean_filename = $inner_pi['filename'];
         }
         $path_info['filename'] = $clean_filename;
+
+        // Remove leftover temp files from a previous failed conversion attempt.
+        self::cleanup_stale_opt_temp_files( $path_info['dirname'], $path_info['filename'] );
+
+        if ( 'image/gif' === $mime && self::is_animated_gif( $file_path ) ) {
+            return new WP_Error(
+                'animated_gif',
+                'Els GIF animats no es poden convertir. Puja un GIF estàtic o desactiva la conversió per a GIF.'
+            );
+        }
+
+        $image = self::load_image( $file_path, $mime );
+        if ( ! $image ) {
+            return new WP_Error(
+                'load_failed',
+                self::get_load_error_message( $mime, $old_ext )
+            );
+        }
 
         // ── Redimensionar si cal ─────────────────────────────────────
         $max_width  = absint( $max_width );
@@ -88,6 +101,18 @@ class TSOIMMA_Optimizer {
         // Guardar fitxer temporal (flatten alpha when targeting JPEG).
         $temp_path = $path_info['dirname'] . '/' . $path_info['filename'] . '_tso_im_opt.' . $new_ext;
         if ( ! self::save_image_resource_to_path( $image, $temp_path, $new_ext, $quality ) ) {
+            self::cleanup_stale_opt_temp_files( $path_info['dirname'], $path_info['filename'] );
+            $detail = 'webp' === $new_ext && ! self::webp_supported()
+                ? ' El servidor no te suport WebP (GD).'
+                : '';
+            return new WP_Error(
+                'save_failed',
+                'No s\'ha pogut guardar la imatge optimitzada.' . $detail
+            );
+        }
+
+        if ( ! self::is_valid_image_file( $temp_path ) ) {
+            self::delete_file_if_exists( $temp_path );
             return new WP_Error( 'save_failed', 'No s\'ha pogut guardar la imatge optimitzada.' );
         }
 
@@ -131,20 +156,25 @@ class TSOIMMA_Optimizer {
         // Store backup in plugin-specific uploads subdirectory (WP.org guideline).
         $backup_path  = self::get_backup_path( $old_path, strtolower( $old_ext ) );
 
-        // Backup silenciós — només si $make_backup és true
-        // En auto-optimització de pujades noves el backup no és necessari
+        // Backup silenciós — només si $make_backup és true, després de validar el temp.
         if ( $make_backup ) {
-            @copy( $old_path, $backup_path );
+        if ( ! self::copy_file_validated( $old_path, $backup_path ) ) {
+            self::delete_file_if_exists( $temp_path );
+            self::prune_empty_backup_dirs( $backup_path );
+            return new WP_Error(
+                'backup_failed',
+                'No s\'ha pogut crear la còpia de seguretat. No s\'ha modificat l\'original.'
+            );
+        }
         }
 
-        // Moure temporal → final
-        $move_ok = @copy( $temp_path, $final_path );
-        wp_delete_file( $temp_path );
-
-        if ( ! $move_ok || ! file_exists( $final_path ) ) {
-            wp_delete_file( $backup_path );
+        if ( ! self::copy_file_validated( $temp_path, $final_path ) ) {
+            self::delete_file_if_exists( $temp_path );
+            self::delete_backup_file( $backup_path );
             return new WP_Error( 'move_failed', 'No s\'ha pogut escriure el fitxer final. Verifica permisos.' );
         }
+
+        self::delete_file_if_exists( $temp_path );
 
         // Eliminar original (i variant -scaled de WordPress) si l'extensió ha canviat.
         if ( ! self::extensions_match( $old_ext, $new_ext ) ) {
@@ -173,6 +203,7 @@ class TSOIMMA_Optimizer {
         $result['old_url']       = $old_url;
         $result['new_url']       = $new_url;
         $result['new_path']      = $final_path;
+        $result['old_path']      = $old_path;
         $result['backup_path']   = file_exists( $backup_path ) ? $backup_path : '';
         $result['has_backup']    = file_exists( $backup_path );
         $result['backup_size']   = file_exists( $backup_path ) ? filesize( $backup_path ) : 0;
@@ -873,6 +904,12 @@ class TSOIMMA_Optimizer {
             $new_path = $pi['dirname'] . '/' . $thumb_clean_name . '.' . $new_ext;
 
             if ( ! self::save_image_resource_to_path( $image, $new_path, $new_ext, $quality ) ) {
+                self::delete_file_if_exists( $new_path );
+                continue;
+            }
+
+            if ( ! self::is_valid_image_file( $new_path ) ) {
+                self::delete_file_if_exists( $new_path );
                 continue;
             }
 
@@ -935,7 +972,12 @@ class TSOIMMA_Optimizer {
         }
     }
 
-    private static function replace_url_pairs_in_content( $pairs ) {
+    /**
+     * Replace URL pairs in posts, postmeta, and options (serialized-safe).
+     *
+     * @param array<int, array{0:string,1:string}> $pairs Old/new URL pairs.
+     */
+    public static function replace_url_pairs_in_content( $pairs ) {
         global $wpdb;
 
         $replacements = array();
@@ -993,16 +1035,36 @@ class TSOIMMA_Optimizer {
                 "UPDATE {$wpdb->posts} SET post_content = REPLACE(post_content, %s, %s) WHERE post_content LIKE %s",
                 $s, $r, $like
             ) );
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Bulk URL swap in meta fields after optimize/rename.
-            $wpdb->query( $wpdb->prepare(
-                "UPDATE {$wpdb->postmeta} SET meta_value = REPLACE(meta_value, %s, %s) WHERE meta_value LIKE %s",
-                $s, $r, $like
-            ) );
+
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Serialized-safe per-row updates.
+            $meta_rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT post_id, meta_key, meta_value FROM {$wpdb->postmeta} WHERE meta_value LIKE %s",
+                    $like
+                )
+            );
+            foreach ( (array) $meta_rows as $row ) {
+                $updated = self::replace_in_stored_value( (string) $row->meta_value, $s, $r );
+                if ( $updated !== (string) $row->meta_value ) {
+                    update_metadata( 'post', (int) $row->post_id, $row->meta_key, $updated );
+                }
+            }
+
             // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-            $wpdb->query( $wpdb->prepare(
-                "UPDATE {$wpdb->options} SET option_value = REPLACE(option_value, %s, %s) WHERE option_value LIKE %s AND option_name NOT LIKE %s",
-                $s, $r, $like, $wpdb->esc_like( '_transient' ) . '%'
-            ) );
+            $option_rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT option_name, option_value FROM {$wpdb->options}
+                     WHERE option_value LIKE %s AND option_name NOT LIKE %s",
+                    $like,
+                    $wpdb->esc_like( '_transient' ) . '%'
+                )
+            );
+            foreach ( (array) $option_rows as $row ) {
+                $updated = self::replace_in_stored_value( (string) $row->option_value, $s, $r );
+                if ( $updated !== (string) $row->option_value ) {
+                    update_option( (string) $row->option_name, $updated );
+                }
+            }
         }
 
         // Regex pass for dimension variants (-WxH), including encoded and decoded URL forms.
@@ -1166,6 +1228,35 @@ class TSOIMMA_Optimizer {
     }
 
     /**
+     * Roll back filesystem changes when optimize() succeeded but metadata update failed.
+     *
+     * @param array $result Result array from optimize().
+     * @return bool True when rollback completed or nothing to roll back.
+     */
+    public static function rollback_optimize_files( $result ) {
+        if ( empty( $result['replaced'] ) ) {
+            return true;
+        }
+
+        $old_path    = isset( $result['old_path'] ) ? (string) $result['old_path'] : '';
+        $new_path    = isset( $result['new_path'] ) ? (string) $result['new_path'] : '';
+        $backup_path = isset( $result['backup_path'] ) ? (string) $result['backup_path'] : '';
+
+        if ( $old_path && $backup_path && self::is_valid_image_file( $backup_path ) ) {
+            if ( ! self::copy_file_validated( $backup_path, $old_path ) ) {
+                self::delete_file_if_exists( $new_path );
+                return false;
+            }
+        }
+
+        if ( $new_path && ( ! $old_path || wp_normalize_path( $new_path ) !== wp_normalize_path( $old_path ) ) ) {
+            self::delete_file_if_exists( $new_path );
+        }
+
+        return true;
+    }
+
+    /**
      * Reverteix una imatge optimitzada a la còpia de seguretat.
      */
     public static function revert( $attachment_id ) {
@@ -1180,9 +1271,11 @@ class TSOIMMA_Optimizer {
         $backup_attached_file = self::normalize_attached_file_meta_value( get_post_meta( $attachment_id, '_tso_im_backup_attached_file', true ) );
         $current_attached_file = self::normalize_attached_file_meta_value( get_post_meta( $attachment_id, '_wp_attached_file', true ) );
 
-        if ( ! $backup_path || ! file_exists( $backup_path ) ) {
+        $backup_status = self::get_backup_status( $attachment_id, true );
+        if ( empty( $backup_status['has_backup'] ) ) {
             return new WP_Error( 'no_backup', 'No hi ha còpia de seguretat disponible.' );
         }
+        $backup_path = $backup_status['backup_path'];
 
         // Safety guard:
         // If the current attached file no longer matches the backup context (usually after rename),
@@ -1190,7 +1283,7 @@ class TSOIMMA_Optimizer {
         if ( self::is_backup_context_mismatch( $backup_path, $backup_attached_file, $current_attached_file ) ) {
             return new WP_Error(
                 'backup_mismatch_after_rename',
-                'No es pot revertir de forma directa perquè la imatge actual ja no coincideix amb el context del backup (possible rename posterior). Restaura-la primer amb el flux segur de restauració o torna-la a optimitzar per generar un backup nou.'
+                'backup_mismatch_after_rename'
             );
         }
 
@@ -1201,7 +1294,7 @@ class TSOIMMA_Optimizer {
         $pi_current   = pathinfo( $current_path );
         $restored_path = $pi_current['dirname'] . '/' . $pi_current['filename'] . '.' . $pi_backup['extension'];
 
-        if ( ! @copy( $backup_path, $restored_path ) ) {
+        if ( ! self::copy_file_validated( $backup_path, $restored_path ) ) {
             return new WP_Error( 'copy_failed', 'No s\'ha pogut restaurar el fitxer.' );
         }
 
@@ -1263,12 +1356,8 @@ class TSOIMMA_Optimizer {
             );
         }
 
-        delete_post_meta( $attachment_id, '_tso_im_backup_file' );
-        delete_post_meta( $attachment_id, '_tso_im_backup_mime' );
-        delete_post_meta( $attachment_id, '_tso_im_backup_size' );
-        delete_post_meta( $attachment_id, '_tso_im_backup_attached_file' );
-        delete_post_meta( $attachment_id, '_tso_im_backup_current_name' );
-        wp_delete_file( $backup_path );
+        self::clear_backup_meta( $attachment_id );
+        self::delete_backup_file( $backup_path );
 
         return array(
             'attachment_id'   => $attachment_id,
@@ -1283,7 +1372,365 @@ class TSOIMMA_Optimizer {
         return function_exists( 'imagewebp' ) && function_exists( 'imagecreatefromwebp' );
     }
 
+    /**
+     * Remove all backup post meta for an attachment.
+     *
+     * @param int $attachment_id Attachment ID.
+     */
+    public static function clear_backup_meta( $attachment_id ) {
+        $attachment_id = absint( $attachment_id );
+        delete_post_meta( $attachment_id, '_tso_im_backup_file' );
+        delete_post_meta( $attachment_id, '_tso_im_backup_mime' );
+        delete_post_meta( $attachment_id, '_tso_im_backup_size' );
+        delete_post_meta( $attachment_id, '_tso_im_backup_attached_file' );
+        delete_post_meta( $attachment_id, '_tso_im_backup_current_name' );
+    }
+
+    /**
+     * Verify a backup path is inside uploads/tso-image-master/.
+     *
+     * @param string $path            Stored or absolute backup path.
+     * @param bool   $require_exists  When true, the file must exist on disk.
+     * @return string|false Resolved absolute path, or false when invalid.
+     */
+    public static function resolve_backup_path( $path, $require_exists = true ) {
+        $path = (string) $path;
+        if ( '' === $path ) {
+            return false;
+        }
+
+        $upload_dir = wp_upload_dir();
+        $marker     = wp_normalize_path( trailingslashit( $upload_dir['basedir'] ) . 'tso-image-master/' );
+        $norm_path  = wp_normalize_path( $path );
+
+        if ( 0 !== strpos( $norm_path, $marker ) ) {
+            return false;
+        }
+
+        if ( ! preg_match( '/_tso_im_backup\.[a-z0-9]+$/i', $norm_path ) ) {
+            return false;
+        }
+
+        if ( ! file_exists( $path ) ) {
+            return $require_exists ? false : $norm_path;
+        }
+
+        $real_path = realpath( $path );
+        if ( false === $real_path || ! is_file( $real_path ) ) {
+            return false;
+        }
+
+        $norm_real = wp_normalize_path( $real_path );
+        if ( 0 !== strpos( $norm_real, $marker ) ) {
+            return false;
+        }
+
+        return $real_path;
+    }
+
+    /**
+     * Remove empty parent directories under uploads/tso-image-master/ after a backup is deleted.
+     *
+     * @param string $backup_file_path Absolute path of the deleted backup file.
+     * @return void
+     */
+    public static function prune_empty_backup_dirs( $backup_file_path ) {
+        $backup_file_path = (string) $backup_file_path;
+        if ( '' === $backup_file_path ) {
+            return;
+        }
+
+        $upload_dir  = wp_upload_dir();
+        $backup_base = wp_normalize_path( trailingslashit( $upload_dir['basedir'] ) . 'tso-image-master' );
+        $dir         = wp_normalize_path( dirname( $backup_file_path ) );
+
+        if ( $dir === $backup_base || 0 !== strpos( $dir, $backup_base . '/' ) ) {
+            return;
+        }
+
+        while ( $dir !== $backup_base && 0 === strpos( $dir, $backup_base . '/' ) ) {
+            if ( ! is_dir( $dir ) ) {
+                break;
+            }
+
+            clearstatcache( true, $dir );
+            $entries = scandir( $dir );
+            if ( false === $entries ) {
+                break;
+            }
+
+            $remaining = array_diff( $entries, array( '.', '..' ) );
+            if ( ! empty( $remaining ) ) {
+                break;
+            }
+
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir
+            if ( ! @rmdir( $dir ) ) {
+                break;
+            }
+
+            $dir = wp_normalize_path( dirname( $dir ) );
+        }
+    }
+
+    /**
+     * Delete a backup file and prune empty directories left behind.
+     *
+     * @param string $backup_path Absolute backup file path.
+     * @return void
+     */
+    private static function delete_backup_file( $backup_path ) {
+        self::delete_file_if_exists( $backup_path );
+        self::prune_empty_backup_dirs( $backup_path );
+    }
+
+    /**
+     * Return backup availability based on the physical file, not stale DB meta alone.
+     *
+     * @param int  $attachment_id     Attachment ID.
+     * @param bool $clear_stale_meta  Remove backup meta when the file no longer exists.
+     * @return array{has_backup:bool,backup_size:string,backup_bytes:int,backup_path:string}
+     */
+    public static function get_backup_status( $attachment_id, $clear_stale_meta = true ) {
+        $attachment_id = absint( $attachment_id );
+        $empty         = array(
+            'has_backup'   => false,
+            'backup_size'  => '',
+            'backup_bytes' => 0,
+            'backup_path'  => '',
+        );
+
+        $stored_path = get_post_meta( $attachment_id, '_tso_im_backup_file', true );
+        if ( ! $stored_path ) {
+            return $empty;
+        }
+
+        $resolved = self::resolve_backup_path( $stored_path, true );
+        if ( ! $resolved || ! self::is_valid_image_file( $resolved ) ) {
+            $resolved = self::locate_backup_file_for_attachment( $attachment_id );
+            if ( $resolved ) {
+                update_post_meta( $attachment_id, '_tso_im_backup_file', $resolved );
+                update_post_meta( $attachment_id, '_tso_im_backup_size', filesize( $resolved ) );
+            }
+        }
+
+        if ( ! $resolved || ! self::is_valid_image_file( $resolved ) ) {
+            if ( $clear_stale_meta ) {
+                self::clear_backup_meta( $attachment_id );
+            }
+            return $empty;
+        }
+
+        clearstatcache( true, $resolved );
+        $bytes = filesize( $resolved );
+
+        return array(
+            'has_backup'   => true,
+            'backup_size'  => size_format( $bytes ),
+            'backup_bytes' => (int) $bytes,
+            'backup_path'  => $resolved,
+        );
+    }
+
+    /**
+     * Try to locate a backup file when stored meta path is stale.
+     *
+     * @param int $attachment_id Attachment ID.
+     * @return string|false Absolute path when found.
+     */
+    private static function locate_backup_file_for_attachment( $attachment_id ) {
+        $backup_mime     = (string) get_post_meta( $attachment_id, '_tso_im_backup_mime', true );
+        $backup_attached = self::normalize_attached_file_meta_value(
+            get_post_meta( $attachment_id, '_tso_im_backup_attached_file', true )
+        );
+        $upload_dir      = wp_upload_dir();
+        $basedir_norm    = wp_normalize_path( trailingslashit( $upload_dir['basedir'] ) );
+
+        $mime_ext_map = array(
+            'image/jpeg' => 'jpg',
+            'image/png'  => 'png',
+            'image/gif'  => 'gif',
+            'image/webp' => 'webp',
+        );
+        $ext = isset( $mime_ext_map[ $backup_mime ] ) ? $mime_ext_map[ $backup_mime ] : '';
+        if ( '' === $ext ) {
+            $stored = (string) get_post_meta( $attachment_id, '_tso_im_backup_file', true );
+            $ext    = strtolower( pathinfo( $stored, PATHINFO_EXTENSION ) );
+        }
+        if ( '' === $ext ) {
+            return false;
+        }
+
+        $source_paths = array();
+        if ( $backup_attached ) {
+            $source_paths[] = $basedir_norm . ltrim( wp_normalize_path( $backup_attached ), '/' );
+        }
+
+        $current = get_attached_file( $attachment_id );
+        if ( $current ) {
+            $source_paths[] = wp_normalize_path( $current );
+        }
+
+        $source_paths = array_values( array_unique( array_filter( $source_paths ) ) );
+        foreach ( $source_paths as $source_path ) {
+            $candidate = self::get_backup_path( $source_path, $ext );
+            if ( self::is_valid_image_file( $candidate ) ) {
+                return $candidate;
+            }
+
+            $filename = pathinfo( $source_path, PATHINFO_FILENAME );
+            $legacy   = $basedir_norm . 'tso-image-master/' . $filename . '_tso_im_backup.' . $ext;
+            if ( self::is_valid_image_file( $legacy ) ) {
+                return wp_normalize_path( $legacy );
+            }
+        }
+
+        return false;
+    }
+
     // ── Helpers privats ─────────────────────────────────────────────
+
+    /**
+     * Replace a substring inside a stored value without breaking serialized PHP data.
+     *
+     * @param string $value   Stored meta/option value.
+     * @param string $search  Needle.
+     * @param string $replace Replacement.
+     * @return string
+     */
+    public static function replace_in_stored_value( $value, $search, $replace ) {
+        $value = (string) $value;
+        if ( '' === $value || $search === $replace ) {
+            return $value;
+        }
+
+        if ( is_serialized( $value ) ) {
+            $data = maybe_unserialize( $value );
+            if ( is_array( $data ) || is_object( $data ) ) {
+                $data = map_deep(
+                    $data,
+                    function( $item ) use ( $search, $replace ) {
+                        return is_string( $item ) ? str_replace( $search, $replace, $item ) : $item;
+                    }
+                );
+                return maybe_serialize( $data );
+            }
+        }
+
+        return str_replace( $search, $replace, $value );
+    }
+
+    /**
+     * Delete a file if it exists on disk.
+     *
+     * @param string $path Absolute file path.
+     */
+    public static function delete_file_if_exists( $path ) {
+        if ( $path && file_exists( $path ) ) {
+            wp_delete_file( $path );
+        }
+    }
+
+    /**
+     * Whether a path points to a non-empty file.
+     *
+     * @param string $path     Absolute file path.
+     * @param int    $min_size Minimum size in bytes.
+     * @return bool
+     */
+    public static function is_valid_image_file( $path, $min_size = 1 ) {
+        if ( ! $path || ! is_file( $path ) ) {
+            return false;
+        }
+        clearstatcache( true, $path );
+        return filesize( $path ) >= max( 1, (int) $min_size );
+    }
+
+    /**
+     * Copy a file and verify the destination is non-empty.
+     *
+     * @param string $source Source path.
+     * @param string $dest   Destination path.
+     * @return bool
+     */
+    public static function copy_file_validated( $source, $dest ) {
+        if ( ! @copy( $source, $dest ) ) {
+            self::delete_file_if_exists( $dest );
+            return false;
+        }
+        if ( ! self::is_valid_image_file( $dest, 1 ) ) {
+            self::delete_file_if_exists( $dest );
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Remove stale *_tso_im_opt.* files left by a failed conversion.
+     *
+     * @param string $dir      Directory containing the attachment.
+     * @param string $basename Filename without extension.
+     */
+    private static function cleanup_stale_opt_temp_files( $dir, $basename ) {
+        $dir = trailingslashit( (string) $dir );
+        $basename = (string) $basename;
+        if ( '' === $dir || '' === $basename ) {
+            return;
+        }
+        foreach ( array( 'webp', 'jpg', 'jpeg', 'png', 'gif', 'avif', 'bmp' ) as $ext ) {
+            self::delete_file_if_exists( $dir . $basename . '_tso_im_opt.' . $ext );
+        }
+    }
+
+    /**
+     * Human-readable load error for unsupported or corrupt sources.
+     *
+     * @param string $mime MIME type.
+     * @param string $ext  File extension.
+     * @return string
+     */
+    private static function get_load_error_message( $mime, $ext ) {
+        $ext  = strtolower( (string) $ext );
+        $mime = (string) $mime;
+
+        if ( in_array( $ext, array( 'tif', 'tiff', 'bmp' ), true )
+            || in_array( $mime, array( 'image/bmp', 'image/x-ms-bmp', 'image/x-bmp', 'image/tiff', 'image/x-tiff', 'image/tif' ), true ) ) {
+            return 'No s\'ha pogut carregar la imatge. BMP/TIFF requereixen GD amb suport o Imagick al servidor.';
+        }
+        if ( 'gif' === $ext || 'image/gif' === $mime ) {
+            return 'No s\'ha pogut carregar el GIF (pot estar corrupte o ser animat).';
+        }
+        if ( in_array( $ext, array( 'webp', 'avif' ), true ) ) {
+            return 'No s\'ha pogut carregar la imatge. Verifica que el servidor tingui suport GD per a ' . strtoupper( $ext ) . '.';
+        }
+        return 'No s\'ha pogut carregar la imatge amb GD.';
+    }
+
+    /**
+     * Returns true when GIF contains more than one frame.
+     *
+     * @param string $file_path Absolute path.
+     * @return bool
+     */
+    private static function is_animated_gif( $file_path ) {
+        if ( ! function_exists( 'WP_Filesystem' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+
+        global $wp_filesystem;
+        WP_Filesystem();
+
+        if ( ! is_object( $wp_filesystem ) || ! method_exists( $wp_filesystem, 'get_contents' ) ) {
+            return true;
+        }
+
+        $bytes = $wp_filesystem->get_contents( $file_path );
+        if ( ! is_string( $bytes ) || '' === $bytes ) {
+            return true;
+        }
+
+        return preg_match_all( '#\x00\x21\xF9\x04.{4}\x00\x2C#s', $bytes ) > 1;
+    }
 
     private static function load_image( $path, $mime ) {
         switch ( $mime ) {
@@ -1377,7 +1824,11 @@ class TSOIMMA_Optimizer {
             $dest_ext = self::get_extension( $output_format, pathinfo( $source_path, PATHINFO_EXTENSION ) );
         }
 
-        return self::save_image_resource_to_path( $image, $dest_path, $dest_ext, $quality );
+        $ok = self::save_image_resource_to_path( $image, $dest_path, $dest_ext, $quality );
+        if ( ! $ok ) {
+            self::delete_file_if_exists( $dest_path );
+        }
+        return $ok;
     }
 
     /**
@@ -1408,9 +1859,65 @@ class TSOIMMA_Optimizer {
             return false;
         }
         $image = self::prepare_image_for_output( $image, $ext );
+        if ( 'webp' === strtolower( (string) $ext ) ) {
+            $image = self::ensure_truecolor_image( $image, true );
+        }
         $saved = self::save_image( $image, $path, $ext, $quality );
         imagedestroy( $image );
-        return $saved && file_exists( $path ) && filesize( $path ) > 0;
+        clearstatcache( true, $path );
+        if ( $saved && self::is_valid_image_file( $path, 1 ) ) {
+            return true;
+        }
+        self::delete_file_if_exists( $path );
+        return false;
+    }
+
+    /**
+     * Convert palette/indexed GD images to truecolor (required for reliable WebP output).
+     *
+     * @param resource|\GdImage|null $image          GD image.
+     * @param bool                   $preserve_alpha Keep alpha channel when possible.
+     * @return resource|\GdImage|null
+     */
+    private static function ensure_truecolor_image( $image, $preserve_alpha = true ) {
+        if ( ! $image ) {
+            return $image;
+        }
+
+        if ( function_exists( 'imageistruecolor' ) && imageistruecolor( $image ) ) {
+            if ( $preserve_alpha ) {
+                imagealphablending( $image, false );
+                imagesavealpha( $image, true );
+            }
+            return $image;
+        }
+
+        $width  = imagesx( $image );
+        $height = imagesy( $image );
+        if ( $width <= 0 || $height <= 0 ) {
+            return $image;
+        }
+
+        $canvas = imagecreatetruecolor( $width, $height );
+        if ( ! $canvas ) {
+            return $image;
+        }
+
+        if ( $preserve_alpha ) {
+            imagealphablending( $canvas, false );
+            imagesavealpha( $canvas, true );
+            $transparent = imagecolorallocatealpha( $canvas, 0, 0, 0, 127 );
+            imagefilledrectangle( $canvas, 0, 0, $width, $height, $transparent );
+            imagealphablending( $canvas, true );
+        } else {
+            $white = imagecolorallocate( $canvas, 255, 255, 255 );
+            imagefill( $canvas, 0, 0, $white );
+        }
+
+        imagecopy( $canvas, $image, 0, 0, 0, 0, $width, $height );
+        imagedestroy( $image );
+
+        return $canvas;
     }
 
     /**
@@ -1566,18 +2073,22 @@ class TSOIMMA_Optimizer {
      * @return string  Absolute path for the backup file.
      */
     private static function get_backup_path( $original_path, $ext ) {
-        $upload_dir  = wp_upload_dir();
-        $backup_base = trailingslashit( $upload_dir['basedir'] ) . 'tso-image-master';
+        $upload_dir   = wp_upload_dir();
+        $backup_base  = trailingslashit( $upload_dir['basedir'] ) . 'tso-image-master';
+        $basedir_norm = wp_normalize_path( $upload_dir['basedir'] );
+        $rel          = ltrim( str_replace( $basedir_norm, '', wp_normalize_path( $original_path ) ), '/' );
+        $rel_dir      = dirname( $rel );
+        $filename     = pathinfo( $original_path, PATHINFO_FILENAME );
 
-        // Backups go directly into the tso-image-master root folder — flat structure.
-        // No year/month subdirectories: they would be left empty after deletion.
-        // The tso_im_backup suffix already makes the filename unique enough.
-        if ( ! file_exists( $backup_base ) ) {
-            wp_mkdir_p( $backup_base );
+        $dest_dir = ( '.' === $rel_dir || '' === $rel_dir )
+            ? $backup_base
+            : $backup_base . '/' . $rel_dir;
+
+        if ( ! file_exists( $dest_dir ) ) {
+            wp_mkdir_p( $dest_dir );
         }
 
-        $filename = pathinfo( $original_path, PATHINFO_FILENAME );
-        return $backup_base . '/' . $filename . '_tso_im_backup.' . strtolower( $ext );
+        return wp_normalize_path( $dest_dir . '/' . $filename . '_tso_im_backup.' . strtolower( $ext ) );
     }
 
 

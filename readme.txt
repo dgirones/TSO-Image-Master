@@ -5,7 +5,7 @@ Tags: image optimization, webp, media library, seo, pdf compression
 Requires at least: 5.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.7.0
+Stable tag: 1.9.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -104,8 +104,46 @@ This can happen with images that are already well-optimized, very small images, 
 
 == Changelog ==
 
+= 1.9.1 =
+* Improved: empty folders under `uploads/tso-image-master/` are removed automatically after a backup is deleted (manual delete, revert, attachment delete, rogue scanner).
+* Fixed: orphan empty backup directories when backup creation failed or the file was already gone from disk.
+* Fixed: delete-backup and attachment delete now validate backup paths before removal.
+
+= 1.9.0 =
+* Added: URL Fixer — manually remove broken image references from content when no automatic fix is available (img tags, Gutenberg blocks, widgets).
+* Improved: history auto-cleanup — separate retention days and check frequency (daily/weekly/monthly); save feedback fixed.
+* Improved: clearer revert error when backup no longer matches after a file rename.
+* Fixed: image/PDF search matches filename prefix only (e.g. "ar" finds "arbre", not "mar").
+* Added: PDF preview modal in the PDFs tab (iframe + open in new tab fallback).
+* Improved: Rogue Scanner UI renamed to “extra upload files”; TSO backups shown as informational (not “problematic”).
+* Fixed: image rename failed with fatal error (private URL replace method now callable from Image Manager).
+* Fixed: history filename search uses prefix match (consistent with image/PDF search).
+* Fixed: history retention accepts 1–3650 days (0 = disabled).
+* Added: index.php in plugin subdirectories; upgrade hook reschedules history cron on version bump.
+
+= 1.8.0 =
+* Fixed: GIF, PNG, WebP and other formats — reliable conversion with truecolor palette handling; failed conversions no longer leave empty `_tso_im_opt.*` temp files or zero-byte backups.
+* Fixed: backup files stored per upload subfolder; optimize modal shows backup only when the physical file exists (stale DB meta cleared automatically).
+* Fixed: optimize rolls back filesystem changes when WordPress metadata update (FASE 2) fails.
+* Fixed: URL repair after conversion/rename covers legacy sizes, `-scaled`, postmeta, widgets, and serialized data (ACF).
+* Fixed: MIME and orphan-meta repair tools no longer regenerate WebP thumbnails when only MIME/path metadata was wrong.
+* Fixed: file rename copies all variants before deleting originals; revert and delete-backup validate paths and file size.
+* Fixed: readable AJAX error messages; 7-column image grid (35 per page); admin dropdowns on Windows/dark admin.
+* Fixed: Plugin Check compliance — postmeta updates use `update_metadata()` instead of direct `meta_value` writes.
+* Improved: WordPress 7.0 compatibility (readme).
+
 = 1.7.0 =
-* Fixed: WebP/JPG conversion keeps post and media URLs in sync after thumbnail regeneration (manual, bulk, and auto-upload) — legacy sizes, `-scaled` variants, cross-extension links, relative upload paths, postmeta and widgets.
+* Fixed: static GIF and PNG conversion to WebP (palette images converted to truecolor before save).
+* Fixed: failed conversions no longer leave empty `_tso_im_opt.*` temp files or zero-byte backups on disk.
+* Fixed: backup paths include upload subfolder to avoid collisions between same-named files.
+* Fixed: optimize rolls back filesystem changes when metadata update (FASE 2) fails.
+* Fixed: MIME repair no longer regenerates thumbnails when only the MIME type was wrong.
+* Fixed: orphan-meta repair regenerates attachment metadata and guid after WebP path fix.
+* Fixed: serialized postmeta/options are updated safely during URL replacement (ACF/widgets).
+* Fixed: rename copies all files before deleting originals; revert validates backup copy.
+* Fixed: backup badge in optimize modal only appears when the backup file exists on disk (stale meta is cleared).
+* Fixed: optimize errors now show readable messages instead of `[object Object]`.
+* Fixed: image grid uses 7 columns with 35 images per page (5 full rows); main nav tabs span the full width.
 * Fixed: file rename updates URLs from real filenames, renames `-scaled` files, and syncs posts, postmeta, excerpts, and options.
 * Fixed: URL Fixer shows the correct destination filename; admin dropdowns readable on Windows and dark admin.
 * Fixed: Plugin Check compliance — postmeta updates use `update_metadata()` instead of direct `meta_value` writes.
@@ -186,6 +224,15 @@ This can happen with images that are already well-optimized, very small images, 
 * Initial release.
 
 == Upgrade Notice ==
+
+= 1.9.1 =
+Cleans up empty backup folders under uploads/tso-image-master after backup deletion; safer backup path validation.
+
+= 1.9.0 =
+Major stability release: reliable image conversion, accurate backup detection, URL repair across posts and widgets, and safer rename/revert flows.
+
+= 1.8.0 =
+Major stability release: reliable image conversion, accurate backup detection, URL repair across posts and widgets, and safer rename/revert flows.
 
 = 1.7.0 =
 Fixes broken image links after format conversion, rename, and auto-upload; improves URL repair across posts, widgets, and Plugin Check compliance.

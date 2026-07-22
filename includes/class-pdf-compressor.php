@@ -142,11 +142,12 @@ class TSOIMMA_PDF_Compressor {
             ];
         }
 
-        // Cerca estricta UTF-8 (respecta ñ vs n).
+        // Cerca estricte UTF-8 per prefix (respecta ñ vs n).
         if ( $search !== '' ) {
             $items = array_values( array_filter( $items, function( $item ) use ( $search ) {
-                return self::contains_utf8( (string) $item['filename'], $search )
-                    || self::contains_utf8( (string) $item['title'], $search );
+                $base_filename = pathinfo( (string) $item['filename'], PATHINFO_FILENAME );
+                return self::starts_with_utf8( $base_filename, $search )
+                    || self::starts_with_utf8( (string) $item['title'], $search );
             } ) );
         }
 
@@ -173,14 +174,19 @@ class TSOIMMA_PDF_Compressor {
         ];
     }
 
-    private static function contains_utf8( $haystack, $needle ) {
+    /**
+     * Case-insensitive UTF-8 prefix check without accent folding.
+     */
+    private static function starts_with_utf8( $haystack, $needle ) {
         $haystack = (string) $haystack;
         $needle   = (string) $needle;
-        if ( '' === $needle ) return true;
-        if ( function_exists( 'mb_stripos' ) ) {
-            return mb_stripos( $haystack, $needle, 0, 'UTF-8' ) !== false;
+        if ( '' === $needle ) {
+            return true;
         }
-        return stripos( $haystack, $needle ) !== false;
+        if ( function_exists( 'mb_stripos' ) ) {
+            return mb_stripos( $haystack, $needle, 0, 'UTF-8' ) === 0;
+        }
+        return 0 === strncasecmp( $haystack, $needle, strlen( $needle ) );
     }
 
     // ── Mètodes de compressió ────────────────────────────────────────

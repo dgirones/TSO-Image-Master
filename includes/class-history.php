@@ -7,6 +7,62 @@ class TSOIMMA_History {
     const DB_VER  = '1.0';
     const OPT_VER = 'tsoimma_db_version';
 
+    /** @var string[] Allowed WP-Cron intervals for history auto-purge. */
+    const PURGE_INTERVALS = array( 'daily', 'weekly', 'monthly' );
+
+    /**
+     * Register weekly/monthly schedules if the host WordPress build lacks them.
+     *
+     * @param array $schedules Existing cron schedules.
+     * @return array
+     */
+    public static function register_cron_schedules( $schedules ) {
+        if ( ! isset( $schedules['weekly'] ) ) {
+            $schedules['weekly'] = array(
+                'interval' => 7 * DAY_IN_SECONDS,
+                'display'  => __( 'Once Weekly', 'tso-image-master' ),
+            );
+        }
+        if ( ! isset( $schedules['monthly'] ) ) {
+            $schedules['monthly'] = array(
+                'interval' => 30 * DAY_IN_SECONDS,
+                'display'  => __( 'Once Monthly', 'tso-image-master' ),
+            );
+        }
+        return $schedules;
+    }
+
+    /**
+     * @return string
+     */
+    public static function get_purge_interval() {
+        $interval = (string) get_option( 'tsoimma_history_purge_interval', 'weekly' );
+        return in_array( $interval, self::PURGE_INTERVALS, true ) ? $interval : 'weekly';
+    }
+
+    /**
+     * (Re)schedule history purge cron. Cleared when retention days is 0.
+     *
+     * @param string|null $interval Optional interval override.
+     */
+    public static function schedule_purge_cron( $interval = null ) {
+        wp_clear_scheduled_hook( 'tsoimma_history_purge' );
+
+        $days = (int) get_option( 'tsoimma_history_retention_days', 90 );
+        if ( $days <= 0 ) {
+            return;
+        }
+
+        if ( null === $interval ) {
+            $interval = self::get_purge_interval();
+        }
+        if ( ! in_array( $interval, self::PURGE_INTERVALS, true ) ) {
+            $interval = 'weekly';
+        }
+
+        wp_schedule_event( time(), $interval, 'tsoimma_history_purge' );
+    }
+
     public static function install() {
         global $wpdb;
         $table   = $wpdb->prefix . self::TABLE;
@@ -120,66 +176,146 @@ class TSOIMMA_History {
             'date_to'       => '',
         );
         $args = wp_parse_args( $args, $defaults );
+        $search    = trim( (string) $args['search'] );
+        $page      = max( 1, (int) $args['page'] );
+        $per_page  = max( 1, (int) $args['per_page'] );
+        $order_sql = ' ORDER BY h.created_at DESC';
 
-        // Patró canònic WP per a WHERE dinàmics:
-        // Cada condició es prepara individualment → $where ja conté SQL segur.
-        // La query final no necessita un segon prepare() per als valors de filtre.
+        // Each filter uses $wpdb->prepare(); fragments are concatenated into $where (canonical WP pattern).
         $where = '1=1';
-
-        if ( $args['attachment_id'] ) {
+        if ( ! empty( $args['attachment_id'] ) ) {
             $where .= $wpdb->prepare( ' AND h.attachment_id = %d', (int) $args['attachment_id'] ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         }
-        if ( $args['action_type'] ) {
-            $where .= $wpdb->prepare( ' AND h.action_type = %s', $args['action_type'] ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+        if ( ! empty( $args['action_type'] ) ) {
+            $where .= $wpdb->prepare( ' AND h.action_type = %s', (string) $args['action_type'] ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         }
-        if ( $args['search'] ) {
-            $where .= $wpdb->prepare( ' AND h.details LIKE %s', '%' . $wpdb->esc_like( $args['search'] ) . '%' ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+        if ( ! empty( $args['date_from'] ) ) {
+            $where .= $wpdb->prepare( ' AND DATE(h.created_at) >= %s', (string) $args['date_from'] ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         }
-        if ( $args['date_from'] ) {
-            $where .= $wpdb->prepare( ' AND DATE(h.created_at) >= %s', $args['date_from'] ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-        }
-        if ( $args['date_to'] ) {
-            $where .= $wpdb->prepare( ' AND DATE(h.created_at) <= %s', $args['date_to'] ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+        if ( ! empty( $args['date_to'] ) ) {
+            $where .= $wpdb->prepare( ' AND DATE(h.created_at) <= %s', (string) $args['date_to'] ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         }
 
-        $offset   = ( (int) $args['page'] - 1 ) * (int) $args['per_page'];
-        $per_page = (int) $args['per_page'];
+        if ( $search !== '' ) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,PluginCheck.Security.DirectDB.UnescapedDBParameter
+            $rows = $wpdb->get_results(
+                'SELECT h.*, u.display_name as user_name FROM ' . $table . ' h LEFT JOIN ' . $wpdb->users . ' u ON u.ID = h.user_id WHERE ' . $where . $order_sql // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+            );
 
-        // $where ja és segur (cada condició preparada individualment).
-        // $table és trusted (prefix WP + constant, no input d'usuari).
-        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-        $total = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $table . ' h WHERE ' . $where ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,PluginCheck.Security.DirectDB.UnescapedDBParameter
+            $items = array();
+            foreach ( (array) $rows as $row ) {
+                $item = self::format_history_row( $row );
+                if ( self::history_entry_matches_search( $item['details'], $search ) ) {
+                    $items[] = $item;
+                }
+            }
 
-        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-        $rows = $wpdb->get_results( $wpdb->prepare( // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,PluginCheck.Security.DirectDB.UnescapedDBParameter
-            'SELECT h.*, u.display_name as user_name FROM ' . $table . ' h LEFT JOIN ' . $wpdb->users . ' u ON u.ID = h.user_id WHERE ' . $where . ' ORDER BY h.created_at DESC LIMIT %d OFFSET %d', // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-            $per_page,
-            $offset
-        ) );
+            $total       = count( $items );
+            $total_pages = $per_page > 0 ? (int) ceil( $total / $per_page ) : 1;
+            $offset      = ( $page - 1 ) * $per_page;
+            $items       = array_slice( $items, $offset, $per_page );
+
+            return array(
+                'items'       => $items,
+                'total'       => $total,
+                'total_pages' => $total_pages,
+                'page'        => $page,
+            );
+        }
+
+        $offset = ( $page - 1 ) * $per_page;
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,PluginCheck.Security.DirectDB.UnescapedDBParameter
+        $total = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $table . ' h WHERE ' . $where );
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,PluginCheck.Security.DirectDB.UnescapedDBParameter
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                'SELECT h.*, u.display_name as user_name FROM ' . $table . ' h LEFT JOIN ' . $wpdb->users . ' u ON u.ID = h.user_id WHERE ' . $where . $order_sql . ' LIMIT %d OFFSET %d', // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
+                $per_page,
+                $offset
+            )
+        );
 
         $items = array();
         foreach ( (array) $rows as $row ) {
-            $d = json_decode( isset( $row->details ) ? $row->details : '{}', true );
-            if ( ! is_array( $d ) ) $d = array();
-            $items[] = array(
-                'id'            => (int) $row->id,
-                'attachment_id' => (int) $row->attachment_id,
-                'action_type'   => $row->action_type,
-                'action_label'  => self::action_label( $row->action_type ),
-                'user_name'     => ! empty( $row->user_name ) ? $row->user_name : 'Sistema',
-                'created_at'    => $row->created_at,
-                'created_at_h'  => date_i18n( 'd/m/Y H:i', strtotime( $row->created_at ) ),
-                'details'       => $d,
-                'thumb'         => wp_get_attachment_image_url( (int) $row->attachment_id, 'thumbnail' ) ?: '',
-            );
+            $items[] = self::format_history_row( $row );
         }
 
         return array(
             'items'       => $items,
             'total'       => $total,
             'total_pages' => $args['per_page'] > 0 ? (int) ceil( $total / $args['per_page'] ) : 1,
-            'page'        => (int) $args['page'],
+            'page'        => $page,
         );
+    }
+
+    /**
+     * @param object $row DB row.
+     * @return array
+     */
+    private static function format_history_row( $row ) {
+        $d = json_decode( isset( $row->details ) ? $row->details : '{}', true );
+        if ( ! is_array( $d ) ) {
+            $d = array();
+        }
+
+        return array(
+            'id'            => (int) $row->id,
+            'attachment_id' => (int) $row->attachment_id,
+            'action_type'   => $row->action_type,
+            'action_label'  => self::action_label( $row->action_type ),
+            'user_name'     => ! empty( $row->user_name ) ? $row->user_name : 'Sistema',
+            'created_at'    => $row->created_at,
+            'created_at_h'  => date_i18n( 'd/m/Y H:i', strtotime( $row->created_at ) ),
+            'details'       => $d,
+            'thumb'         => wp_get_attachment_image_url( (int) $row->attachment_id, 'thumbnail' ) ?: '',
+        );
+    }
+
+    /**
+     * Prefix search on filename fields stored in history details JSON.
+     *
+     * @param array  $details Decoded details.
+     * @param string $search  Search term.
+     * @return bool
+     */
+    private static function history_entry_matches_search( array $details, $search ) {
+        $search = trim( (string) $search );
+        if ( $search === '' ) {
+            return true;
+        }
+
+        foreach ( array( 'filename', 'old_filename', 'new_filename' ) as $key ) {
+            if ( empty( $details[ $key ] ) ) {
+                continue;
+            }
+            $base = pathinfo( (string) $details[ $key ], PATHINFO_FILENAME );
+            if ( $base !== '' && self::starts_with_utf8( $base, $search ) ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Case-insensitive UTF-8 prefix check without accent folding.
+     *
+     * @param string $haystack Filename base.
+     * @param string $needle   Search prefix.
+     * @return bool
+     */
+    private static function starts_with_utf8( $haystack, $needle ) {
+        $haystack = (string) $haystack;
+        $needle   = (string) $needle;
+        if ( $needle === '' ) {
+            return true;
+        }
+        if ( function_exists( 'mb_stripos' ) ) {
+            return mb_stripos( $haystack, $needle, 0, 'UTF-8' ) === 0;
+        }
+        return 0 === strncasecmp( $haystack, $needle, strlen( $needle ) );
     }
 
     public static function get_stats() {
@@ -240,8 +376,8 @@ class TSOIMMA_History {
     }
 
     /**
-     * Neteja automàtica: elimina entrades més antigues que tso_history_retention_days dies.
-     * Cridat pel WP-Cron setmanal. Per defecte: 90 dies.
+     * Neteja automàtica (WP-Cron setmanal): elimina entrades més antigues que N dies.
+     * Per defecte: conservar 90 dies; la comprovació s'executa un cop per setmana.
      */
     public static function auto_purge() {
         $days = (int) get_option( 'tsoimma_history_retention_days', 90 );
@@ -253,20 +389,20 @@ class TSOIMMA_History {
     public static function clear( $days = 0, $type = '' ) {
         global $wpdb;
         $table = $wpdb->prefix . self::TABLE;
-        if ( ! self::table_exists() ) return;
+        if ( ! self::table_exists() ) {
+            return;
+        }
 
-        // Patró canònic WP: cada condició preparada individualment.
         $where = '1=1';
         if ( $days > 0 ) {
             $where .= $wpdb->prepare( ' AND created_at < DATE_SUB(NOW(), INTERVAL %d DAY)', (int) $days ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         }
         if ( $type !== '' ) {
-            $where .= $wpdb->prepare( ' AND action_type = %s', $type ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+            $where .= $wpdb->prepare( ' AND action_type = %s', (string) $type ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         }
 
-        // $where ja és segur. $table és trusted (prefix WP + constant).
-        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-        $wpdb->query( 'DELETE FROM ' . $table . ' WHERE ' . $where ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,PluginCheck.Security.DirectDB.UnescapedDBParameter
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,PluginCheck.Security.DirectDB.UnescapedDBParameter
+        $wpdb->query( 'DELETE FROM ' . $table . ' WHERE ' . $where );
     }
 
     private static function table_exists() {

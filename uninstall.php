@@ -55,6 +55,8 @@ if ( is_dir( $tsoimma_backup_base ) ) {
 delete_option( 'tsoimma_auto_optimize_settings' );
 delete_option( 'tsoimma_db_version' );
 delete_option( 'tsoimma_history_retention_days' );
+delete_option( 'tsoimma_history_purge_interval' );
+delete_option( 'tsoimma_version' );
 
 // ── Clear scheduled cron events ───────────────────────────────────
 wp_clear_scheduled_hook( 'tsoimma_history_purge' );

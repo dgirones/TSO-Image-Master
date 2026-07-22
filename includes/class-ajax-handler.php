@@ -33,6 +33,7 @@ class TSOIMMA_Ajax_Handler {
             'tso_im_fix_orphan_meta',
             'tso_im_fix_mime_mismatch',
             'tso_im_fix_url_issues',
+            'tso_im_remove_url_issues',
             'tso_im_find_ghost_attachments',
             'tso_im_delete_ghost_attachments',
         );
@@ -94,8 +95,10 @@ class TSOIMMA_Ajax_Handler {
             try {
                 TSOIMMA_Optimizer::update_wp_metadata_only( $id, $result, $format );
             } catch ( \Throwable $ex ) {
+                TSOIMMA_Optimizer::rollback_optimize_files( $result );
                 wp_send_json_error( 'FASE 2: ' . $ex->getMessage()
-                    . ' a ' . basename( $ex->getFile() ) . ':' . $ex->getLine() );
+                    . ' a ' . basename( $ex->getFile() ) . ':' . $ex->getLine()
+                    . ' (fitxers restaurats des del backup)' );
                 return;
             }
 
@@ -206,7 +209,16 @@ class TSOIMMA_Ajax_Handler {
             }
 
             if ( ! empty( $res['replaced'] ) ) {
-                TSOIMMA_Optimizer::update_wp_metadata_only( $id, $res, $format );
+                try {
+                    TSOIMMA_Optimizer::update_wp_metadata_only( $id, $res, $format );
+                } catch ( \Throwable $ex ) {
+                    TSOIMMA_Optimizer::rollback_optimize_files( $res );
+                    $results[] = array(
+                        'id'    => $id,
+                        'error' => 'FASE 2: ' . $ex->getMessage() . ' (fitxers restaurats des del backup)',
+                    );
+                    continue;
+                }
 
                 $ext_changed = ! empty( $res['old_ext'] ) && ! empty( $res['new_ext'] )
                     && ! TSOIMMA_Optimizer::extensions_match( $res['old_ext'], $res['new_ext'] );
@@ -507,21 +519,34 @@ class TSOIMMA_Ajax_Handler {
         check_ajax_referer( 'tso_im_nonce', 'nonce' );
         self::require_admin();
         wp_send_json_success( array(
-            'days' => (int) get_option( 'tsoimma_history_retention_days', 90 ),
+            'days'     => (int) get_option( 'tsoimma_history_retention_days', 90 ),
+            'interval' => TSOIMMA_History::get_purge_interval(),
         ) );
     }
 
     public static function handle_tso_im_save_history_retention() {
         check_ajax_referer( 'tso_im_nonce', 'nonce' );
         self::require_admin();
-        $days = absint( $_POST['days'] ?? 90 );
-        // Valors permesos: 0 (mai) o entre 7 i 3650 dies
-        if ( $days !== 0 && ( $days < 7 || $days > 3650 ) ) {
-            wp_send_json_error( 'Valor invàlid. Usa 0 per desactivar, o entre 7 i 3650 dies.' );
+        $days     = absint( $_POST['days'] ?? 90 );
+        $interval = sanitize_key( $_POST['interval'] ?? '' );
+        // Valors permesos: 0 (desactivat) o entre 1 i 3650 dies.
+        if ( $days !== 0 && ( $days < 1 || $days > 3650 ) ) {
+            wp_send_json_error( __( 'Invalid value. Use 0 to disable, or between 1 and 3650 days.', 'tso-image-master' ) );
+            return;
+        }
+        if ( $interval !== '' && ! in_array( $interval, TSOIMMA_History::PURGE_INTERVALS, true ) ) {
+            wp_send_json_error( __( 'Invalid check frequency.', 'tso-image-master' ) );
             return;
         }
         update_option( 'tsoimma_history_retention_days', $days );
-        wp_send_json_success( array( 'days' => $days ) );
+        if ( $interval !== '' ) {
+            update_option( 'tsoimma_history_purge_interval', $interval );
+        }
+        TSOIMMA_History::schedule_purge_cron( $interval !== '' ? $interval : null );
+        wp_send_json_success( array(
+            'days'     => $days,
+            'interval' => TSOIMMA_History::get_purge_interval(),
+        ) );
     }
 
     // ----------------------------------------------------------------
@@ -558,6 +583,8 @@ class TSOIMMA_Ajax_Handler {
         );
         $real_ext = isset( $ext_map[ $real_mime ] ) ? $ext_map[ $real_mime ] : strtoupper( pathinfo( $file ?? '', PATHINFO_EXTENSION ) );
 
+        $backup = TSOIMMA_Optimizer::get_backup_status( $id );
+
         wp_send_json_success( array(
             'id'          => $id,
             'title'       => get_the_title( $id ),
@@ -576,8 +603,8 @@ class TSOIMMA_Ajax_Handler {
             'suggested'   => TSOIMMA_Image_Manager::suggest_filename( $id ),
             'is_orphan'   => TSOIMMA_Orphan_Finder::is_orphan( $id ),
             'used_in'     => TSOIMMA_Image_Manager::get_used_in_posts( $id ),
-            'has_backup'  => (bool) get_post_meta( $id, '_tso_im_backup_file', true ),
-            'backup_size' => ( $bs = get_post_meta( $id, '_tso_im_backup_size', true ) ) ? size_format( (int) $bs ) : '',
+            'has_backup'  => ! empty( $backup['has_backup'] ),
+            'backup_size' => ! empty( $backup['backup_size'] ) ? $backup['backup_size'] : '',
         ) );
     }
 
@@ -607,20 +634,24 @@ class TSOIMMA_Ajax_Handler {
         check_ajax_referer( 'tso_im_nonce', 'nonce' );
         self::require_admin();
 
-        $id          = absint( $_POST['attachment_id'] ?? 0 );
+        $id = absint( $_POST['attachment_id'] ?? 0 );
         $backup_path = get_post_meta( $id, '_tso_im_backup_file', true );
 
         if ( ! $backup_path ) {
             wp_send_json_error( 'No hi ha backup per eliminar.' );
         }
-        if ( file_exists( $backup_path ) ) {
-            wp_delete_file( $backup_path );
+
+        $safe_backup = TSOIMMA_Optimizer::resolve_backup_path( $backup_path, false );
+        if ( false === $safe_backup ) {
+            TSOIMMA_Optimizer::clear_backup_meta( $id );
+            wp_send_json_success( array( 'deleted' => true ) );
         }
-        delete_post_meta( $id, '_tso_im_backup_file' );
-        delete_post_meta( $id, '_tso_im_backup_mime' );
-        delete_post_meta( $id, '_tso_im_backup_size' );
-        delete_post_meta( $id, '_tso_im_backup_attached_file' );
-        delete_post_meta( $id, '_tso_im_backup_current_name' );
+
+        if ( file_exists( $safe_backup ) ) {
+            wp_delete_file( $safe_backup );
+        }
+        TSOIMMA_Optimizer::prune_empty_backup_dirs( $safe_backup );
+        TSOIMMA_Optimizer::clear_backup_meta( $id );
 
         wp_send_json_success( array( 'deleted' => true ) );
     }
@@ -665,6 +696,7 @@ class TSOIMMA_Ajax_Handler {
             wp_delete_file( $safe_path );
             if ( ! file_exists( $safe_path ) ) {
                 $deleted++;
+                TSOIMMA_Optimizer::prune_empty_backup_dirs( $safe_path );
             } else {
                 $errors[] = basename( $safe_path ) . ' (no es pot eliminar)';
             }
@@ -684,8 +716,8 @@ class TSOIMMA_Ajax_Handler {
         $fixed  = 0;
         $errors = array();
 
-        $upload_dir = wp_upload_dir();
-        $base_dir   = trailingslashit( $upload_dir['basedir'] );
+        $upload_dir    = wp_upload_dir();
+        $base_dir_norm = wp_normalize_path( trailingslashit( $upload_dir['basedir'] ) );
 
         // CAS 1: _wp_attached_file acaba en .webp pero post_mime_type no es image/webp.
         // Cobreix: imatge convertida a WebP pero mime_type es image/jpeg a la BD.
@@ -767,8 +799,8 @@ class TSOIMMA_Ajax_Handler {
         }
 
         foreach ( $all_rows as $id => $row ) {
-            $rel_path     = ltrim( $row->attached_file, '/' );
-            $abs_path     = $base_dir . $rel_path;
+            $rel_path     = ltrim( wp_normalize_path( (string) $row->attached_file ), '/' );
+            $abs_path     = $base_dir_norm . $rel_path;
             $path_changed = false;
             $mime_changed = false;
 
@@ -778,7 +810,7 @@ class TSOIMMA_Ajax_Handler {
                 $webp_path = $pi['dirname'] . '/' . $pi['filename'] . '.webp';
                 if ( file_exists( $webp_path ) ) {
                     $abs_path     = $webp_path;
-                    $rel_path     = str_replace( $base_dir, '', $webp_path );
+                    $rel_path     = ltrim( str_replace( $base_dir_norm, '', wp_normalize_path( $webp_path ) ), '/' );
                     update_post_meta( $id, '_wp_attached_file', $rel_path );
                     $path_changed = true;
                 } else {
@@ -807,18 +839,24 @@ class TSOIMMA_Ajax_Handler {
 
             // Regenerar metadata NOMES quan cal:
             //  - El path ha canviat (fitxer .jpg -> .webp trobat)
-            //  - El mime type era incorrecte
             //  - L'adjunt ve de rows_c (dimensions 0x0)
-            // Per a imatges amb fitxer existent i mime correcte NO regenerem: evitem
-            // sobreescriure thumbnails WebP existents amb versions JPG generades per WP.
-            $needs_regen = $path_changed || $mime_changed || isset( $ids_rows_c[ $id ] );
+            // Si nomes el mime era incorrecte, sincronitzem mime-type als sizes sense regenerar.
+            $needs_regen = $path_changed || isset( $ids_rows_c[ $id ] );
 
             if ( $needs_regen ) {
                 $new_meta = wp_generate_attachment_metadata( $id, $abs_path );
                 if ( $new_meta && ! is_wp_error( $new_meta ) ) {
                     wp_update_attachment_metadata( $id, $new_meta );
                 }
-                // Comptabilitzar NOMES els que han necessitat reparació real
+                $fixed++;
+            } elseif ( $mime_changed ) {
+                $meta = wp_get_attachment_metadata( $id );
+                if ( is_array( $meta ) && ! empty( $meta['sizes'] ) ) {
+                    foreach ( $meta['sizes'] as $sz => $sz_data ) {
+                        $meta['sizes'][ $sz ]['mime-type'] = $real_mime;
+                    }
+                    wp_update_attachment_metadata( $id, $meta );
+                }
                 $fixed++;
             }
 
@@ -872,6 +910,32 @@ class TSOIMMA_Ajax_Handler {
             }
         }
         $result = TSOIMMA_URL_Fixer::fix( $clean_fixes );
+        wp_send_json_success( $result );
+    }
+
+    public static function handle_tso_im_remove_url_issues() {
+        check_ajax_referer( 'tso_im_nonce', 'nonce' );
+        self::require_admin();
+
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized per URL below
+        $raw_urls = isset( $_POST['urls'] ) ? wp_unslash( (array) $_POST['urls'] ) : array();
+        if ( empty( $raw_urls ) ) {
+            wp_send_json_error( 'No s\'han rebut URLs per eliminar.' );
+        }
+
+        $clean_urls = array();
+        foreach ( $raw_urls as $url ) {
+            $url = esc_url_raw( (string) $url );
+            if ( $url ) {
+                $clean_urls[] = $url;
+            }
+        }
+
+        if ( empty( $clean_urls ) ) {
+            wp_send_json_error( 'No s\'han rebut URLs vàlides.' );
+        }
+
+        $result = TSOIMMA_URL_Fixer::remove_urls( $clean_urls );
         wp_send_json_success( $result );
     }
 
@@ -935,8 +999,12 @@ class TSOIMMA_Ajax_Handler {
         global $wpdb;
         $fixed = 0;
 
-        $upload_dir = wp_upload_dir();
-        $base_dir   = trailingslashit( $upload_dir['basedir'] );
+        if ( ! function_exists( 'wp_generate_attachment_metadata' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/image.php';
+        }
+
+        $upload_dir    = wp_upload_dir();
+        $base_dir_norm = wp_normalize_path( trailingslashit( $upload_dir['basedir'] ) );
 
         // Cercar attachments on el path DB no existeix físicament
         $rows = $wpdb->get_results(  // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -947,29 +1015,50 @@ class TSOIMMA_Ajax_Handler {
         );
 
         foreach ( (array) $rows as $row ) {
-            $old_rel  = $row->meta_value;
-            $old_path = $base_dir . $old_rel;
+            $old_rel  = ltrim( wp_normalize_path( (string) $row->meta_value ), '/' );
+            $old_path = $base_dir_norm . $old_rel;
 
-            if ( file_exists( $old_path ) ) continue;
+            if ( file_exists( $old_path ) ) {
+                continue;
+            }
 
-            // Buscar fitxer WebP equivalent
-            $dir      = dirname( $old_path );
-            $basename = pathinfo( $old_path, PATHINFO_FILENAME );
-            $webp     = $dir . DIRECTORY_SEPARATOR . $basename . '.webp';
+            $pi       = pathinfo( $old_path );
+            $webp     = $pi['dirname'] . '/' . $pi['filename'] . '.webp';
 
-            if ( ! file_exists( $webp ) ) continue;
+            if ( ! file_exists( $webp ) ) {
+                continue;
+            }
 
-            // Actualitzar path i mime
-            $new_rel = ltrim( str_replace( $base_dir, '', $webp ), DIRECTORY_SEPARATOR );
-            update_post_meta( $row->post_id, '_wp_attached_file', $new_rel );
-            $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+            $post_id = (int) $row->post_id;
+            $new_rel = ltrim( str_replace( $base_dir_norm, '', wp_normalize_path( $webp ) ), '/' );
+            update_post_meta( $post_id, '_wp_attached_file', $new_rel );
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+            $wpdb->update(
                 $wpdb->posts,
                 array( 'post_mime_type' => 'image/webp' ),
-                array( 'ID' => (int) $row->post_id ),
+                array( 'ID' => $post_id ),
                 array( '%s' ),
                 array( '%d' )
             );
-            clean_attachment_cache( (int) $row->post_id );
+
+            $new_meta = wp_generate_attachment_metadata( $post_id, $webp );
+            if ( $new_meta && ! is_wp_error( $new_meta ) ) {
+                wp_update_attachment_metadata( $post_id, $new_meta );
+            }
+
+            $new_url = wp_get_attachment_url( $post_id );
+            if ( $new_url ) {
+                // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+                $wpdb->update(
+                    $wpdb->posts,
+                    array( 'guid' => $new_url ),
+                    array( 'ID' => $post_id ),
+                    array( '%s' ),
+                    array( '%d' )
+                );
+            }
+
+            clean_attachment_cache( $post_id );
             $fixed++;
         }
 

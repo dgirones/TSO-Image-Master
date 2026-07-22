@@ -4,10 +4,10 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: TSO Image Master 1.7.0\n"
+"Project-Id-Version: TSO Image Master 1.9.1\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/tso-image-master\n"
 "POT-Creation-Date: 2026-04-17 21:10+0000\n"
-"PO-Revision-Date: 2026-04-17 21:10+0000\n"
+"PO-Revision-Date: 2026-05-22 12:00+0000\n"
 "Last-Translator: Tu Soporte Online <info@tusoporteonline.es>\n"
 "Language-Team: Spanish (Spain)\n"
 "Language: es_ES\n"
@@ -23,8 +23,8 @@ msgstr "TSO Image Master"
 msgid "Complete image optimization suite for WordPress: convert to WebP/JPG, resize, compress PDFs, find orphaned images, scan rogue files, fix broken image URLs, and manage SEO fields. Requires PHP GD library."
 msgstr "Suite completa de optimización de imágenes para WordPress: convierte a WebP/JPG, redimensiona, comprime PDFs, encuentra imágenes huérfanas, analiza archivos huérfanos, corrige URLs de imágenes rotas y gestiona campos SEO. Requiere la biblioteca PHP GD."
 
-msgid "All problem files deleted!"
-msgstr "¡Todos los archivos problemáticos han sido eliminados!"
+msgid "All selected extra files deleted!"
+msgstr "Archivos extra seleccionados eliminados."
 
 msgid "Auto-fixable"
 msgstr "Reparable automáticamente"
@@ -143,6 +143,9 @@ msgstr "Sin texto alternativo"
 msgid "No alternative found. Manual restore required."
 msgstr "No se ha encontrado ninguna alternativa. Hay que restaurar manualmente."
 
+msgid "No alternative found. Select and remove the reference from content, or restore the file manually."
+msgstr "No se ha encontrado ninguna alternativa. Selecciona y elimina la referencia del contenido, o restaura el archivo manualmente."
+
 msgid "No auto-optimization entries."
 msgstr "No hay entradas de auto-optimización."
 
@@ -167,8 +170,8 @@ msgstr "Sin discrepancias. Todos los adjuntos están correctos."
 msgid "No orphaned images found."
 msgstr "No se han encontrado imágenes huérfanas."
 
-msgid "No problem files found."
-msgstr "No se han encontrado archivos problemáticos."
+msgid "No extra files found."
+msgstr "No se han encontrado archivos extra."
 
 msgid "No results."
 msgstr "Sin resultados."
@@ -239,8 +242,8 @@ msgstr "Escanear todo el sitio"
 msgid "Scan ghost attachments"
 msgstr "Escanear adjuntos fantasma"
 
-msgid "Scan problem files"
-msgstr "Escanear archivos problemáticos"
+msgid "Scan extra upload files"
+msgstr "Escanear archivos extra"
 
 msgid "Scanning..."
 msgstr "Escaneando..."
@@ -286,3 +289,39 @@ msgstr "seleccionadas"
 
 msgid "🔧 Fix incorrect mime types"
 msgstr "🔧 Reparar tipos MIME incorrectos"
+
+msgid "Invalid value. Use 0 to disable, or between 1 and 3650 days."
+msgstr "Valor inválido. Usa 0 para desactivar, o entre 1 y 3650 días."
+
+msgid "Invalid check frequency."
+msgstr "Frecuencia de comprobación inválida."
+
+msgid "Once Weekly"
+msgstr "Cada semana"
+
+msgid "Once Monthly"
+msgstr "Cada mes"
+
+msgid "Content items scanned"
+msgstr "Elementos de contenido escaneados"
+
+msgid "Select removable"
+msgstr "Seleccionar eliminables"
+
+msgid "removable"
+msgstr "eliminables"
+
+msgid "Remove from content"
+msgstr "Eliminar del contenido"
+
+msgid "Removing..."
+msgstr "Eliminando..."
+
+msgid "URL references removed from content."
+msgstr "Referencias URL eliminadas del contenido."
+
+msgid "Remove selected broken URL references from posts and widgets? The image tag or link will be deleted from content."
+msgstr "¿Eliminar las referencias URL rotas seleccionadas de entradas y widgets? La etiqueta o enlace de imagen se eliminará del contenido."
+
+msgid "Click to select for removal"
+msgstr "Haz clic para seleccionar para eliminar"

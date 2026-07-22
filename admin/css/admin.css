@@ -93,13 +93,14 @@
 
 /* ===== TABS ===== */
 .imp-tabs {
-    display: flex; gap: 4px; padding: 6px;
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 4px; padding: 6px;
     background: var(--imp-surface); border: 1px solid var(--imp-border);
     border-radius: var(--imp-radius); margin-bottom: 20px;
-    flex-wrap: wrap;
 }
 .imp-tab {
-    flex: 1; min-width: 80px; padding: 10px 16px; border: none; background: transparent;
+    min-width: 0; width: 100%; padding: 10px 12px; border: none; background: transparent;
     color: var(--imp-text-muted); font-family: var(--imp-font); font-size: 13px;
     font-weight: 500; border-radius: var(--imp-radius-sm); cursor: pointer;
     transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -292,8 +293,20 @@
 /* ===== IMAGES GRID ===== */
 .imp-images-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 16px; margin-bottom: 20px;
+}
+@media (max-width: 1500px) {
+    .imp-images-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@media (max-width: 1280px) {
+    .imp-images-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (max-width: 1024px) {
+    .imp-images-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 768px) {
+    .imp-images-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .imp-image-card {
     background: var(--imp-surface); border: 1px solid var(--imp-border);
@@ -480,7 +493,7 @@
 .imp-used-in-item-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Modal Tabs */
-.imp-modal-tabs { display: flex; gap: 4px; background: var(--imp-bg); border-radius: 8px; padding: 4px; margin-bottom: 20px; }
+.imp-modal-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; background: var(--imp-bg); border-radius: 8px; padding: 4px; margin-bottom: 20px; width: 100%; }
 .imp-mtab {
     flex: 1; padding: 7px; border: none; background: transparent;
     color: var(--imp-text-muted); font-family: var(--imp-font); font-size: 13px;
@@ -519,7 +532,6 @@
 }
 @media (max-width: 640px) {
     .imp-wrap { padding: 12px; }
-    .imp-images-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 }
 
 @media (max-width: 768px) {
@@ -660,7 +672,7 @@
 /* ===== PDF LIST ===== */
 .imp-pdf-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
 .imp-pdf-row {
-    display: grid; grid-template-columns: 24px 1fr auto auto auto auto;
+    display: grid; grid-template-columns: 24px 1fr auto auto auto auto auto;
     align-items: center; gap: 14px;
     background: var(--imp-surface); border: 1px solid var(--imp-border);
     border-radius: var(--imp-radius-sm); padding: 12px 16px; cursor: pointer;
@@ -679,6 +691,30 @@
     transition: all .2s;
 }
 .imp-pdf-compress-btn:hover { background: #7c74ff; }
+.imp-pdf-preview-btn {
+    background: transparent; color: var(--imp-accent2); border: 1px solid var(--imp-border);
+    border-radius: var(--imp-radius-sm); padding: 6px 10px; font-size: 12px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; transition: all .2s;
+}
+.imp-pdf-preview-btn:hover { border-color: var(--imp-accent); background: rgba(108,99,255,.12); }
+.imp-pdf-preview-box {
+    width: min(960px, 92vw); max-height: 92vh; display: flex; flex-direction: column;
+}
+.imp-pdf-preview-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-bottom: 12px; padding-right: 36px;
+}
+.imp-pdf-preview-header h3 {
+    margin: 0; font-size: 15px; font-weight: 600; color: var(--imp-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.imp-pdf-preview-frame {
+    width: 100%; height: min(70vh, 720px); border: 1px solid var(--imp-border);
+    border-radius: var(--imp-radius-sm); background: #fff;
+}
+.imp-pdf-preview-fallback {
+    margin: 10px 0 0; font-size: 12px; color: var(--imp-text-muted); line-height: 1.5;
+}
 .imp-pdf-engine-ok  { color: var(--imp-success); font-weight: 600; }
 .imp-pdf-engine-warn{ color: var(--imp-warn);    font-weight: 600; }
 .imp-pdf-engine-err { color: var(--imp-danger);  font-weight: 600; }
@@ -911,6 +947,7 @@
 }
 .imp-rogue-badge-high { background: rgba(255,77,109,.2); color: var(--imp-danger); }
 .imp-rogue-badge-low  { background: rgba(139,144,166,.15); color: var(--imp-text-muted); }
+.imp-rogue-badge-info { background: rgba(108,99,255,.18); color: var(--imp-accent2); }
 .imp-rogue-meta {
     display: flex; align-items: center; gap: 10px; font-size: 12px;
     color: var(--imp-text-muted);
@@ -997,6 +1034,8 @@
     transition: border-color .2s, background .2s;
 }
 .imp-url-row.no-fix   { border-left: 3px solid var(--imp-danger); }
+.imp-url-row.removable { cursor: pointer; border-left: 3px solid var(--imp-danger); }
+.imp-url-row.removable:hover { border-color: var(--imp-warn); background: rgba(255,77,109,.06); }
 .imp-url-row.fixable  { cursor: pointer; border-left: 3px solid var(--imp-success); }
 .imp-url-row.fixable:hover { border-color: var(--imp-accent); background: rgba(108,99,255,.06); }
 .imp-url-row.selected { border-color: var(--imp-accent); background: rgba(108,99,255,.14); }

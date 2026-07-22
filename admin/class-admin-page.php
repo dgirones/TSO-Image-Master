@@ -69,7 +69,7 @@ class TSOIMMA_Admin_Page {
                 'save_ok'             => __( 'Saved!', 'tso-image-master' ),
                 'save_seo'            => __( 'Save SEO', 'tso-image-master' ),
                 'edit_image'          => __( 'Edit', 'tso-image-master' ),
-                'scan_rogue'          => __( 'Scan problem files', 'tso-image-master' ),
+                'scan_rogue'          => __( 'Scan extra upload files', 'tso-image-master' ),
                 'delete_rogue'        => __( 'Delete selected', 'tso-image-master' ),
                 'scan_web'            => __( 'Scan entire site', 'tso-image-master' ),
                 'fix_selected'        => __( 'Fix selected', 'tso-image-master' ),
@@ -86,7 +86,7 @@ class TSOIMMA_Admin_Page {
                 'scanning_msg'        => __( 'Scanning...', 'tso-image-master' ),
                 'no_images'           => __( 'No images found.', 'tso-image-master' ),
                 'no_orphans'          => __( 'No orphaned images found.', 'tso-image-master' ),
-                'no_rogue'            => __( 'No problem files found.', 'tso-image-master' ),
+                'no_rogue'            => __( 'No extra files found.', 'tso-image-master' ),
                 'no_pdfs'             => __( 'No PDFs found.', 'tso-image-master' ),
                 'no_auto_history'     => __( 'No auto-optimization entries.', 'tso-image-master' ),
                 'auto_hist_error'     => __( 'Error loading history.', 'tso-image-master' ),
@@ -97,11 +97,18 @@ class TSOIMMA_Admin_Page {
                 'url_click_select'    => __( 'Click to select', 'tso-image-master' ),
                 'url_content_label'   => __( 'URL in content (obsolete)', 'tso-image-master' ),
                 'url_correct_label'   => __( 'Correct URL (file exists)', 'tso-image-master' ),
-                'url_no_fix_label'    => __( 'No alternative found. Manual restore required.', 'tso-image-master' ),
+                'url_no_fix_label'    => __( 'No alternative found. Select and remove the reference from content, or restore the file manually.', 'tso-image-master' ),
                 'url_outdated_badge'  => __( 'Obsolete thumbnail (file exists in new format)', 'tso-image-master' ),
                 'url_missing_badge'   => __( 'Missing file - alternative found', 'tso-image-master' ),
                 'url_broken_badge'    => __( 'Missing file - no automatic fix', 'tso-image-master' ),
                 'url_fixing'          => __( 'Fixing...', 'tso-image-master' ),
+                'select_removable'    => __( 'Select removable', 'tso-image-master' ),
+                'removable_label'     => __( 'removable', 'tso-image-master' ),
+                'remove_selected'     => __( 'Remove from content', 'tso-image-master' ),
+                'url_removing'        => __( 'Removing...', 'tso-image-master' ),
+                'url_removed_ok'      => __( 'URL references removed from content.', 'tso-image-master' ),
+                'confirm_remove_urls' => __( 'Remove selected broken URL references from posts and widgets? The image tag or link will be deleted from content.', 'tso-image-master' ),
+                'url_click_select_remove' => __( 'Click to select for removal', 'tso-image-master' ),
                 'posts_scanned'       => __( 'Content items scanned', 'tso-image-master' ),
                 'broken_urls'         => __( 'Broken URLs', 'tso-image-master' ),
                 'fixable_urls'        => __( 'Auto-fixable', 'tso-image-master' ),
@@ -142,7 +149,7 @@ class TSOIMMA_Admin_Page {
                 'stat_current_size'   => __( 'Current size', 'tso-image-master' ),
                 'stat_real_format'    => __( 'Real format', 'tso-image-master' ),
                 'images_deleted'      => __( 'images deleted.', 'tso-image-master' ),
-                'all_rogue_deleted'   => __( 'All problem files deleted!', 'tso-image-master' ),
+                'all_rogue_deleted'   => __( 'All selected extra files deleted!', 'tso-image-master' ),
                 'featured'            => __( 'Featured image', 'tso-image-master' ),
                 'no_alt_text'         => __( 'No alt text', 'tso-image-master' ),
                 'url_fixed_ok'        => __( 'URLs fixed correctly.', 'tso-image-master' ),
@@ -455,11 +462,11 @@ class TSOIMMA_Admin_Page {
                     <p id="imp-orphans-progress-text" data-i18n="scanning_msg">Escanejant...</p>
                 </div>
 
-                <!-- SECCIÓ: Fitxers físics problemàtics -->
+                <!-- SECCIÓ: Fitxers extra a uploads -->
                 <div class="imp-panel" style="margin-top:24px;">
-                    <h2 class="imp-panel-title" data-i18n="rogue_title">🗂 Fitxers Físics Problemàtics</h2>
-                    <p class="imp-panel-desc" data-i18n-html="rogue_desc">Detecta fitxers al disc que <strong>no estan registrats a WordPress</strong> o que tenen patrons problemàtics: doble extensió (<code>.jpg.webp</code>), backups antics (<code>.bk</code>), temporals, etc. Aquests fitxers ocupen espai però WordPress no els coneix.</p>
-                    <button id="imp-scan-rogue" class="imp-btn imp-btn-primary" data-i18n="scan_rogue">🔍 Escanejar fitxers problemàtics</button>
+                    <h2 class="imp-panel-title" data-i18n="rogue_title">🗂 Fitxers extra a uploads</h2>
+                    <p class="imp-panel-desc" data-i18n-html="rogue_desc">Escaneja fitxers a <code>uploads/</code> que WordPress no té registrats: <strong>còpies de seguretat TSO</strong> (<code>_tso_im_backup</code>), temporals (<code>_tso_im_opt</code>), doble extensió (<code>.jpg.webp</code>), backups antics (<code>.bk</code>), etc. Revisa abans d'eliminar les còpies de seguretat.</p>
+                    <button id="imp-scan-rogue" class="imp-btn imp-btn-primary" data-i18n="scan_rogue">🔍 Escanejar fitxers extra</button>
                 </div>
 
                 <div id="imp-rogue-result" style="display:none;">
@@ -659,6 +666,20 @@ class TSOIMMA_Admin_Page {
                 </div>
             </div>
 
+            <!-- Modal: PDF preview -->
+            <div id="imp-pdf-preview-modal" class="imp-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="imp-pdf-preview-title">
+                <div class="imp-modal-overlay"></div>
+                <div class="imp-modal-box imp-pdf-preview-box">
+                    <button type="button" class="imp-modal-close imp-pdf-preview-close" aria-label="Tancar">✕</button>
+                    <div class="imp-pdf-preview-header">
+                        <h3 id="imp-pdf-preview-title" data-i18n="pdf_preview_title">Previsualització PDF</h3>
+                        <a id="imp-pdf-preview-open" class="imp-btn imp-btn-ghost imp-btn-sm" href="#" target="_blank" rel="noopener noreferrer" data-i18n="pdf_open_tab">Obrir en pestanya nova</a>
+                    </div>
+                    <iframe id="imp-pdf-preview-frame" class="imp-pdf-preview-frame" title="PDF preview"></iframe>
+                    <p class="imp-pdf-preview-fallback" data-i18n="pdf_preview_fallback">Si la previsualització no es carrega al navegador, obre el PDF en una pestanya nova.</p>
+                </div>
+            </div>
+
             <!-- =====================================================
                  TAB: PDFs
                  ===================================================== -->
@@ -848,13 +869,37 @@ class TSOIMMA_Admin_Page {
                         <button id="imp-history-clear-30" class="imp-btn imp-btn-ghost" data-i18n="clear_30">🗑️ Netejar >30 dies</button>
                         <button id="imp-history-clear-all" class="imp-btn imp-btn-danger" data-i18n="clear_all">🗑️ Netejar tot</button>
                     </div>
-                    <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 16px;background:var(--imp-surface2);border-radius:8px;border:1px solid var(--imp-border);">
-                        <span style="color:var(--imp-text-muted);font-size:13px;" data-i18n="auto_clean_label">🕐 Neteja automàtica (setmanal):</span>
-                        <input type="number" id="imp-history-retention-days" min="0" max="3650" step="1" value="90"
-                               style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--imp-border);background:var(--imp-surface);color:var(--imp-text);font-size:13px;"
-                               title="Dies de retenció. 0 = desactivat.">
-                        <span style="color:var(--imp-text-muted);font-size:13px;" data-i18n="days_hint">dies &nbsp;(0 = desactivat)</span>
-                        <button id="imp-history-retention-save" class="imp-btn imp-btn-ghost" style="font-size:12px;padding:4px 12px;" data-i18n="save_btn">💾 Desar</button>
+                    <div style="margin-top:14px;padding:12px 16px;background:var(--imp-surface2);border-radius:8px;border:1px solid var(--imp-border);">
+                        <div style="color:var(--imp-text-muted);font-size:13px;margin-bottom:12px;font-weight:600;" data-i18n="auto_clean_title">🕐 Neteja automàtica de l'historial</div>
+                        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+                            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                <span style="color:var(--imp-text-muted);font-size:13px;" data-i18n="retention_days_label">Conservar:</span>
+                                <input type="number" id="imp-history-retention-days" min="0" max="3650" step="1" value="90"
+                                       style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--imp-border);background:var(--imp-surface);color:var(--imp-text);font-size:13px;">
+                                <span style="color:var(--imp-text-muted);font-size:13px;" data-i18n="retention_days_unit">dies</span>
+                            </div>
+                            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                <span style="color:var(--imp-text-muted);font-size:13px;" data-i18n="purge_interval_label">Comprovació:</span>
+                                <?php
+                                self::render_custom_select(
+                                    array(
+                                        'id'         => 'imp-history-purge-interval',
+                                        'wrap_style' => 'min-width:170px;width:auto;',
+                                        'selected'   => 'weekly',
+                                        'options'    => array(
+                                            array( 'value' => 'daily', 'label' => 'Cada dia', 'i18n' => 'interval_daily' ),
+                                            array( 'value' => 'weekly', 'label' => 'Cada setmana', 'i18n' => 'interval_weekly' ),
+                                            array( 'value' => 'monthly', 'label' => 'Cada mes', 'i18n' => 'interval_monthly' ),
+                                        ),
+                                    )
+                                );
+                                ?>
+                            </div>
+                            <span style="color:var(--imp-text-muted);font-size:12px;" data-i18n="retention_zero_hint">0 dies = desactivat</span>
+                            <button id="imp-history-retention-save" class="imp-btn imp-btn-ghost" style="font-size:12px;padding:4px 12px;" data-i18n="save_btn">💾 Desar</button>
+                            <span id="imp-retention-saved" style="display:none;color:var(--imp-success);font-size:12px;" data-i18n="retention_saved">Desat!</span>
+                            <span id="imp-retention-error" style="display:none;color:#f87171;font-size:12px;"></span>
+                        </div>
                     </div>
                 </div>
 
@@ -898,12 +943,14 @@ class TSOIMMA_Admin_Page {
                     <!-- Toolbar -->
                     <div class="imp-toolbar" id="imp-url-toolbar" style="display:none;">
                         <div class="imp-toolbar-left">
-                            <button id="imp-url-select-all"   class="imp-btn imp-btn-ghost"data-i18n="select_fixable">Seleccionar reparables</button>
-                            <button id="imp-url-deselect"     class="imp-btn imp-btn-ghost" data-i18n="deselect">Deseleccionar</button>
+                            <button id="imp-url-select-all"      class="imp-btn imp-btn-ghost" data-i18n="select_fixable">Seleccionar reparables</button>
+                            <button id="imp-url-select-removable" class="imp-btn imp-btn-ghost" data-i18n="select_removable">Seleccionar eliminables</button>
+                            <button id="imp-url-deselect"        class="imp-btn imp-btn-ghost" data-i18n="deselect">Deseleccionar</button>
                         </div>
                         <div class="imp-toolbar-right">
                             <span id="imp-url-count" class="imp-count-badge"></span>
-                            <button id="imp-fix-urls" class="imp-btn imp-btn-primary"data-i18n="fix_selected">✅ Reparar seleccionades</button>
+                            <button id="imp-remove-urls" class="imp-btn imp-btn-danger" data-i18n="remove_selected">🗑 Eliminar del contingut</button>
+                            <button id="imp-fix-urls"    class="imp-btn imp-btn-primary" data-i18n="fix_selected">✅ Reparar seleccionades</button>
                         </div>
                     </div>
 

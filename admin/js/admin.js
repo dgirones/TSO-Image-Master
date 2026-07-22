@@ -17,11 +17,11 @@
     // ================================================================
     var state = {
         opt: {
-            page: 1, perPage: 30, search: '', totalPages: 1,
+            page: 1, perPage: 35, search: '', totalPages: 1,
             selected: new Set()
         },
         seo: {
-            page: 1, perPage: 30, search: '', totalPages: 1
+            page: 1, perPage: 35, search: '', totalPages: 1
         },
         orphans: { found: [] },
         orphanSelected: new Set(),
@@ -59,7 +59,9 @@
     // ================================================================
     var I18N_STATIC = {
         ca: {
-            scan_rogue: '🔍 Escanejar fitxers problemàtics',
+            scan_rogue: '🔍 Escanejar fitxers extra',
+            rogue_title: '🗂 Fitxers extra a uploads',
+            rogue_desc: 'Escaneja fitxers a <code>uploads/</code> que WordPress no té registrats: <strong>còpies de seguretat TSO</strong> (<code>_tso_im_backup</code>), temporals (<code>_tso_im_opt</code>), doble extensió (<code>.jpg.webp</code>), backups antics (<code>.bk</code>), etc. Revisa abans d\'eliminar les còpies de seguretat.',
             rename_btn: '✏️ Reanomenar fitxer',
             repair_paths: '🔧 Reparar imatges amb path trencat',
             mime_fix_btn: '🔧 Reparar mime types incorrectes',
@@ -75,6 +77,10 @@
             url_items_suffix: 'URL(s)?',
             skipped_suffix: 'omeses',
             compressed_tag: 'Comprimit',
+            pdf_preview_btn: '👁 Veure',
+            pdf_preview_title: 'Previsualització PDF',
+            pdf_open_tab: 'Obrir en pestanya nova',
+            pdf_preview_fallback: 'Si la previsualització no es carrega al navegador, obre el PDF en una pestanya nova.',
             non_compressible_tag: 'No comprimible',
             webp_label: 'WebP',
             file_unit_suffix: 'fitxer(s)?',
@@ -112,7 +118,17 @@
             rogue_reason_tso_temp: 'Temporal TSO',
             rogue_reason_tso_pdf_compressed: 'PDF comprimit TSO',
             rogue_reason_generic_backup: 'Backup genèric (.bk)',
-            rogue_reason_unregistered_wp_db: 'Fitxer no registrat a la BD de WordPress'
+            rogue_reason_unregistered_wp_db: 'Fitxer no registrat a la BD de WordPress',
+            auto_clean_title: '🕐 Neteja automàtica de l\'historial',
+            retention_days_label: 'Conservar:',
+            retention_days_unit: 'dies',
+            purge_interval_label: 'Comprovació:',
+            interval_daily: 'Cada dia',
+            interval_weekly: 'Cada setmana',
+            interval_monthly: 'Cada mes',
+            retention_zero_hint: '0 dies = desactivat',
+            retention_saved: 'Desat!',
+            retention_invalid: 'Valor invàlid. Usa 0 per desactivar, o entre 1 i 3650 dies.'
         },
         es: {
             tab_optimize: 'Optimizar',
@@ -138,8 +154,8 @@
             all_slow: 'Todas (lento)',
             scan_now: '🔍 Escanear ahora',
             delete_selected: 'Eliminar seleccionadas',
-            rogue_title: '🗂 Archivos Físicos Problemáticos',
-            rogue_desc: 'Detecta archivos en disco que <strong>no están registrados en WordPress</strong> o tienen patrones problemáticos: doble extensión (<code>.jpg.webp</code>), copias antiguas (<code>.bk</code>), temporales, etc.',
+            rogue_title: '🗂 Archivos extra en uploads',
+            rogue_desc: 'Escanea archivos en <code>uploads/</code> que WordPress no tiene registrados: <strong>copias de seguridad TSO</strong> (<code>_tso_im_backup</code>), temporales (<code>_tso_im_opt</code>), doble extensión (<code>.jpg.webp</code>), copias antiguas (<code>.bk</code>), etc. Revisa antes de eliminar las copias de seguridad.',
             sort_size: '📦 Ordenar por peso (mayor primero)',
             sort_date: '📅 Ordenar por fecha de creación',
             sort_modified: '✏️ Ordenar por fecha de modificación',
@@ -201,8 +217,16 @@
             history_load: '🔄 Cargar / filtrar',
             clear_30: '🗑️ Limpiar >30 días',
             clear_all: '🗑️ Limpiar todo',
-            auto_clean_label: '🕐 Limpieza automática (semanal):',
-            days_hint: 'días (0 = desactivado)',
+            auto_clean_title: '🕐 Limpieza automática del historial',
+            retention_days_label: 'Conservar:',
+            retention_days_unit: 'días',
+            purge_interval_label: 'Comprobación:',
+            interval_daily: 'Cada día',
+            interval_weekly: 'Cada semana',
+            interval_monthly: 'Cada mes',
+            retention_zero_hint: '0 días = desactivado',
+            retention_saved: '¡Guardado!',
+            retention_invalid: 'Valor inválido. Usa 0 para desactivar, o entre 1 y 3650 días.',
             save_btn: '💾 Guardar',
             url_title: '🔗 Detector de URLs Inconsistentes',
             url_desc: 'Detecta URLs de imágenes en entradas y páginas que <strong>apuntan a archivos que ya no existen</strong> en el servidor — normalmente por conversiones de JPG a WebP. Puede actualizarlas automáticamente en toda la base de datos.',
@@ -210,12 +234,16 @@
             scan_web: '🔍 Escanear toda la web',
             select_fixable: 'Seleccionar reparables',
             fix_selected: '✅ Reparar seleccionadas',
-            scan_rogue: '🔍 Escanear archivos problemáticos',
+            scan_rogue: '🔍 Escanear archivos extra',
             rename_btn: '✏️ Renombrar archivo',
             files_label: 'archivos',
             remaining_label: 'restantes',
             open_title: 'Abrir',
             compressed_tag: 'Comprimido',
+            pdf_preview_btn: '👁 Ver',
+            pdf_preview_title: 'Vista previa PDF',
+            pdf_open_tab: 'Abrir en pestaña nueva',
+            pdf_preview_fallback: 'Si la vista previa no se carga en el navegador, abre el PDF en una pestaña nueva.',
             non_compressible_tag: 'No comprimible',
             webp_label: 'WebP',
             file_unit_suffix: 'archivo(s)?',
@@ -301,8 +329,8 @@
             all_slow: 'All (slow)',
             scan_now: '🔍 Scan now',
             delete_selected: 'Delete selected',
-            rogue_title: '🗂 Problematic Physical Files',
-            rogue_desc: 'Detect files on disk that are <strong>not registered in WordPress</strong> or have problematic patterns: double extension (<code>.jpg.webp</code>), old backups (<code>.bk</code>), temp files, etc.',
+            rogue_title: '🗂 Extra files in uploads',
+            rogue_desc: 'Scans files in <code>uploads/</code> not registered in WordPress: <strong>TSO backup copies</strong> (<code>_tso_im_backup</code>), temp files (<code>_tso_im_opt</code>), double extensions (<code>.jpg.webp</code>), old backups (<code>.bk</code>), etc. Review before deleting backup copies.',
             sort_size: '📦 Sort by size (largest first)',
             sort_date: '📅 Sort by creation date',
             sort_modified: '✏️ Sort by modification date',
@@ -364,8 +392,16 @@
             history_load: '🔄 Load / filter',
             clear_30: '🗑️ Clean >30 days',
             clear_all: '🗑️ Clean all',
-            auto_clean_label: '🕐 Automatic cleanup (weekly):',
-            days_hint: 'days (0 = disabled)',
+            auto_clean_title: '🕐 Automatic history cleanup',
+            retention_days_label: 'Keep:',
+            retention_days_unit: 'days',
+            purge_interval_label: 'Check:',
+            interval_daily: 'Daily',
+            interval_weekly: 'Weekly',
+            interval_monthly: 'Monthly',
+            retention_zero_hint: '0 days = disabled',
+            retention_saved: 'Saved!',
+            retention_invalid: 'Invalid value. Use 0 to disable, or between 1 and 3650 days.',
             save_btn: '💾 Save',
             url_title: '🔗 Inconsistent URL Detector',
             url_desc: 'Detects image URLs in posts/pages that <strong>point to files that no longer exist</strong> on the server — typically after JPG to WebP conversions. It can update links automatically across the database.',
@@ -373,12 +409,16 @@
             scan_web: '🔍 Scan entire website',
             select_fixable: 'Select fixable',
             fix_selected: '✅ Fix selected',
-            scan_rogue: '🔍 Scan problem files',
+            scan_rogue: '🔍 Scan extra upload files',
             rename_btn: '✏️ Rename file',
             files_label: 'files',
             remaining_label: 'remaining',
             open_title: 'Open',
             compressed_tag: 'Compressed',
+            pdf_preview_btn: '👁 View',
+            pdf_preview_title: 'PDF preview',
+            pdf_open_tab: 'Open in new tab',
+            pdf_preview_fallback: 'If the preview does not load in your browser, open the PDF in a new tab.',
             non_compressible_tag: 'Not compressible',
             webp_label: 'WebP',
             file_unit_suffix: 'file(s)?',
@@ -455,7 +495,7 @@
                 save_ok: '¡Guardado!',
                 save_seo: 'Guardar SEO',
                 edit_image: 'Editar',
-                scan_rogue: 'Escanear archivos problemáticos',
+                scan_rogue: 'Escanear archivos extra',
                 delete_rogue: 'Eliminar seleccionados',
                 scan_web: 'Escanear todo el sitio',
                 fix_selected: 'Reparar seleccionadas',
@@ -472,7 +512,7 @@
                 scanning_msg: 'Escaneando...',
                 no_images: 'No se han encontrado imágenes.',
                 no_orphans: 'No se han encontrado imágenes huérfanas.',
-                no_rogue: 'No se han encontrado archivos problemáticos.',
+                no_rogue: 'No se han encontrado archivos extra.',
                 no_pdfs: 'No se han encontrado PDFs.',
                 no_auto_history: 'No hay entradas de auto-optimización.',
                 auto_hist_error: 'Error al cargar el historial.',
@@ -483,11 +523,19 @@
                 url_click_select: 'Haz clic para seleccionar',
                 url_content_label: 'URL en el contenido (obsoleta)',
                 url_correct_label: 'URL correcta (archivo existente)',
-                url_no_fix_label: 'No se ha encontrado ninguna alternativa. Hay que restaurar manualmente.',
+
                 url_outdated_badge: 'Miniatura obsoleta (archivo existente en nuevo formato)',
                 url_missing_badge: 'Archivo ausente — alternativa encontrada',
                 url_broken_badge: 'Archivo ausente — sin solución automática',
                 url_fixing: 'Reparando...',
+                select_removable: 'Seleccionar eliminables',
+                removable_label: 'eliminables',
+                remove_selected: 'Eliminar del contenido',
+                url_removing: 'Eliminando...',
+                url_removed_ok: 'Referencias URL eliminadas del contenido.',
+                confirm_remove_urls: '¿Eliminar las referencias URL rotas del contenido? Se borrará la etiqueta img o el enlace.',
+                url_click_select_remove: 'Clic para seleccionar y eliminar',
+                url_no_fix_label: 'Sin alternativa. Selecciona y elimina la referencia del contenido, o restaura el archivo manualmente.',
                 posts_scanned: 'Contenidos escaneados',
                 broken_urls: 'URLs rotas',
                 fixable_urls: 'Reparable automáticamente',
@@ -519,6 +567,7 @@
                 btn_processing: 'Procesando...',
                 btn_deleting: 'Eliminando...',
                 btn_reverting: 'Revirtiendo...',
+                revert_rename_mismatch: 'No se puede revertir porque cambiaste el nombre del archivo después de optimizarlo. El backup sigue en el servidor pero ya no coincide con el nombre actual (por ejemplo, eliminaste el sufijo -e172…). Opciones: restaura el nombre original y entonces podrás revertir; elimina este backup y vuelve a optimizar para generar uno nuevo; o recupera el archivo manualmente desde Imágenes huérfanas → Archivos extra en uploads.',
                 btn_repairing: 'Reparando...',
                 webp_ok: 'Soportado',
                 webp_nok: 'No disponible (GD sin WebP)',
@@ -528,7 +577,7 @@
                 stat_current_size: 'Tamaño actual',
                 stat_real_format: 'Formato real',
                 images_deleted: 'imágenes eliminadas.',
-                all_rogue_deleted: '¡Todos los archivos problemáticos han sido eliminados!',
+                all_rogue_deleted: 'Archivos extra seleccionados eliminados.',
                 featured: 'Imagen destacada',
                 no_alt_text: 'Sin texto alternativo',
                 url_fixed_ok: 'URLs reparadas correctamente.',
@@ -555,7 +604,7 @@
                 save_ok: 'Saved!',
                 save_seo: 'Save SEO',
                 edit_image: 'Edit',
-                scan_rogue: 'Scan problem files',
+                scan_rogue: 'Scan extra upload files',
                 delete_rogue: 'Delete selected',
                 scan_web: 'Scan entire site',
                 fix_selected: 'Fix selected',
@@ -572,7 +621,7 @@
                 scanning_msg: 'Scanning...',
                 no_images: 'No images found.',
                 no_orphans: 'No orphaned images found.',
-                no_rogue: 'No problem files found.',
+                no_rogue: 'No extra files found.',
                 no_pdfs: 'No PDFs found.',
                 no_auto_history: 'No auto-optimization entries.',
                 auto_hist_error: 'Error loading history.',
@@ -583,11 +632,19 @@
                 url_click_select: 'Click to select',
                 url_content_label: 'URL in content (obsolete)',
                 url_correct_label: 'Correct URL (file exists)',
-                url_no_fix_label: 'No alternative found. Manual restore required.',
+
                 url_outdated_badge: 'Obsolete thumbnail (file exists in new format)',
                 url_missing_badge: 'Missing file - alternative found',
                 url_broken_badge: 'Missing file - no automatic fix',
                 url_fixing: 'Fixing...',
+                select_removable: 'Select removable',
+                removable_label: 'removable',
+                remove_selected: 'Remove from content',
+                url_removing: 'Removing...',
+                url_removed_ok: 'URL references removed from content.',
+                confirm_remove_urls: 'Remove selected broken URL references from content? The image tag or link will be deleted.',
+                url_click_select_remove: 'Click to select for removal',
+                url_no_fix_label: 'No alternative found. Select and remove the reference from content, or restore the file manually.',
                 posts_scanned: 'Content items scanned',
                 broken_urls: 'Broken URLs',
                 fixable_urls: 'Auto-fixable',
@@ -619,6 +676,7 @@
                 btn_processing: 'Processing...',
                 btn_deleting: 'Deleting...',
                 btn_reverting: 'Reverting...',
+                revert_rename_mismatch: 'Cannot revert because you renamed the file after optimizing it. The backup still exists on the server but no longer matches the current filename (e.g. you removed the -e172… suffix). Options: restore the original filename and revert; delete this backup and re-optimize to create a new one; or recover the file manually from Orphan Images → Extra upload files.',
                 btn_repairing: 'Repairing...',
                 webp_ok: 'Supported',
                 webp_nok: 'Not available (GD without WebP)',
@@ -628,7 +686,7 @@
                 stat_current_size: 'Current size',
                 stat_real_format: 'Real format',
                 images_deleted: 'images deleted.',
-                all_rogue_deleted: 'All problem files deleted!',
+                all_rogue_deleted: 'All selected extra files deleted!',
                 featured: 'Featured image',
                 no_alt_text: 'No alt text',
                 url_fixed_ok: 'URLs fixed correctly.',
@@ -655,7 +713,7 @@
                 save_ok: 'Guardat!',
                 save_seo: 'Guardar SEO',
                 edit_image: 'Editar',
-                scan_rogue: 'Escanejar fitxers problemàtics',
+                scan_rogue: 'Escanejar fitxers extra',
                 delete_rogue: 'Eliminar seleccionats',
                 scan_web: 'Escanejar tot el lloc',
                 fix_selected: 'Reparar seleccionades',
@@ -672,7 +730,7 @@
                 scanning_msg: 'Escanejant...',
                 no_images: 'No s\'han trobat imatges.',
                 no_orphans: 'No s\'han trobat imatges òrfenes.',
-                no_rogue: 'No s\'han trobat fitxers problemàtics.',
+                no_rogue: 'No s\'han trobat fitxers extra.',
                 no_pdfs: 'No s\'han trobat PDFs.',
                 no_auto_history: 'No hi ha entrades d\'auto-optimització.',
                 auto_hist_error: 'Error carregant l\'historial.',
@@ -683,11 +741,19 @@
                 url_click_select: 'Fes clic per seleccionar',
                 url_content_label: 'URL al contingut (obsoleta)',
                 url_correct_label: 'URL correcta (fitxer existent)',
-                url_no_fix_label: 'No s\'ha trobat cap alternativa. Cal restaurar manualment.',
+
                 url_outdated_badge: 'Miniatura obsoleta (fitxer existent en nou format)',
                 url_missing_badge: 'Fitxer absent — alternativa trobada',
                 url_broken_badge: 'Fitxer absent — sense solució automàtica',
                 url_fixing: 'Reparant...',
+                select_removable: 'Seleccionar eliminables',
+                removable_label: 'eliminables',
+                remove_selected: 'Eliminar del contingut',
+                url_removing: 'Eliminant...',
+                url_removed_ok: 'Referències URL eliminades del contingut.',
+                confirm_remove_urls: 'Eliminar les referències URL trencades del contingut? S\'esborrarà l\'etiqueta img o l\'enllaç.',
+                url_click_select_remove: 'Fes clic per seleccionar i eliminar',
+                url_no_fix_label: 'No s\'ha trobat cap alternativa. Selecciona i elimina la referència del contingut, o restaura el fitxer manualment.',
                 posts_scanned: 'Continguts escanejats',
                 broken_urls: 'URLs trencades',
                 fixable_urls: 'Reparable automàticament',
@@ -719,6 +785,7 @@
                 btn_processing: 'Processant...',
                 btn_deleting: 'Eliminant...',
                 btn_reverting: 'Revertint...',
+                revert_rename_mismatch: 'No es pot revertir perquè has canviat el nom del fitxer després d\'optimitzar-lo. El backup encara existeix al servidor però ja no correspon al nom actual (per exemple, has eliminat el sufix -e172…). Solucions: torna a posar el nom original i llavors podràs revertir; elimina aquest backup i torna a optimitzar per generar-ne un de nou; o recupera el fitxer manualment des de la pestanya Imatges òrfenes → Fitxers extra a uploads.',
                 btn_repairing: 'Reparant...',
                 webp_ok: 'Suportat',
                 webp_nok: 'No disponible (GD sense WebP)',
@@ -728,7 +795,7 @@
                 stat_current_size: 'Mida actual',
                 stat_real_format: 'Format real',
                 images_deleted: 'imatges eliminades.',
-                all_rogue_deleted: 'Tots els fitxers problemàtics han estat eliminats!',
+                all_rogue_deleted: 'Fitxers extra seleccionats eliminats!',
                 featured: 'Imatge destacada',
                 no_alt_text: 'Sense text alternatiu',
                 url_fixed_ok: 'URLs reparades correctament.',
@@ -846,7 +913,7 @@
         $('#imp-fix-mime-mismatch').text(uiText('mime_fix_btn', '🔧 Fix incorrect mime types'));
         $('#imp-scan-ghosts').text('🔍 ' + uiText('scan_ghosts', 'Scan ghost attachments'));
         $('#imp-delete-ghosts').text('🗑 ' + uiText('delete_ghosts', 'Delete selected'));
-        $('#imp-scan-rogue').text(uiText('scan_rogue', '🔍 Scan problem files'));
+        $('#imp-scan-rogue').text(uiText('scan_rogue', '🔍 Scan extra upload files'));
         $('#imp-save-rename').text(uiText('rename_btn', '✏️ Rename file'));
 
         // Re-render result messages if they are visible and previously stored.
@@ -1359,13 +1426,13 @@
             $('#imp-rogue-result').hide();
             $('#imp-rogue-loading').show();
             ajax('tso_im_scan_rogue_files', {}, function(data) {
-                btn.prop('disabled', false).text(uiText('scan_rogue', '🔍 Scan problem files'));
+                btn.prop('disabled', false).text(uiText('scan_rogue', '🔍 Scan extra upload files'));
                 $('#imp-rogue-loading').hide();
                 rogueFiles    = data.files || [];
                 rogueSelected = new Set();
                 if (!rogueFiles.length) {
                     $('#imp-rogue-result').show();
-                    $('#imp-rogue-grid').html('<div class="imp-loading" style="padding:30px 0">✓ ' + (L.no_rogue || 'No problem files found.') + '</div>');
+                    $('#imp-rogue-grid').html('<div class="imp-loading" style="padding:30px 0">✓ ' + (L.no_rogue || 'No extra files found.') + '</div>');
                     $('#imp-rogue-summary').text('');
                     $('#imp-delete-rogue, #imp-rogue-select-all, #imp-rogue-deselect').hide();
                     return;
@@ -1375,7 +1442,7 @@
                 renderRogueGrid();
                 $('#imp-rogue-result').show();
             }, function(err) {
-                btn.prop('disabled', false).text(uiText('scan_rogue', '🔍 Scan problem files'));
+                btn.prop('disabled', false).text(uiText('scan_rogue', '🔍 Scan extra upload files'));
                 $('#imp-rogue-loading').hide();
                 alert((L.error_prefix || 'Error: ') + err);
             });
@@ -1422,7 +1489,7 @@
                     alert(uiText('deleted_msg', 'Deleted') + ' ' + data.deleted + '. ' + uiText('errors_label', 'Errors:') + '\n' + data.errors.join('\n'));
                 }
                 if (!rogueFiles.length) {
-                    $('#imp-rogue-grid').html('<div class="imp-loading" style="padding:30px 0">✓ ' + (L.all_rogue_deleted || 'All problem files deleted!') + '</div>');
+                    $('#imp-rogue-grid').html('<div class="imp-loading" style="padding:30px 0">✓ ' + (L.all_rogue_deleted || 'All selected extra files deleted!') + '</div>');
                     $('#imp-rogue-summary').text('');
                     $('#imp-delete-rogue, #imp-rogue-select-all, #imp-rogue-deselect').hide();
                 } else {
@@ -1439,13 +1506,21 @@
         function renderRogueGrid() {
             var grid = $('#imp-rogue-grid');
             if (!rogueFiles.length) { grid.html(''); return; }
+            var sorted = rogueFiles.slice().sort(function(a, b) {
+                var ta = a.mtime || 0;
+                var tb = b.mtime || 0;
+                if (tb !== ta) return tb - ta;
+                return String(a.filename || '').localeCompare(String(b.filename || ''), undefined, { sensitivity: 'base' });
+            });
             var html = '';
-            rogueFiles.forEach(function(f) {
+            sorted.forEach(function(f) {
                 var sel   = rogueSelected.has(f.path) ? ' selected' : '';
                 var reasonLabel = uiText('rogue_reason_' + (f.reason_code || ''), f.reason || '');
                 var badge = f.priority === 'high'
                     ? '<span class="imp-rogue-badge imp-rogue-badge-high">! ' + escHtml(reasonLabel) + '</span>'
-                    : '<span class="imp-rogue-badge imp-rogue-badge-low">'  + escHtml(reasonLabel) + '</span>';
+                    : (f.reason_code === 'tso_backup' || f.reason_code === 'generic_backup' || f.reason_code === 'tso_pdf_compressed'
+                        ? '<span class="imp-rogue-badge imp-rogue-badge-info">💾 ' + escHtml(reasonLabel) + '</span>'
+                        : '<span class="imp-rogue-badge imp-rogue-badge-low">' + escHtml(reasonLabel) + '</span>');
                 html += '<div class="imp-rogue-card' + sel + '" data-path="' + escHtml(f.path) + '">' +
                     '<div class="imp-rogue-name" title="' + escHtml(f.path) + '">' + escHtml(f.filename) + '</div>' +
                     badge +
@@ -1684,7 +1759,10 @@
             loadOptImages(); loadSeoImages();
         }, function(err) {
             btn.prop('disabled', false).text(L.revert_btn || '↩ Revert');
-            alert((L.error_prefix || 'Error: ') + err);
+            var msg = (err === 'backup_mismatch_after_rename')
+                ? uiText('revert_rename_mismatch', 'Cannot revert because the file was renamed after optimization.')
+                : err;
+            alert((L.error_prefix || 'Error: ') + msg);
         });
     });
 
@@ -1801,6 +1879,24 @@
     // ================================================================
     // AJAX helper
     // ================================================================
+    function parseAjaxError(data) {
+        if (data == null || data === '') {
+            return 'Unknown error.';
+        }
+        if (typeof data === 'string') {
+            return data;
+        }
+        if (typeof data === 'object') {
+            if (data.message) {
+                return String(data.message);
+            }
+            if (data.code && !data.message) {
+                return String(data.code);
+            }
+        }
+        return 'Unknown error.';
+    }
+
     function ajax(action, data, onSuccess, onError, timeoutMs) {
         $.ajax({
             url:     TSOIMMA.ajax_url,
@@ -1811,7 +1907,7 @@
                 if (resp.success) {
                     if (onSuccess) onSuccess(resp.data);
                 } else {
-                    (onError || defaultError)(resp.data || 'Unknown error.');
+                    (onError || defaultError)(parseAjaxError(resp.data));
                 }
             },
             error: function(xhr, status) {
@@ -1926,6 +2022,7 @@
 
     function initPdfTab() {
         $(document).on('click', '.imp-tab[data-tab="pdf"]', function() { loadPdfs(); });
+        initPdfPreview();
         var pdfSearchTimer;
         $('#imp-search-pdf').on('input', function() {
             clearTimeout(pdfSearchTimer);
@@ -1942,7 +2039,7 @@
             updatePdfCount();
         });
         $(document).on('click', '#imp-pdf-grid .imp-pdf-row', function(e) {
-            if ($(e.target).hasClass('imp-pdf-compress-btn')) return;
+            if ($(e.target).closest('.imp-pdf-compress-btn, .imp-pdf-preview-btn').length) return;
             var id = $(this).data('id');
             if (pdfState.selected.has(id)) { pdfState.selected.delete(id); $(this).removeClass('selected'); }
             else { pdfState.selected.add(id); $(this).addClass('selected'); }
@@ -1974,6 +2071,33 @@
             var ids = Array.from(pdfState.selected);
             if (!ids.length) { alert(L.no_selection || 'Select at least one.'); return; }
             bulkCompressPdf(ids);
+        });
+    }
+
+    function initPdfPreview() {
+        var $modal = $('#imp-pdf-preview-modal');
+        function closePdfPreview() {
+            $modal.hide();
+            $('#imp-pdf-preview-frame').attr('src', 'about:blank');
+        }
+        function openPdfPreview(url, filename) {
+            if (!url) return;
+            $('#imp-pdf-preview-title').text(filename || uiText('pdf_preview_title', 'PDF preview'));
+            $('#imp-pdf-preview-open').attr('href', url).text(uiText('pdf_open_tab', 'Open in new tab'));
+            $('#imp-pdf-preview-frame').attr('src', url);
+            $modal.show();
+        }
+        $(document).on('click', '.imp-pdf-preview-btn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openPdfPreview($(this).attr('data-url') || '', $(this).attr('data-filename') || '');
+        });
+        $modal.on('click', '.imp-modal-overlay, .imp-pdf-preview-close', function(e) {
+            e.preventDefault();
+            closePdfPreview();
+        });
+        $(document).on('keydown.impPdfPreview', function(e) {
+            if (e.key === 'Escape' && $modal.is(':visible')) closePdfPreview();
         });
     }
 
@@ -2010,6 +2134,11 @@
             row.append('<span class="imp-pdf-date">' + escHtml(item.date) + '</span>');
             if (compTag) row.append(compTag);
             if (noCompTag) row.append(noCompTag);
+            if (item.url) {
+                row.append(
+                    '<button type="button" class="imp-pdf-preview-btn" data-id="' + item.id + '" data-url="' + escHtml(item.url) + '" data-filename="' + escHtml(item.filename) + '" title="' + escHtml(uiText('pdf_preview_btn', 'View')) + '">' + uiText('pdf_preview_btn', '👁 View') + '</button>'
+                );
+            }
             row.append('<button class="imp-pdf-compress-btn" data-id="' + item.id + '"' + btnDisabled + reasonTitle + '>' + uiText('pdf_compress_btn', '📄 Compress') + '</button>');
             grid.append(row);
         });
@@ -2092,13 +2221,6 @@
                 updateAutoToggleUI(data.enabled);
             });
         });
-        // History retention settings
-        $('#imp-save-history-retention').on('click', function() {
-            ajax('tso_im_save_history_retention', { days: $('#imp-history-retention-days').val() }, function() {
-                $('#imp-retention-saved').show().delay(2000).fadeOut();
-            });
-        });
-
         // ── Fix mime type mismatch ────────────────────────────────
         $('#imp-fix-mime-mismatch').on('click', function() {
             var $btn = $(this);
@@ -2270,6 +2392,20 @@
         var today = new Date().toISOString().slice(0, 10);
         $('#imp-history-date-from').val(today);
         $('#imp-history-date-to').val(today);
+        loadHistoryRetention();
+        $('#imp-history-retention-save').on('click', function() {
+            var $err = $('#imp-retention-error');
+            $err.hide().text('');
+            ajax('tso_im_save_history_retention', {
+                days: $('#imp-history-retention-days').val(),
+                interval: $('#imp-history-purge-interval').val()
+            }, function(data) {
+                applyHistoryRetention(data);
+                $('#imp-retention-saved').text(uiText('retention_saved', 'Saved!')).show().delay(2000).fadeOut();
+            }, function(err) {
+                $err.text(err || uiText('retention_invalid', 'Invalid value.')).show();
+            });
+        });
         $(document).on('click', '.imp-tab[data-tab="history"]', function() {
             loadHistoryStats('#imp-history-stats');
             histState.page = 1;
@@ -2287,6 +2423,25 @@
                 $('#imp-history-pagination').empty();
                 loadHistoryStats('#imp-history-stats');
             });
+        });
+    }
+
+    function applyHistoryRetention(data) {
+        if (!data) return;
+        if (typeof data.days !== 'undefined') {
+            $('#imp-history-retention-days').val(data.days);
+        }
+        if (data.interval) {
+            var $interval = $('#imp-history-purge-interval');
+            $interval.val(data.interval).trigger('change');
+            var api = $interval.closest('.imp-csel').data('impCselApi');
+            if (api && api.sync) api.sync();
+        }
+    }
+
+    function loadHistoryRetention() {
+        ajax('tso_im_get_history_retention', {}, function(data) {
+            applyHistoryRetention(data);
         });
     }
 
@@ -2357,14 +2512,16 @@
     // URL FIXER TAB
     // ================================================================
     function initUrlFixer() {
-        var urlIssues  = [];
-        var urlSelected = new Set();
+        var urlIssues       = [];
+        var urlSelected     = new Set();
+        var urlRemoveSelected = new Set();
 
         function renderUrlSummary(summary) {
             if (!summary) return;
             var summHtml = '<div class="imp-stat-box"><span class="imp-stat-label">' + uiText('posts_scanned', 'Posts scanned') + '</span><span class="imp-stat-val">' + summary.total_posts_scanned + '</span></div>' +
                            '<div class="imp-stat-box"><span class="imp-stat-label">' + uiText('broken_urls', 'Broken URLs') + '</span><span class="imp-stat-val" style="color:var(--imp-danger)">' + summary.total + '</span></div>' +
-                           '<div class="imp-stat-box"><span class="imp-stat-label">' + uiText('fixable_urls', 'Auto-fixable') + '</span><span class="imp-stat-val" style="color:var(--imp-success)">' + summary.fixable + '</span></div>';
+                           '<div class="imp-stat-box"><span class="imp-stat-label">' + uiText('fixable_urls', 'Auto-fixable') + '</span><span class="imp-stat-val" style="color:var(--imp-success)">' + summary.fixable + '</span></div>' +
+                           '<div class="imp-stat-box"><span class="imp-stat-label">' + uiText('removable_label', 'removable') + '</span><span class="imp-stat-val" style="color:var(--imp-warn)">' + (summary.removable || 0) + '</span></div>';
             $('#imp-url-summary').html(summHtml);
         }
 
@@ -2391,10 +2548,12 @@
                 $('#imp-url-loading').hide();
                 urlIssues    = data.issues || [];
                 urlSelected  = new Set();
+                urlRemoveSelected = new Set();
                 $('#imp-url-summary').data('summary', {
                     total_posts_scanned: data.total_posts_scanned || 0,
                     total: data.total || 0,
-                    fixable: data.fixable || 0
+                    fixable: data.fixable || 0,
+                    removable: data.removable || 0
                 });
                 renderUrlSummary($('#imp-url-summary').data('summary'));
                 $('#imp-url-result').show();
@@ -2419,8 +2578,15 @@
             $('.imp-url-row.fixable').addClass('selected');
             updateUrlToolbar();
         });
+        $('#imp-url-select-removable').on('click', function() {
+            urlRemoveSelected = new Set();
+            urlIssues.forEach(function(issue) { if (!issue.has_fix) urlRemoveSelected.add(issue.old_url); });
+            $('.imp-url-row.removable').addClass('selected');
+            updateUrlToolbar();
+        });
         $('#imp-url-deselect').on('click', function() {
             urlSelected = new Set();
+            urlRemoveSelected = new Set();
             $('.imp-url-row').removeClass('selected');
             updateUrlToolbar();
         });
@@ -2428,6 +2594,12 @@
             var url = $(this).data('url');
             if (urlSelected.has(url)) { urlSelected.delete(url); $(this).removeClass('selected'); }
             else                      { urlSelected.add(url);    $(this).addClass('selected');    }
+            updateUrlToolbar();
+        });
+        $(document).on('click', '.imp-url-row.removable', function() {
+            var url = $(this).data('url');
+            if (urlRemoveSelected.has(url)) { urlRemoveSelected.delete(url); $(this).removeClass('selected'); }
+            else                            { urlRemoveSelected.add(url);    $(this).addClass('selected');    }
             updateUrlToolbar();
         });
         $('#imp-fix-urls').on('click', function() {
@@ -2456,12 +2628,44 @@
             }, function(err) { btn.prop('disabled', false).text(uiText('fix_selected', '✓ Fix selected')); alert((L.error_prefix || 'Error: ') + err); });
         });
 
+        $('#imp-remove-urls').on('click', function() {
+            if (!urlRemoveSelected.size) return;
+            if (!confirm(uiText('confirm_remove_urls', 'Remove selected broken URL references from content?'))) return;
+            var btn = $(this);
+            btn.prop('disabled', true).text(uiText('url_removing', '⏳ Removing...'));
+            var urls = Array.from(urlRemoveSelected);
+            ajax('tso_im_remove_url_issues', { urls: urls }, function(data) {
+                btn.prop('disabled', false).text(uiText('remove_selected', '🗑 Remove from content'));
+                var msg = '✓ ' + data.removed + ' ' + uiText('url_removed_ok', 'URL references removed.');
+                if (data.skipped) msg += ' (' + data.skipped + ' ' + uiText('skipped_suffix', 'skipped') + ')';
+                if (data.errors && data.errors.length) msg += '\n' + uiText('errors_label', 'Errors:') + '\n' + data.errors.join('\n');
+                alert(msg);
+                urlIssues = urlIssues.filter(function(i) { return !urlRemoveSelected.has(i.old_url); });
+                urlRemoveSelected = new Set();
+                var summary = $('#imp-url-summary').data('summary') || {};
+                summary.total = urlIssues.length;
+                summary.fixable = urlIssues.filter(function(i) { return i.has_fix; }).length;
+                summary.removable = urlIssues.filter(function(i) { return !i.has_fix; }).length;
+                $('#imp-url-summary').data('summary', summary);
+                renderUrlSummary(summary);
+                renderUrlList();
+                updateUrlToolbar();
+                if (!urlIssues.length) {
+                    $('#imp-url-toolbar').hide();
+                    $('#imp-url-list').html('<div class="imp-loading" style="padding:40px 0">✓ ' + uiText('url_all_ok', 'All URLs fixed!') + '</div>');
+                }
+            }, function(err) {
+                btn.prop('disabled', false).text(uiText('remove_selected', '🗑 Remove from content'));
+                alert((L.error_prefix || 'Error: ') + err);
+            });
+        });
+
         function renderUrlList() {
             var html = '';
             urlIssues.forEach(function(issue) {
                 var fixable  = issue.has_fix;
-                var selClass = urlSelected.has(issue.old_url) ? ' selected' : '';
-                var cls      = fixable ? ' fixable' + selClass : ' no-fix';
+                var selClass = (fixable ? urlSelected.has(issue.old_url) : urlRemoveSelected.has(issue.old_url)) ? ' selected' : '';
+                var cls      = fixable ? ' fixable' + selClass : ' removable no-fix' + selClass;
                 var badge = issue.type === 'outdated'
                     ? '<span class="imp-url-badge imp-url-badge-outdated">🔄 ' + uiText('url_outdated_badge', 'Obsolete thumbnail') + '</span>'
                     : (issue.type === 'missing'
@@ -2480,17 +2684,25 @@
                         : '<div class="imp-url-path imp-url-path-nofix"><span class="imp-url-label" style="color:var(--imp-text-muted)">' + uiText('url_no_fix_label', 'No alternative found.') + '</span></div>') +
                     '</div>' +
                     '<div class="imp-url-posts">' + uiText('appears_in', 'Appears in') + ': ' + postsHtml + '</div>' +
-                    (fixable ? '<div class="imp-url-select-hint">👆 ' + uiText('url_click_select', 'Click to select') + '</div>' : '') +
+                    (fixable
+                        ? '<div class="imp-url-select-hint">👆 ' + uiText('url_click_select', 'Click to select') + '</div>'
+                        : '<div class="imp-url-select-hint">👆 ' + uiText('url_click_select_remove', 'Click to select for removal') + '</div>') +
                     '</div>';
             });
             $('#imp-url-list').html(html || '<div class="imp-loading">' + uiText('url_no_results', 'No results.') + '</div>');
         }
 
         function updateUrlToolbar() {
-            var fixable = urlIssues.filter(function(i) { return i.has_fix; }).length;
-            var sel     = urlSelected.size;
-            $('#imp-url-count').text(sel + ' ' + uiText('selected_of', 'selected of') + ' ' + fixable + ' ' + uiText('fixable_label', 'fixable'));
-            $('#imp-fix-urls').prop('disabled', sel === 0);
+            var fixableCount   = urlIssues.filter(function(i) { return i.has_fix; }).length;
+            var removableCount = urlIssues.filter(function(i) { return !i.has_fix; }).length;
+            var selFix         = urlSelected.size;
+            var selRemove      = urlRemoveSelected.size;
+            $('#imp-url-count').text(
+                selFix + ' ' + uiText('selected_of', 'selected of') + ' ' + fixableCount + ' ' + uiText('fixable_label', 'fixable') +
+                ' · ' + selRemove + ' ' + uiText('selected_of', 'selected of') + ' ' + removableCount + ' ' + uiText('removable_label', 'removable')
+            );
+            $('#imp-fix-urls').prop('disabled', selFix === 0);
+            $('#imp-remove-urls').prop('disabled', selRemove === 0);
         }
     }
 

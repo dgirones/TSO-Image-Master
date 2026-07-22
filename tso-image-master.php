@@ -2,12 +2,12 @@
 /**
  * Plugin Name:       TSO Image Master
  * Description:       Complete image optimization suite for WordPress: convert to WebP/JPG, resize, compress PDFs, find orphaned images, scan rogue files, fix broken image URLs, and manage SEO fields. Requires PHP GD library.
- * Version:           1.7.0
+ * Version:           1.9.1
  * Requires at least: 5.9
  * Requires PHP:      7.4
  * Tested up to:      7.0
  * Author:            Tu Soporte Online
- * Author URI:        https://tusoporteonline.es/
+ * Author URI:        https://www.tusoporteonline.es/blog
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       tso-image-master
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // ── Constants ────────────────────────────────────────────────────────
-define( 'TSOIMMA_VERSION',    '1.7.0' );
+define( 'TSOIMMA_VERSION',    '1.9.1' );
 define( 'TSOIMMA_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'TSOIMMA_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -52,8 +52,9 @@ function tsoimma_init() {
         3
     );
 
-    // WP-Cron: weekly history auto-purge
+    // WP-Cron: history auto-purge (interval configurable in admin)
     add_action( 'tsoimma_history_purge', array( 'TSOIMMA_History', 'auto_purge' ) );
+    add_filter( 'cron_schedules', array( 'TSOIMMA_History', 'register_cron_schedules' ) );
 }
 add_action( 'plugins_loaded', 'tsoimma_init' );
 
@@ -132,11 +133,24 @@ add_filter( 'all_plugins', 'tsoimma_translate_plugin_list_headers' );
 function tsoimma_activate() {
     TSOIMMA_History::maybe_install();
 
-    if ( ! wp_next_scheduled( 'tsoimma_history_purge' ) ) {
-        wp_schedule_event( time(), 'weekly', 'tsoimma_history_purge' );
-    }
+    TSOIMMA_History::schedule_purge_cron();
+    update_option( 'tsoimma_version', TSOIMMA_VERSION );
 }
 register_activation_hook( __FILE__, 'tsoimma_activate' );
+
+/**
+ * Run upgrade tasks when the plugin version changes (without reactivation).
+ */
+function tsoimma_maybe_upgrade() {
+    $stored = get_option( 'tsoimma_version', '' );
+    if ( is_string( $stored ) && version_compare( $stored, TSOIMMA_VERSION, '>=' ) ) {
+        return;
+    }
+
+    TSOIMMA_History::schedule_purge_cron();
+    update_option( 'tsoimma_version', TSOIMMA_VERSION );
+}
+add_action( 'plugins_loaded', 'tsoimma_maybe_upgrade', 20 );
 
 /**
  * Deactivation: remove scheduled events (data is preserved).

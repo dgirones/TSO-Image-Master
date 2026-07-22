@@ -65,11 +65,13 @@ class TSOIMMA_Image_Manager {
             }
         }
 
-        // Moure fitxer principal (copy+delete és més fiable que rename en entorns WordPress)
-        if ( ! @copy( $file_path, $new_path ) || ! file_exists( $new_path ) ) {
+        // Copy main file first; delete originals only after validated copies succeed.
+        if ( ! TSOIMMA_Optimizer::copy_file_validated( $file_path, $new_path ) ) {
+            TSOIMMA_Optimizer::delete_file_if_exists( $new_path );
             return new WP_Error( 'rename_failed', 'No s\'ha pogut reanomenar el fitxer.' );
         }
-        wp_delete_file( $file_path );
+
+        $files_to_delete = array( $file_path );
 
         // Reanomenar thumbnails (preservem el sufix de dimensions del nom real del fitxer).
         if ( ! empty( $meta['sizes'] ) && is_array( $meta['sizes'] ) ) {
@@ -97,8 +99,8 @@ class TSOIMMA_Image_Manager {
                 $new_thumb_name = $target_name . $dims_suffix . '.' . $thumb_ext;
                 $new_thumb_path = $base_dir . '/' . $new_thumb_name;
 
-                if ( @copy( $old_thumb, $new_thumb_path ) && file_exists( $new_thumb_path ) ) {
-                    wp_delete_file( $old_thumb );
+                if ( TSOIMMA_Optimizer::copy_file_validated( $old_thumb, $new_thumb_path ) ) {
+                    $files_to_delete[] = $old_thumb;
                     $meta['sizes'][ $size_key ]['file'] = $new_thumb_name;
 
                     $old_thumb_url = $old_dir_url . self::encode_rel_path_for_url( $old_thumb_file );
@@ -124,8 +126,8 @@ class TSOIMMA_Image_Manager {
 
             $new_scaled_name = $target_name . '-scaled.' . $scaled_ext;
             $new_scaled_path = $base_dir . '/' . $new_scaled_name;
-            if ( @copy( $old_scaled_path, $new_scaled_path ) && file_exists( $new_scaled_path ) ) {
-                wp_delete_file( $old_scaled_path );
+            if ( TSOIMMA_Optimizer::copy_file_validated( $old_scaled_path, $new_scaled_path ) ) {
+                $files_to_delete[] = $old_scaled_path;
 
                 $old_scaled_url = $old_dir_url . self::encode_rel_path_for_url( $old_scaled_name );
                 $new_scaled_url = $old_dir_url . self::encode_rel_path_for_url( $new_scaled_name );
@@ -133,6 +135,10 @@ class TSOIMMA_Image_Manager {
                     $url_pairs[ md5( $old_scaled_url ) ] = array( $old_scaled_url, $new_scaled_url );
                 }
             }
+        }
+
+        foreach ( $files_to_delete as $old_file ) {
+            wp_delete_file( $old_file );
         }
 
         // Actualitzar meta de WordPress
@@ -237,9 +243,13 @@ class TSOIMMA_Image_Manager {
             // de backup (_tso_im_backup.jpg) perquè no és a metadata['sizes'].
             // Cal llegir el path ABANS de cridar wp_delete_attachment (que esborraria
             // el postmeta _tso_im_backup_file i perdríem la referència).
-            $backup_path = get_post_meta( $id, '_tso_im_backup_file', true );
-            if ( $backup_path && file_exists( $backup_path ) ) {
-                wp_delete_file( $backup_path );
+            $stored_backup = get_post_meta( $id, '_tso_im_backup_file', true );
+            $safe_backup   = TSOIMMA_Optimizer::resolve_backup_path( $stored_backup, false );
+            if ( false !== $safe_backup ) {
+                if ( file_exists( $safe_backup ) ) {
+                    wp_delete_file( $safe_backup );
+                }
+                TSOIMMA_Optimizer::prune_empty_backup_dirs( $safe_backup );
             }
 
             // ── Eliminar fitxer temporal de compressió PDF si existeix ─
@@ -283,8 +293,7 @@ class TSOIMMA_Image_Manager {
      */
     public static function get_images_list( $page = 1, $per_page = 30, $search = '', $sort = 'date' ) {
         // filesize: cal ordenar en PHP (WP no indexa mida de fitxer)
-        // search: fem filtre propi UTF-8 estricte per evitar falses coincidències de WP "s"
-        // (p.ex. cataluñ trobant catalunya).
+        // search: filtre propi UTF-8 per prefix del nom (evita "ar" dins "mar").
         $search    = trim( (string) $search );
         $fetch_all = ( $sort === 'filesize' || $search !== '' );
 
@@ -336,11 +345,11 @@ class TSOIMMA_Image_Manager {
             ];
         }
 
-        // Filtre de cerca estricte UTF-8 sobre filename base (sense extensió).
+        // Filtre de cerca estricte UTF-8: el nom base (sense extensió) ha de començar pel terme.
         if ( $search !== '' ) {
             $items = array_values( array_filter( $items, function( $item ) use ( $search ) {
                 $base_filename = pathinfo( (string) $item['filename'], PATHINFO_FILENAME );
-                return self::contains_utf8( $base_filename, $search );
+                return self::starts_with_utf8( $base_filename, $search );
             } ) );
         }
 
@@ -367,17 +376,19 @@ class TSOIMMA_Image_Manager {
     }
 
     /**
-     * Case-insensitive UTF-8 substring check without accent folding.
-     * This keeps "ñ" different from "n".
+     * Case-insensitive UTF-8 prefix check without accent folding.
+     * This keeps "ñ" different from "n" and avoids "ar" matching "mar".
      */
-    private static function contains_utf8( $haystack, $needle ) {
+    private static function starts_with_utf8( $haystack, $needle ) {
         $haystack = (string) $haystack;
         $needle   = (string) $needle;
-        if ( $needle === '' ) return true;
-        if ( function_exists( 'mb_stripos' ) ) {
-            return mb_stripos( $haystack, $needle, 0, 'UTF-8' ) !== false;
+        if ( $needle === '' ) {
+            return true;
         }
-        return stripos( $haystack, $needle ) !== false;
+        if ( function_exists( 'mb_stripos' ) ) {
+            return mb_stripos( $haystack, $needle, 0, 'UTF-8' ) === 0;
+        }
+        return 0 === strncasecmp( $haystack, $needle, strlen( $needle ) );
     }
 
     /**
