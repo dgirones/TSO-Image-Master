@@ -3,9 +3,9 @@ Contributors: deadko
 Donate link: https://ko-fi.com/deadko_cat
 Tags: image optimization, webp, media library, seo, pdf compression
 Requires at least: 5.9
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.9.1
+Stable tag: 1.9.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -36,7 +36,7 @@ TSO Image Master is a complete media management and image optimization plugin fo
 = Requirements =
 
 * PHP 7.4 or higher (tested up to 8.3)
-* WordPress 5.9 or higher (tested up to 7.0)
+* WordPress 5.9 or higher (tested up to 7.1)
 * PHP GD library with JPEG, PNG, GIF, and WebP support
 * GhostScript (optional, required for PDF compression)
 * Imagick PHP extension (optional, fallback for PDF compression)
@@ -103,6 +103,9 @@ This can happen with images that are already well-optimized, very small images, 
 3. Per-image Optimize modal with output format, resize, and replace-original options.
 
 == Changelog ==
+
+= 1.9.2 =
+* Improved: WordPress 7.1 compatibility (readme and tested declaration).
 
 = 1.9.1 =
 * Improved: empty folders under `uploads/tso-image-master/` are removed automatically after a backup is deleted (manual delete, revert, attachment delete, rogue scanner).
@@ -224,6 +227,9 @@ This can happen with images that are already well-optimized, very small images, 
 * Initial release.
 
 == Upgrade Notice ==
+
+= 1.9.2 =
+Compatibility update: tested with WordPress 7.1 (no code changes required).
 
 = 1.9.1 =
 Cleans up empty backup folders under uploads/tso-image-master after backup deletion; safer backup path validation.
