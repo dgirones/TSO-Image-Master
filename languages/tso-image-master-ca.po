@@ -356,17 +356,92 @@ msgstr "Auto-optimitzar DESACTIVAT"
 msgid "Images without alt (or generic alt)"
 msgstr "Imatges sense alt (o alt genèric)"
 
-msgid "Suggests alt from title or filename. Does not overwrite useful existing alt text."
-msgstr "Suggereix alt des del títol o nom de fitxer. No sobreescriu un alt ja definit i útil."
+msgid "Suggests alt from title or filename. The «Suggested alt» column shows what will be written. Does not overwrite useful existing alt text."
+msgstr "Suggereix alt des del títol o nom de fitxer. La columna «Alt suggerit» mostra el text que s'escriurà. No sobreescriu un alt ja definit i útil."
 
 msgid "Only used in content"
 msgstr "Només usades en contingut"
 
+msgid "Shows only images referenced in posts, pages, featured images, widgets, or custom fields. Hides unused library uploads."
+msgstr "Mostra només imatges referenciades en entrades, pàgines, imatges destacades, widgets o camps personalitzats. Oculta pujades no usades de la biblioteca."
+
 msgid "Fill alt for selected"
 msgstr "Omplir alt seleccionades"
 
+msgid "Writes the suggested alt (title if useful, otherwise humanized filename) into each selected image. Skips images that already have useful alt text."
+msgstr "Escriu l'alt suggerit (títol si és útil, sinó nom de fitxer humanitzat) a cada imatge seleccionada. Omet les que ja tenen un alt útil."
+
 msgid "Suggested alt"
 msgstr "Alt suggerit"
+
+msgid "File"
+msgstr "Fitxer"
+
+msgid "Auto-optimize"
+msgstr "Auto-optimitzar"
+
+msgid "ON"
+msgstr "ACTIVAT"
+
+msgid "OFF"
+msgstr "DESACTIVAT"
+
+msgid "Output format: %s"
+msgstr "Format de sortida: %s"
+
+msgid "Disabled — enable in Auto tab"
+msgstr "Desactivat — activa a la pestanya Auto"
+
+msgid "Server engines"
+msgstr "Motors del servidor"
+
+msgid "PHP GD with WebP read/write. Required for WebP conversion and most image optimization."
+msgstr "PHP GD amb lectura/escriptura WebP. Necessari per convertir a WebP i la majoria d'optimitzacions."
+
+msgid "PHP GD with AVIF read/write. Needed only when you choose AVIF as output format."
+msgstr "PHP GD amb lectura/escriptura AVIF. Només cal si tries AVIF com a format de sortida."
+
+msgid "Command-line tool used to compress PDF files in the PDFs tab."
+msgstr "Eina de línia de comandes per comprimir PDFs a la pestanya PDFs."
+
+msgid "ImageMagick PHP extension. Used as fallback for PDF compression and some image tasks."
+msgstr "Extensió PHP ImageMagick. Reserva per comprimir PDFs i algunes tasques d'imatge."
+
+msgid "Available on this server."
+msgstr "Disponible en aquest servidor."
+
+msgid "Not available on this server."
+msgstr "No disponible en aquest servidor."
+
+msgid "Why it is not working"
+msgstr "Per què no funciona"
+
+msgid "Close"
+msgstr "Tancar"
+
+msgid "GhostScript was not found in the server PATH. Install it to compress PDFs from the command line."
+msgstr "No s'ha trobat GhostScript al PATH del servidor. Instal·la'l per comprimir PDFs des de la línia de comandes."
+
+msgid "The PHP Imagick extension is not installed. Some PDF and image operations may be limited."
+msgstr "L'extensió PHP Imagick no està instal·lada. Algunes operacions de PDF i imatge poden estar limitades."
+
+msgid "PHP GD cannot read or write WebP (imagewebp and imagecreatefromwebp are missing). Enable WebP in PHP GD."
+msgstr "PHP GD no pot llegir ni escriure WebP (falten imagewebp i imagecreatefromwebp). Activa WebP a PHP GD."
+
+msgid "PHP GD cannot encode WebP (imagewebp is missing)."
+msgstr "PHP GD no pot codificar WebP (falta imagewebp)."
+
+msgid "PHP GD cannot decode WebP (imagecreatefromwebp is missing)."
+msgstr "PHP GD no pot decodificar WebP (falta imagecreatefromwebp)."
+
+msgid "PHP GD was compiled without AVIF support (imageavif and imagecreatefromavif are missing). Recompile GD with libavif or use WebP instead."
+msgstr "PHP GD es va compilar sense suport AVIF (falten imageavif i imagecreatefromavif). Recompila GD amb libavif o usa WebP."
+
+msgid "PHP GD cannot encode AVIF (imageavif is missing)."
+msgstr "PHP GD no pot codificar AVIF (falta imageavif)."
+
+msgid "PHP GD cannot decode AVIF (imagecreatefromavif is missing)."
+msgstr "PHP GD no pot decodificar AVIF (falta imagecreatefromavif)."
 
 msgid "alt texts updated."
 msgstr "texts alt actualitzats."

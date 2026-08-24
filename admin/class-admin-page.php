@@ -170,11 +170,19 @@ class TSOIMMA_Admin_Page {
                 'dash_operations'       => __( 'Plugin operations', 'tso-image-master' ),
                 'dash_auto_on'          => __( 'Auto-optimize ON', 'tso-image-master' ),
                 'dash_auto_off'         => __( 'Auto-optimize OFF', 'tso-image-master' ),
+                'dash_auto_label'       => __( 'Auto-optimize', 'tso-image-master' ),
+                'dash_auto_status_on'   => __( 'ON', 'tso-image-master' ),
+                'dash_auto_status_off'  => __( 'OFF', 'tso-image-master' ),
+                'dash_auto_format_sub'  => __( 'Output format: %s', 'tso-image-master' ),
+                'dash_auto_disabled_hint' => __( 'Disabled — enable in Auto tab', 'tso-image-master' ),
                 'dash_alt_title'        => __( 'Images without alt (or generic alt)', 'tso-image-master' ),
-                'dash_alt_desc'         => __( 'Suggests alt from title or filename. Does not overwrite useful existing alt text.', 'tso-image-master' ),
+                'dash_alt_desc'         => __( 'Suggests alt from title or filename. The «Suggested alt» column shows what will be written. Does not overwrite useful existing alt text.', 'tso-image-master' ),
                 'dash_alt_used_only'    => __( 'Only used in content', 'tso-image-master' ),
+                'dash_alt_used_only_tip' => __( 'Shows only images referenced in posts, pages, featured images, widgets, or custom fields. Hides unused library uploads.', 'tso-image-master' ),
                 'dash_alt_fill'         => __( 'Fill alt for selected', 'tso-image-master' ),
+                'dash_alt_fill_tip'     => __( 'Writes the suggested alt (title if useful, otherwise humanized filename) into each selected image. Skips images that already have useful alt text.', 'tso-image-master' ),
                 'dash_alt_suggested'    => __( 'Suggested alt', 'tso-image-master' ),
+                'dash_alt_file_col'     => __( 'File', 'tso-image-master' ),
                 'dash_alt_used_in'      => __( 'Used in', 'tso-image-master' ),
                 'dash_alt_updated'      => __( 'alt texts updated.', 'tso-image-master' ),
                 'dash_alt_skipped'      => __( 'skipped (already had alt).', 'tso-image-master' ),
@@ -185,6 +193,15 @@ class TSOIMMA_Admin_Page {
                 'dash_go_urls'          => __( 'Fix URLs', 'tso-image-master' ),
                 'dash_alt_all_ok'       => __( 'All images have useful alt text.', 'tso-image-master' ),
                 'dash_engine_avif'      => __( 'GD AVIF', 'tso-image-master' ),
+                'dash_engine_info_title' => __( 'Server engines', 'tso-image-master' ),
+                'dash_engine_gd_desc'   => __( 'PHP GD with WebP read/write. Required for WebP conversion and most image optimization.', 'tso-image-master' ),
+                'dash_engine_avif_desc' => __( 'PHP GD with AVIF read/write. Needed only when you choose AVIF as output format.', 'tso-image-master' ),
+                'dash_engine_gs_desc'   => __( 'Command-line tool used to compress PDF files in the PDFs tab.', 'tso-image-master' ),
+                'dash_engine_imagick_desc' => __( 'ImageMagick PHP extension. Used as fallback for PDF compression and some image tasks.', 'tso-image-master' ),
+                'dash_engine_available' => __( 'Available on this server.', 'tso-image-master' ),
+                'dash_engine_unavailable' => __( 'Not available on this server.', 'tso-image-master' ),
+                'dash_engine_why_fail'  => __( 'Why it is not working', 'tso-image-master' ),
+                'dash_engine_close'     => __( 'Close', 'tso-image-master' ),
                 'dash_queue_title'      => __( 'Background queue', 'tso-image-master' ),
                 'dash_queue_desc'       => __( 'Bulk optimize jobs run in the background via WP-Cron (5 images per batch).', 'tso-image-master' ),
                 'dash_queue_cancel'     => __( 'Cancel pending jobs', 'tso-image-master' ),
@@ -430,13 +447,18 @@ class TSOIMMA_Admin_Page {
                             <label class="imp-field-check" style="margin:0;">
                                 <input type="checkbox" id="imp-alt-used-only">
                                 <span data-i18n="dash_alt_used_only">Només usades en contingut</span>
+                                <button type="button" class="imp-help-tip" data-help="dash_alt_used_only_tip" aria-label="?">?</button>
                             </label>
                             <button id="imp-alt-select-all" class="imp-btn imp-btn-ghost" data-i18n="select_all">Seleccionar tot</button>
                             <button id="imp-alt-deselect" class="imp-btn imp-btn-ghost" data-i18n="deselect">Deseleccionar</button>
                             <button id="imp-alt-bulk-fill" class="imp-btn imp-btn-primary" data-i18n="dash_alt_fill">Omplir alt seleccionades</button>
+                            <button type="button" class="imp-help-tip" data-help="dash_alt_fill_tip" aria-label="?">?</button>
                         </div>
                     </div>
-                    <p class="imp-panel-desc" data-i18n="dash_alt_desc">Suggereix alt des del títol o nom de fitxer. No sobreescriu un alt ja definit i útil.</p>
+                    <p class="imp-panel-desc" data-i18n="dash_alt_desc">Suggereix alt des del títol o nom de fitxer. La columna «Alt suggerit» mostra el text que s'escriurà. No sobreescriu un alt ja definit i útil.</p>
+                    <div class="imp-alt-list-head">
+                        <span></span><span></span><span data-i18n="dash_alt_file_col">Fitxer</span><span data-i18n="dash_alt_suggested">Alt suggerit</span><span data-i18n="dash_alt_used_in">Usada a</span>
+                    </div>
                     <div id="imp-alt-grid" class="imp-alt-list">
                         <div class="imp-loading" data-i18n="loading_data">Carregant...</div>
                     </div>
@@ -903,15 +925,18 @@ class TSOIMMA_Admin_Page {
                                 <label class="imp-auto-src-item"><input type="checkbox" class="imp-auto-src-format" value="tiff" checked> <span data-i18n="auto_src_tiff">TIFF</span></label>
                             </div>
                         </div>
-                        <div class="imp-field">
-                            <label for="imp-auto-skip-kb" data-i18n="auto_skip_kb_label">Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)</label>
-                            <input type="number" id="imp-auto-skip-kb" min="0" max="5120" value="0">
-                        </div>
-                        <div class="imp-field imp-field-check">
-                            <label>
-                                <input type="checkbox" id="imp-auto-fill-alt">
-                                <span data-i18n="auto_fill_alt_label">Fill missing alt text on upload</span>
-                            </label>
+                        <div class="imp-auto-extra-row">
+                            <div class="imp-field">
+                                <label for="imp-auto-skip-kb" data-i18n="auto_skip_kb_label">Ometre auto-optimitzar si WebP/AVIF ≤ (KB, 0 = off)</label>
+                                <input type="number" id="imp-auto-skip-kb" min="0" max="5120" value="0">
+                            </div>
+                            <div class="imp-field imp-field-check">
+                                <label>
+                                    <input type="checkbox" id="imp-auto-fill-alt">
+                                    <span data-i18n="auto_fill_alt_label">Omplir alt absent en pujar</span>
+                                    <button type="button" class="imp-help-tip" data-help="dash_alt_fill_tip" aria-label="?">?</button>
+                                </label>
+                            </div>
                         </div>
                     </div>
                     <button id="imp-save-auto" class="imp-btn imp-btn-primary" style="margin-top:20px;" data-i18n="save_config">💾 Guardar configuració</button>
@@ -1095,6 +1120,21 @@ class TSOIMMA_Admin_Page {
                     </div>
 
                     <div id="imp-url-list"></div>
+                </div>
+            </div>
+
+            <div id="imp-engine-info-modal" class="imp-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="imp-engine-info-title">
+                <div class="imp-modal-overlay imp-engine-info-close"></div>
+                <div class="imp-engine-info-box">
+                    <button type="button" class="imp-modal-close imp-engine-info-close" aria-label="Tancar">✕</button>
+                    <h4 id="imp-engine-info-title"></h4>
+                    <div id="imp-engine-info-status" class="imp-engine-info-status"></div>
+                    <p id="imp-engine-info-desc"></p>
+                    <div id="imp-engine-info-reason-wrap" style="display:none;">
+                        <strong style="font-size:12px;display:block;margin-bottom:6px;" data-i18n="dash_engine_why_fail">Per què no funciona</strong>
+                        <div id="imp-engine-info-reason" class="imp-engine-info-reason"></div>
+                    </div>
+                    <button type="button" class="imp-btn imp-btn-ghost imp-engine-info-close" style="margin-top:14px;" data-i18n="dash_engine_close">Tancar</button>
                 </div>
             </div>
 

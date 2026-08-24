@@ -25,7 +25,7 @@
         },
         orphans: { found: [] },
         orphanSelected: new Set(),
-        dashboard: { altPage: 1, altSelected: new Set() },
+        dashboard: { altPage: 1, altSelected: new Set(), engines: {} },
         currentModalId: null,
         imgCacheTs: {}
     };
@@ -39,6 +39,8 @@
         initLanguageSwitcher();
         initTabs();
         initDashboard();
+        initHelpTips();
+        initEngineInfo();
         initQualitySliders();
         initSearch();
         initOptimizeTab();
@@ -146,11 +148,19 @@
             dash_operations: 'operacions del plugin',
             dash_auto_on: 'Auto-optimitzar ACTIVAT',
             dash_auto_off: 'Auto-optimitzar DESACTIVAT',
+            dash_auto_label: 'Auto-optimitzar',
+            dash_auto_status_on: 'ACTIVAT',
+            dash_auto_status_off: 'DESACTIVAT',
+            dash_auto_format_sub: 'Format de sortida: %s',
+            dash_auto_disabled_hint: 'Desactivat — activa a la pestanya Auto',
             dash_alt_title: 'Imatges sense alt (o alt genèric)',
-            dash_alt_desc: 'Suggereix alt des del títol o nom de fitxer. No sobreescriu un alt ja definit i útil.',
+            dash_alt_desc: 'Suggereix alt des del títol o nom de fitxer. La columna «Alt suggerit» mostra el text que s\'escriurà. No sobreescriu un alt ja definit i útil.',
             dash_alt_used_only: 'Només usades en contingut',
+            dash_alt_used_only_tip: 'Mostra només imatges referenciades en entrades, pàgines, imatges destacades, widgets o camps personalitzats. Oculta pujades no usades de la biblioteca.',
             dash_alt_fill: 'Omplir alt seleccionades',
+            dash_alt_fill_tip: 'Escriu l\'alt suggerit (títol si és útil, sinó nom de fitxer humanitzat) a cada imatge seleccionada. Omet les que ja tenen un alt útil.',
             dash_alt_suggested: 'Alt suggerit',
+            dash_alt_file_col: 'Fitxer',
             dash_alt_used_in: 'Usada a',
             dash_alt_updated: 'texts alt actualitzats.',
             dash_alt_skipped: 'omeses (ja tenien alt).',
@@ -158,6 +168,15 @@
             dash_engine_avif: 'GD AVIF',
             dash_engine_gs: 'GhostScript',
             dash_engine_imagick: 'Imagick',
+            dash_engine_info_title: 'Motors del servidor',
+            dash_engine_gd_desc: 'PHP GD amb lectura/escriptura WebP. Necessari per convertir a WebP i la majoria d\'optimitzacions.',
+            dash_engine_avif_desc: 'PHP GD amb lectura/escriptura AVIF. Només cal si tries AVIF com a format de sortida.',
+            dash_engine_gs_desc: 'Eina de línia de comandes per comprimir PDFs a la pestanya PDFs.',
+            dash_engine_imagick_desc: 'Extensió PHP ImageMagick. Reserva per comprimir PDFs i algunes tasques d\'imatge.',
+            dash_engine_available: 'Disponible en aquest servidor.',
+            dash_engine_unavailable: 'No disponible en aquest servidor.',
+            dash_engine_why_fail: 'Per què no funciona',
+            dash_engine_close: 'Tancar',
             dash_go_orphans: 'Trobar òrfenes',
             dash_go_urls: 'Reparar URLs',
             dash_alt_all_ok: 'Totes les imatges tenen un alt útil.',
@@ -369,11 +388,19 @@
             ,dash_operations: 'operaciones del plugin'
             ,dash_auto_on: 'Auto-optimizar ACTIVADO'
             ,dash_auto_off: 'Auto-optimizar DESACTIVADO'
+            ,dash_auto_label: 'Auto-optimizar'
+            ,dash_auto_status_on: 'ACTIVADO'
+            ,dash_auto_status_off: 'DESACTIVADO'
+            ,dash_auto_format_sub: 'Formato de salida: %s'
+            ,dash_auto_disabled_hint: 'Desactivado — activa en la pestaña Auto'
             ,dash_alt_title: 'Imágenes sin alt (o alt genérico)'
-            ,dash_alt_desc: 'Sugiere alt desde el título o nombre de archivo. No sobrescribe un alt útil existente.'
+            ,dash_alt_desc: 'Sugiere alt desde el título o nombre de archivo. La columna «Alt sugerido» muestra el texto que se escribirá. No sobrescribe un alt útil existente.'
             ,dash_alt_used_only: 'Solo usadas en contenido'
+            ,dash_alt_used_only_tip: 'Muestra solo imágenes referenciadas en entradas, páginas, imágenes destacadas, widgets o campos personalizados. Oculta subidas no usadas de la biblioteca.'
             ,dash_alt_fill: 'Rellenar alt seleccionadas'
+            ,dash_alt_fill_tip: 'Escribe el alt sugerido (título si es útil, si no nombre de archivo humanizado) en cada imagen seleccionada. Omite las que ya tienen un alt útil.'
             ,dash_alt_suggested: 'Alt sugerido'
+            ,dash_alt_file_col: 'Archivo'
             ,dash_alt_used_in: 'Usada en'
             ,dash_alt_updated: 'textos alt actualizados.'
             ,dash_alt_skipped: 'omitidas (ya tenían alt).'
@@ -381,6 +408,15 @@
             ,dash_engine_avif: 'GD AVIF'
             ,dash_engine_gs: 'GhostScript'
             ,dash_engine_imagick: 'Imagick'
+            ,dash_engine_info_title: 'Motores del servidor'
+            ,dash_engine_gd_desc: 'PHP GD con lectura/escritura WebP. Necesario para convertir a WebP y la mayoría de optimizaciones.'
+            ,dash_engine_avif_desc: 'PHP GD con lectura/escritura AVIF. Solo hace falta si eliges AVIF como formato de salida.'
+            ,dash_engine_gs_desc: 'Herramienta de línea de comandos para comprimir PDFs en la pestaña PDFs.'
+            ,dash_engine_imagick_desc: 'Extensión PHP ImageMagick. Respaldo para comprimir PDFs y algunas tareas de imagen.'
+            ,dash_engine_available: 'Disponible en este servidor.'
+            ,dash_engine_unavailable: 'No disponible en este servidor.'
+            ,dash_engine_why_fail: 'Por qué no funciona'
+            ,dash_engine_close: 'Cerrar'
             ,dash_go_orphans: 'Buscar huérfanas'
             ,dash_go_urls: 'Reparar URLs'
             ,dash_alt_all_ok: 'Todas las imágenes tienen un alt útil.'
@@ -592,11 +628,19 @@
             ,dash_operations: 'operations'
             ,dash_auto_on: 'Auto-optimize ON'
             ,dash_auto_off: 'Auto-optimize OFF'
+            ,dash_auto_label: 'Auto-optimize'
+            ,dash_auto_status_on: 'ON'
+            ,dash_auto_status_off: 'OFF'
+            ,dash_auto_format_sub: 'Output format: %s'
+            ,dash_auto_disabled_hint: 'Disabled — enable in Auto tab'
             ,dash_alt_title: 'Images without alt (or generic alt)'
-            ,dash_alt_desc: 'Suggests alt from title or filename. Does not overwrite useful existing alt text.'
+            ,dash_alt_desc: 'Suggests alt from title or filename. The «Suggested alt» column shows what will be written. Does not overwrite useful existing alt text.'
             ,dash_alt_used_only: 'Only used in content'
+            ,dash_alt_used_only_tip: 'Shows only images referenced in posts, pages, featured images, widgets, or custom fields. Hides unused library uploads.'
             ,dash_alt_fill: 'Fill alt for selected'
+            ,dash_alt_fill_tip: 'Writes the suggested alt (title if useful, otherwise humanized filename) into each selected image. Skips images that already have useful alt text.'
             ,dash_alt_suggested: 'Suggested alt'
+            ,dash_alt_file_col: 'File'
             ,dash_alt_used_in: 'Used in'
             ,dash_alt_updated: 'alt texts updated.'
             ,dash_alt_skipped: 'skipped (already had alt).'
@@ -604,6 +648,15 @@
             ,dash_engine_avif: 'GD AVIF'
             ,dash_engine_gs: 'GhostScript'
             ,dash_engine_imagick: 'Imagick'
+            ,dash_engine_info_title: 'Server engines'
+            ,dash_engine_gd_desc: 'PHP GD with WebP read/write. Required for WebP conversion and most image optimization.'
+            ,dash_engine_avif_desc: 'PHP GD with AVIF read/write. Needed only when you choose AVIF as output format.'
+            ,dash_engine_gs_desc: 'Command-line tool used to compress PDF files in the PDFs tab.'
+            ,dash_engine_imagick_desc: 'ImageMagick PHP extension. Fallback for PDF compression and some image tasks.'
+            ,dash_engine_available: 'Available on this server.'
+            ,dash_engine_unavailable: 'Not available on this server.'
+            ,dash_engine_why_fail: 'Why it is not working'
+            ,dash_engine_close: 'Close'
             ,dash_go_orphans: 'Find orphans'
             ,dash_go_urls: 'Fix URLs'
             ,dash_alt_all_ok: 'All images have useful alt text.'
@@ -754,11 +807,19 @@
                 dash_operations: 'operaciones del plugin',
                 dash_auto_on: 'Auto-optimizar ACTIVADO',
                 dash_auto_off: 'Auto-optimizar DESACTIVADO',
+                dash_auto_label: 'Auto-optimizar',
+                dash_auto_status_on: 'ACTIVADO',
+                dash_auto_status_off: 'DESACTIVADO',
+                dash_auto_format_sub: 'Formato de salida: %s',
+                dash_auto_disabled_hint: 'Desactivado — activa en la pestaña Auto',
                 dash_alt_title: 'Imágenes sin alt (o alt genérico)',
-                dash_alt_desc: 'Sugiere alt desde el título o nombre de archivo. No sobrescribe un alt útil existente.',
+                dash_alt_desc: 'Sugiere alt desde el título o nombre de archivo. La columna «Alt sugerido» muestra el texto que se escribirá. No sobrescribe un alt útil existente.',
                 dash_alt_used_only: 'Solo usadas en contenido',
+                dash_alt_used_only_tip: 'Muestra solo imágenes referenciadas en entradas, páginas, imágenes destacadas, widgets o campos personalizados. Oculta subidas no usadas de la biblioteca.',
                 dash_alt_fill: 'Rellenar alt seleccionadas',
+                dash_alt_fill_tip: 'Escribe el alt sugerido (título si es útil, si no nombre de archivo humanizado) en cada imagen seleccionada. Omite las que ya tienen un alt útil.',
                 dash_alt_suggested: 'Alt sugerido',
+                dash_alt_file_col: 'Archivo',
                 dash_alt_used_in: 'Usada en',
                 dash_alt_updated: 'textos alt actualizados.',
                 dash_alt_skipped: 'omitidas (ya tenían alt).',
@@ -766,6 +827,15 @@
                 dash_engine_avif: 'GD AVIF',
                 dash_engine_gs: 'GhostScript',
                 dash_engine_imagick: 'Imagick',
+                dash_engine_info_title: 'Motores del servidor',
+                dash_engine_gd_desc: 'PHP GD con lectura/escritura WebP. Necesario para convertir a WebP y la mayoría de optimizaciones.',
+                dash_engine_avif_desc: 'PHP GD con lectura/escritura AVIF. Solo hace falta si eliges AVIF como formato de salida.',
+                dash_engine_gs_desc: 'Herramienta de línea de comandos para comprimir PDFs en la pestaña PDFs.',
+                dash_engine_imagick_desc: 'Extensión PHP ImageMagick. Respaldo para comprimir PDFs y algunas tareas de imagen.',
+                dash_engine_available: 'Disponible en este servidor.',
+                dash_engine_unavailable: 'No disponible en este servidor.',
+                dash_engine_why_fail: 'Por qué no funciona',
+                dash_engine_close: 'Cerrar',
                 dash_go_orphans: 'Buscar huérfanas',
                 dash_go_urls: 'Reparar URLs',
                 dash_alt_all_ok: 'Todas las imágenes tienen un alt útil.',
@@ -911,11 +981,19 @@
                 dash_operations: 'operations',
                 dash_auto_on: 'Auto-optimize ON',
                 dash_auto_off: 'Auto-optimize OFF',
+                dash_auto_label: 'Auto-optimize',
+                dash_auto_status_on: 'ON',
+                dash_auto_status_off: 'OFF',
+                dash_auto_format_sub: 'Output format: %s',
+                dash_auto_disabled_hint: 'Disabled — enable in Auto tab',
                 dash_alt_title: 'Images without alt (or generic alt)',
-                dash_alt_desc: 'Suggests alt from title or filename. Does not overwrite useful existing alt text.',
+                dash_alt_desc: 'Suggests alt from title or filename. The «Suggested alt» column shows what will be written. Does not overwrite useful existing alt text.',
                 dash_alt_used_only: 'Only used in content',
+                dash_alt_used_only_tip: 'Shows only images referenced in posts, pages, featured images, widgets, or custom fields. Hides unused library uploads.',
                 dash_alt_fill: 'Fill alt for selected',
+                dash_alt_fill_tip: 'Writes the suggested alt (title if useful, otherwise humanized filename) into each selected image. Skips images that already have useful alt text.',
                 dash_alt_suggested: 'Suggested alt',
+                dash_alt_file_col: 'File',
                 dash_alt_used_in: 'Used in',
                 dash_alt_updated: 'alt texts updated.',
                 dash_alt_skipped: 'skipped (already had alt).',
@@ -923,6 +1001,15 @@
                 dash_engine_avif: 'GD AVIF',
                 dash_engine_gs: 'GhostScript',
                 dash_engine_imagick: 'Imagick',
+                dash_engine_info_title: 'Server engines',
+                dash_engine_gd_desc: 'PHP GD with WebP read/write. Required for WebP conversion and most image optimization.',
+                dash_engine_avif_desc: 'PHP GD with AVIF read/write. Needed only when you choose AVIF as output format.',
+                dash_engine_gs_desc: 'Command-line tool used to compress PDF files in the PDFs tab.',
+                dash_engine_imagick_desc: 'ImageMagick PHP extension. Fallback for PDF compression and some image tasks.',
+                dash_engine_available: 'Available on this server.',
+                dash_engine_unavailable: 'Not available on this server.',
+                dash_engine_why_fail: 'Why it is not working',
+                dash_engine_close: 'Close',
                 dash_go_orphans: 'Find orphans',
                 dash_go_urls: 'Fix URLs',
                 dash_alt_all_ok: 'All images have useful alt text.',
@@ -1068,11 +1155,19 @@
                 dash_operations: 'operacions del plugin',
                 dash_auto_on: 'Auto-optimitzar ACTIVAT',
                 dash_auto_off: 'Auto-optimitzar DESACTIVAT',
+                dash_auto_label: 'Auto-optimitzar',
+                dash_auto_status_on: 'ACTIVAT',
+                dash_auto_status_off: 'DESACTIVAT',
+                dash_auto_format_sub: 'Format de sortida: %s',
+                dash_auto_disabled_hint: 'Desactivat — activa a la pestanya Auto',
                 dash_alt_title: 'Imatges sense alt (o alt genèric)',
-                dash_alt_desc: 'Suggereix alt des del títol o nom de fitxer. No sobreescriu un alt ja definit i útil.',
+                dash_alt_desc: 'Suggereix alt des del títol o nom de fitxer. La columna «Alt suggerit» mostra el text que s\'escriurà. No sobreescriu un alt ja definit i útil.',
                 dash_alt_used_only: 'Només usades en contingut',
+                dash_alt_used_only_tip: 'Mostra només imatges referenciades en entrades, pàgines, imatges destacades, widgets o camps personalitzats. Oculta pujades no usades de la biblioteca.',
                 dash_alt_fill: 'Omplir alt seleccionades',
+                dash_alt_fill_tip: 'Escriu l\'alt suggerit (títol si és útil, sinó nom de fitxer humanitzat) a cada imatge seleccionada. Omet les que ja tenen un alt útil.',
                 dash_alt_suggested: 'Alt suggerit',
+                dash_alt_file_col: 'Fitxer',
                 dash_alt_used_in: 'Usada a',
                 dash_alt_updated: 'texts alt actualitzats.',
                 dash_alt_skipped: 'omeses (ja tenien alt).',
@@ -1080,6 +1175,15 @@
                 dash_engine_avif: 'GD AVIF',
                 dash_engine_gs: 'GhostScript',
                 dash_engine_imagick: 'Imagick',
+                dash_engine_info_title: 'Motors del servidor',
+                dash_engine_gd_desc: 'PHP GD amb lectura/escriptura WebP. Necessari per convertir a WebP i la majoria d\'optimitzacions.',
+                dash_engine_avif_desc: 'PHP GD amb lectura/escriptura AVIF. Només cal si tries AVIF com a format de sortida.',
+                dash_engine_gs_desc: 'Eina de línia de comandes per comprimir PDFs a la pestanya PDFs.',
+                dash_engine_imagick_desc: 'Extensió PHP ImageMagick. Reserva per comprimir PDFs i algunes tasques d\'imatge.',
+                dash_engine_available: 'Disponible en aquest servidor.',
+                dash_engine_unavailable: 'No disponible en aquest servidor.',
+                dash_engine_why_fail: 'Per què no funciona',
+                dash_engine_close: 'Tancar',
                 dash_go_orphans: 'Trobar òrfenes',
                 dash_go_urls: 'Reparar URLs',
                 dash_alt_all_ok: 'Totes les imatges tenen un alt útil.',
@@ -1590,12 +1694,18 @@
         $stats.html('<div class="imp-loading">' + uiText('loading_data', 'Loading...') + '</div>');
         ajax('tso_im_get_dashboard_overview', {}, function(data) {
             var warnAlt = (data.missing_alt || 0) > 0;
+            var fmtKey = String(data.auto_format || 'webp').toLowerCase();
+            var fmtLabels = { webp: 'WebP', avif: 'AVIF', jpg: 'JPG', original: uiText('fmt_keep', 'Original') };
+            var fmtLabel = fmtLabels[fmtKey] || fmtKey.toUpperCase();
+            var autoSub = data.auto_enabled
+                ? uiText('dash_auto_format_sub', 'Output format: %s').replace('%s', fmtLabel)
+                : uiText('dash_auto_disabled_hint', 'Disabled — enable in Auto tab');
             var cards = [
-                { label: uiText('dash_total_images', 'Images in library'), val: data.total_images || 0, sub: '', cls: '' },
+                { label: uiText('dash_total_images', 'Images in library'), val: data.total_images || 0, sub: '\u00a0', cls: '' },
                 { label: uiText('dash_missing_alt', 'Missing alt text'), val: data.missing_alt || 0, sub: warnAlt ? uiText('dash_alt_title', 'Review below') : '✓', cls: warnAlt ? 'is-warn is-clickable imp-dash-jump' : 'is-ok', jump: 'dashboard' },
                 { label: uiText('dash_backups', 'TSO backups'), val: data.backup_count || 0, sub: data.backup_bytes_h || '0 B', cls: (data.backup_count || 0) > 0 ? 'is-warn' : 'is-ok' },
                 { label: uiText('dash_saved', 'Space saved'), val: data.total_saved_h || '0 B', sub: (data.total_operations || 0) + ' ' + uiText('dash_operations', 'operations'), cls: 'is-ok' },
-                { label: data.auto_enabled ? uiText('dash_auto_on', 'Auto-optimize ON') : uiText('dash_auto_off', 'Auto-optimize OFF'), val: (data.auto_format || 'webp').toUpperCase(), sub: '', cls: data.auto_enabled ? 'is-ok is-clickable imp-dash-jump' : '', jump: 'auto' }
+                { label: uiText('dash_auto_label', 'Auto-optimize'), val: data.auto_enabled ? uiText('dash_auto_status_on', 'ON') : uiText('dash_auto_status_off', 'OFF'), sub: autoSub, cls: data.auto_enabled ? 'is-ok is-clickable imp-dash-jump' : '', jump: 'auto' }
             ];
             $stats.empty();
             cards.forEach(function(card) {
@@ -1610,16 +1720,26 @@
             });
 
             var engines = data.engines || {};
+            state.dashboard.engines = engines;
             var pills = [
-                { key: 'gd_webp', label: uiText('dash_engine_gd', 'GD WebP') },
-                { key: 'gd_avif', label: uiText('dash_engine_avif', 'GD AVIF') },
-                { key: 'ghostscript', label: uiText('dash_engine_gs', 'GhostScript') },
-                { key: 'imagick', label: uiText('dash_engine_imagick', 'Imagick') }
+                { key: 'gd_webp', label: uiText('dash_engine_gd', 'GD WebP'), descKey: 'dash_engine_gd_desc' },
+                { key: 'gd_avif', label: uiText('dash_engine_avif', 'GD AVIF'), descKey: 'dash_engine_avif_desc' },
+                { key: 'ghostscript', label: uiText('dash_engine_gs', 'GhostScript'), descKey: 'dash_engine_gs_desc' },
+                { key: 'imagick', label: uiText('dash_engine_imagick', 'Imagick'), descKey: 'dash_engine_imagick_desc' }
             ];
             $engines.empty();
+            $engines.append('<span class="imp-engine-row-title">' + escHtml(uiText('dash_engine_info_title', 'Server engines')) + '</span>');
             pills.forEach(function(pill) {
-                var ok = !!engines[pill.key];
-                $engines.append('<span class="imp-engine-pill ' + (ok ? 'ok' : 'nok') + '">' + (ok ? '✓' : '✗') + ' ' + escHtml(pill.label) + '</span>');
+                var engineData = engines[pill.key];
+                var ok = (engineData && typeof engineData === 'object') ? !!engineData.ok : !!engineData;
+                $engines.append(
+                    '<button type="button" class="imp-engine-pill ' + (ok ? 'ok' : 'nok') + '" ' +
+                    'data-engine-key="' + escHtml(pill.key) + '" ' +
+                    'data-engine-label="' + escHtml(pill.label) + '" ' +
+                    'data-engine-desc="' + escHtml(uiText(pill.descKey, '')) + '">' +
+                    (ok ? '✓' : '✗') + ' ' + escHtml(pill.label) +
+                    '</button>'
+                );
             });
 
             renderQueueStatus(data.queue || {});
@@ -1628,6 +1748,59 @@
             }
         }, function(err) {
             $stats.html('<div class="imp-error">' + escHtml(err) + '</div>');
+        });
+    }
+
+    function initEngineInfo() {
+        $(document).on('click', '.imp-engine-pill', function() {
+            var key = $(this).attr('data-engine-key') || '';
+            var label = $(this).attr('data-engine-label') || '';
+            var desc = $(this).attr('data-engine-desc') || '';
+            var engineData = state.dashboard.engines[key] || {};
+            var ok = (engineData && typeof engineData === 'object') ? !!engineData.ok : !!engineData;
+            var reason = (engineData && typeof engineData === 'object') ? (engineData.reason || '') : '';
+            $('#imp-engine-info-title').text(label);
+            $('#imp-engine-info-desc').text(desc);
+            $('#imp-engine-info-status')
+                .attr('class', 'imp-engine-info-status ' + (ok ? 'ok' : 'nok'))
+                .text((ok ? '✓ ' : '✗ ') + uiText(ok ? 'dash_engine_available' : 'dash_engine_unavailable', ok ? 'Available' : 'Not available'));
+            if (!ok && reason) {
+                $('#imp-engine-info-reason').text(reason);
+                $('#imp-engine-info-reason-wrap').show();
+            } else {
+                $('#imp-engine-info-reason-wrap').hide();
+            }
+            $('#imp-engine-info-modal').show();
+        });
+        $(document).on('click', '.imp-engine-info-close', function() {
+            $('#imp-engine-info-modal').hide();
+        });
+    }
+
+    function initHelpTips() {
+        var $popover = null;
+        function hidePopover() {
+            if ($popover) {
+                $popover.remove();
+                $popover = null;
+            }
+        }
+        $(document).on('click', '.imp-help-tip', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var key = $(this).data('help');
+            var text = uiText(key, '');
+            if (!text) return;
+            hidePopover();
+            $popover = $('<div class="imp-help-popover" role="tooltip"></div>').text(text).appendTo('body');
+            var rect = this.getBoundingClientRect();
+            var top = rect.bottom + window.scrollY + 8;
+            var left = Math.max(12, rect.left + window.scrollX - 40);
+            $popover.css({ top: top + 'px', left: left + 'px' });
+        });
+        $(document).on('click', function() { hidePopover(); });
+        $(document).on('keydown', function(e) {
+            if (e.key === 'Escape') hidePopover();
         });
     }
 

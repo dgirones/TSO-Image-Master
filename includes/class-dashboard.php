@@ -302,14 +302,57 @@ class TSOIMMA_Dashboard {
 	}
 
 	/**
-	 * @return array<string, bool>
+	 * @return array<string, array<string, mixed>>
 	 */
 	private static function get_engine_status() {
+		$gd_webp_ok  = TSOIMMA_Optimizer::webp_supported();
+		$gd_avif_ok  = TSOIMMA_Optimizer::avif_supported();
+		$gs_ok       = TSOIMMA_PDF_Compressor::ghostscript_available();
+		$imagick_ok  = class_exists( 'Imagick' );
+
 		return array(
-			'gd_webp'  => TSOIMMA_Optimizer::webp_supported(),
-			'gd_avif'  => TSOIMMA_Optimizer::avif_supported(),
-			'ghostscript' => TSOIMMA_PDF_Compressor::ghostscript_available(),
-			'imagick'  => class_exists( 'Imagick' ),
+			'gd_webp'     => array(
+				'ok'     => $gd_webp_ok,
+				'reason' => $gd_webp_ok ? '' : self::engine_reason_gd_webp(),
+			),
+			'gd_avif'     => array(
+				'ok'     => $gd_avif_ok,
+				'reason' => $gd_avif_ok ? '' : self::engine_reason_gd_avif(),
+			),
+			'ghostscript' => array(
+				'ok'     => $gs_ok,
+				'reason' => $gs_ok ? '' : __( 'GhostScript was not found in the server PATH. Install it to compress PDFs from the command line.', 'tso-image-master' ),
+			),
+			'imagick'     => array(
+				'ok'     => $imagick_ok,
+				'reason' => $imagick_ok ? '' : __( 'The PHP Imagick extension is not installed. Some PDF and image operations may be limited.', 'tso-image-master' ),
+			),
 		);
+	}
+
+	/**
+	 * @return string
+	 */
+	private static function engine_reason_gd_webp() {
+		if ( ! function_exists( 'imagewebp' ) && ! function_exists( 'imagecreatefromwebp' ) ) {
+			return __( 'PHP GD cannot read or write WebP (imagewebp and imagecreatefromwebp are missing). Enable WebP in PHP GD.', 'tso-image-master' );
+		}
+		if ( ! function_exists( 'imagewebp' ) ) {
+			return __( 'PHP GD cannot encode WebP (imagewebp is missing).', 'tso-image-master' );
+		}
+		return __( 'PHP GD cannot decode WebP (imagecreatefromwebp is missing).', 'tso-image-master' );
+	}
+
+	/**
+	 * @return string
+	 */
+	private static function engine_reason_gd_avif() {
+		if ( ! function_exists( 'imageavif' ) && ! function_exists( 'imagecreatefromavif' ) ) {
+			return __( 'PHP GD was compiled without AVIF support (imageavif and imagecreatefromavif are missing). Recompile GD with libavif or use WebP instead.', 'tso-image-master' );
+		}
+		if ( ! function_exists( 'imageavif' ) ) {
+			return __( 'PHP GD cannot encode AVIF (imageavif is missing).', 'tso-image-master' );
+		}
+		return __( 'PHP GD cannot decode AVIF (imagecreatefromavif is missing).', 'tso-image-master' );
 	}
 }
