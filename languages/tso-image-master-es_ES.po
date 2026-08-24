@@ -4,7 +4,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: TSO Image Master 1.9.1\n"
+"Project-Id-Version: TSO Image Master 1.9.5\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/tso-image-master\n"
 "POT-Creation-Date: 2026-04-17 21:10+0000\n"
 "PO-Revision-Date: 2026-05-22 12:00+0000\n"
@@ -325,3 +325,159 @@ msgstr "¿Eliminar las referencias URL rotas seleccionadas de entradas y widgets
 
 msgid "Click to select for removal"
 msgstr "Haz clic para seleccionar para eliminar"
+
+msgid "Overview"
+msgstr "Resumen"
+
+msgid "Site overview"
+msgstr "Resumen del sitio"
+
+msgid "Quick view of image health, available engines, and pending actions."
+msgstr "Vista rápida de la salud de las imágenes, motores disponibles y acciones pendientes."
+
+msgid "Images in library"
+msgstr "Imágenes en la biblioteca"
+
+msgid "Missing alt text"
+msgstr "Texto alt ausente"
+
+msgid "TSO backups"
+msgstr "Copias de seguridad TSO"
+
+msgid "Space saved"
+msgstr "Espacio ahorrado"
+
+msgid "Plugin operations"
+msgstr "Operaciones del plugin"
+
+msgid "Auto-optimize ON"
+msgstr "Auto-optimizar ACTIVADO"
+
+msgid "Auto-optimize OFF"
+msgstr "Auto-optimizar DESACTIVADO"
+
+msgid "Images without alt (or generic alt)"
+msgstr "Imágenes sin alt (o alt genérico)"
+
+msgid "Suggests alt from title or filename. Does not overwrite useful existing alt text."
+msgstr "Sugiere alt desde el título o nombre de archivo. No sobrescribe un alt útil existente."
+
+msgid "Only used in content"
+msgstr "Solo usadas en contenido"
+
+msgid "Fill alt for selected"
+msgstr "Rellenar alt seleccionadas"
+
+msgid "Suggested alt"
+msgstr "Alt sugerido"
+
+msgid "alt texts updated."
+msgstr "textos alt actualizados."
+
+msgid "skipped (already had alt)."
+msgstr "omitidas (ya tenían alt)."
+
+msgid "GD WebP"
+msgstr "GD WebP"
+
+msgid "GD AVIF"
+msgstr "GD AVIF"
+
+msgid "Find orphans"
+msgstr "Buscar huérfanas"
+
+msgid "Fix URLs"
+msgstr "Reparar URLs"
+
+msgid "All images have useful alt text."
+msgstr "Todas las imágenes tienen un alt útil."
+
+msgid "Background queue"
+msgstr "Cola en segundo plano"
+
+msgid "Bulk optimize jobs run in the background via WP-Cron (5 images per batch)."
+msgstr "Las optimizaciones masivas se ejecutan en segundo plano vía WP-Cron (5 imágenes por lote)."
+
+msgid "Cancel pending jobs"
+msgstr "Cancelar trabajos pendientes"
+
+msgid "Queue is empty."
+msgstr "La cola está vacía."
+
+msgid "done"
+msgstr "hechas"
+
+msgid "pending"
+msgstr "pendientes"
+
+msgid "errors"
+msgstr "errores"
+
+msgid "Queued for background processing..."
+msgstr "En cola para procesar en segundo plano..."
+
+msgid "images queued."
+msgstr "imágenes en cola."
+
+msgid "Backup retention"
+msgstr "Retención de copias de seguridad"
+
+msgid "Auto-delete TSO backups under uploads/tso-image-master/ (0 = disabled)."
+msgstr "Elimina automáticamente las copias TSO en uploads/tso-image-master/ (0 = desactivado)."
+
+msgid "Keep backups (days)"
+msgstr "Conservar copias (días)"
+
+msgid "Max total size (MB, 0 = unlimited)"
+msgstr "Tamaño máximo total (MB, 0 = ilimitado)"
+
+msgid "Purge now"
+msgstr "Purgar ahora"
+
+msgid "Duplicate images"
+msgstr "Imágenes duplicadas"
+
+msgid "Scan duplicates"
+msgstr "Escanear duplicados"
+
+msgid "No duplicate groups found."
+msgstr "No se han encontrado grupos de duplicados."
+
+msgid "duplicate groups"
+msgstr "grupos de duplicados"
+
+msgid "Wasted space"
+msgstr "Espacio desperdiciado"
+
+msgid "Largest images"
+msgstr "Imágenes más pesadas"
+
+msgid "Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)"
+msgstr "Omitir auto-optimizar si WebP/AVIF ≤ (KB, 0 = off)"
+
+msgid "Fill missing alt text on upload"
+msgstr "Rellenar alt ausente al subir"
+
+msgid "AVIF"
+msgstr "AVIF"
+
+msgid "Attachment %d: could not build alt text."
+msgstr "Adjunto %d: no se pudo generar el texto alt."
+
+msgid "Image Master"
+msgstr "Image Master"
+
+msgid "Queue optimize (Image Master)"
+msgstr "Encolar optimización (Image Master)"
+
+msgid "No images were queued for optimization."
+msgstr "No se ha encolado ninguna imagen para optimizar."
+
+msgid "%1$d images queued for background optimization. <a href=\"%2$s\">View queue in Image Master</a>."
+msgstr "%1$d imágenes encoladas para optimizar en segundo plano. <a href=\"%2$s\">Ver la cola en Image Master</a>."
+
+msgid "Auto-optimized on upload."
+msgstr "Auto-optimizada al subir."
+
+msgid "Backup available for revert."
+msgstr "Copia de seguridad disponible para revertir."

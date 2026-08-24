@@ -445,35 +445,35 @@ class TSOIMMA_Admin_Page {
                 </div>
 
                 <div class="imp-panel">
-                    <h2 class="imp-panel-title" data-i18n="dash_queue_title">Background queue</h2>
-                    <p class="imp-panel-desc" data-i18n="dash_queue_desc">Bulk optimize jobs run in the background via WP-Cron (5 images per batch).</p>
+                    <h2 class="imp-panel-title" data-i18n="dash_queue_title">Cua en segon pla</h2>
+                    <p class="imp-panel-desc" data-i18n="dash_queue_desc">Les optimitzacions massives s'executen en segon pla via WP-Cron (5 imatges per lot).</p>
                     <div id="imp-queue-status" class="imp-queue-status"></div>
-                    <button id="imp-queue-cancel" class="imp-btn imp-btn-ghost" data-i18n="dash_queue_cancel">Cancel pending jobs</button>
+                    <button id="imp-queue-cancel" class="imp-btn imp-btn-ghost" data-i18n="dash_queue_cancel">Cancel·lar jobs pendents</button>
                 </div>
 
                 <div class="imp-panel">
-                    <h2 class="imp-panel-title" data-i18n="dash_backup_title">Backup retention</h2>
-                    <p class="imp-panel-desc" data-i18n="dash_backup_desc">Auto-delete TSO backups under uploads/tso-image-master/ (0 = disabled).</p>
+                    <h2 class="imp-panel-title" data-i18n="dash_backup_title">Retenció de còpies de seguretat</h2>
+                    <p class="imp-panel-desc" data-i18n="dash_backup_desc">Elimina automàticament les còpies TSO a uploads/tso-image-master/ (0 = desactivat).</p>
                     <div class="imp-settings-grid">
                         <div class="imp-field">
-                            <label for="imp-backup-days" data-i18n="dash_backup_days">Keep backups (days)</label>
+                            <label for="imp-backup-days" data-i18n="dash_backup_days">Conservar còpies (dies)</label>
                             <input type="number" id="imp-backup-days" min="0" max="3650" value="0">
                         </div>
                         <div class="imp-field">
-                            <label for="imp-backup-max-mb" data-i18n="dash_backup_max">Max total size (MB, 0 = unlimited)</label>
+                            <label for="imp-backup-max-mb" data-i18n="dash_backup_max">Mida màxima total (MB, 0 = il·limitat)</label>
                             <input type="number" id="imp-backup-max-mb" min="0" max="102400" value="0">
                         </div>
                     </div>
-                    <button id="imp-save-backup-retention" class="imp-btn imp-btn-primary" data-i18n="save_config">Save settings</button>
-                    <button id="imp-purge-backups-now" class="imp-btn imp-btn-ghost" data-i18n="dash_backup_purge">Purge now</button>
+                    <button id="imp-save-backup-retention" class="imp-btn imp-btn-primary" data-i18n="save_config">Guardar configuració</button>
+                    <button id="imp-purge-backups-now" class="imp-btn imp-btn-ghost" data-i18n="dash_backup_purge">Purga ara</button>
                     <span id="imp-backup-retention-msg" style="display:none;margin-left:10px;font-size:13px;"></span>
                 </div>
 
                 <div class="imp-panel">
                     <div class="imp-toolbar" style="margin-bottom:12px;">
-                        <h2 class="imp-panel-title" style="margin:0;" data-i18n="dash_dup_title">Duplicate images</h2>
-                        <button id="imp-scan-duplicates" class="imp-btn imp-btn-ghost" data-i18n="dash_dup_scan">Scan duplicates</button>
-                        <button id="imp-heavy-images" class="imp-btn imp-btn-ghost imp-dash-jump" data-jump-tab="optimize" data-i18n="dash_heavy_btn">Largest images</button>
+                        <h2 class="imp-panel-title" style="margin:0;" data-i18n="dash_dup_title">Imatges duplicades</h2>
+                        <button id="imp-scan-duplicates" class="imp-btn imp-btn-ghost" data-i18n="dash_dup_scan">Escanejar duplicats</button>
+                        <button id="imp-heavy-images" class="imp-btn imp-btn-ghost imp-dash-jump" data-jump-tab="optimize" data-i18n="dash_heavy_btn">Imatges més pesades</button>
                     </div>
                     <div id="imp-duplicates-result"></div>
                     <div id="imp-duplicates-list"></div>

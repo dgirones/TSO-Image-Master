@@ -4,7 +4,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: TSO Image Master 1.9.1\n"
+"Project-Id-Version: TSO Image Master 1.9.5\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/tso-image-master\n"
 "POT-Creation-Date: 2026-04-17 21:10+0000\n"
 "PO-Revision-Date: 2026-05-22 12:00+0000\n"
@@ -320,8 +320,161 @@ msgstr "imatges reparades. Recarrega SEO & Noms per veure-les."
 msgid "saved"
 msgstr "estalviat"
 
-msgid "selected"
-msgstr "seleccionades"
-
 msgid "🔧 Fix incorrect mime types"
 msgstr "🔧 Reparar tipus MIME incorrectes"
+
+msgid "Overview"
+msgstr "Resum"
+
+msgid "Site overview"
+msgstr "Resum del lloc"
+
+msgid "Quick view of image health, available engines, and pending actions."
+msgstr "Visió ràpida de la salut de les imatges, motors disponibles i accions pendents."
+
+msgid "Images in library"
+msgstr "Imatges a la biblioteca"
+
+msgid "Missing alt text"
+msgstr "Alt text absent"
+
+msgid "TSO backups"
+msgstr "Còpies de seguretat TSO"
+
+msgid "Space saved"
+msgstr "Espai estalviat"
+
+msgid "Plugin operations"
+msgstr "Operacions del plugin"
+
+msgid "Auto-optimize ON"
+msgstr "Auto-optimitzar ACTIVAT"
+
+msgid "Auto-optimize OFF"
+msgstr "Auto-optimitzar DESACTIVAT"
+
+msgid "Images without alt (or generic alt)"
+msgstr "Imatges sense alt (o alt genèric)"
+
+msgid "Suggests alt from title or filename. Does not overwrite useful existing alt text."
+msgstr "Suggereix alt des del títol o nom de fitxer. No sobreescriu un alt ja definit i útil."
+
+msgid "Only used in content"
+msgstr "Només usades en contingut"
+
+msgid "Fill alt for selected"
+msgstr "Omplir alt seleccionades"
+
+msgid "Suggested alt"
+msgstr "Alt suggerit"
+
+msgid "alt texts updated."
+msgstr "texts alt actualitzats."
+
+msgid "skipped (already had alt)."
+msgstr "omeses (ja tenien alt)."
+
+msgid "GD WebP"
+msgstr "GD WebP"
+
+msgid "GD AVIF"
+msgstr "GD AVIF"
+
+msgid "Find orphans"
+msgstr "Trobar òrfenes"
+
+msgid "Fix URLs"
+msgstr "Reparar URLs"
+
+msgid "All images have useful alt text."
+msgstr "Totes les imatges tenen un alt útil."
+
+msgid "Background queue"
+msgstr "Cua en segon pla"
+
+msgid "Bulk optimize jobs run in the background via WP-Cron (5 images per batch)."
+msgstr "Les optimitzacions massives s'executen en segon pla via WP-Cron (5 imatges per lot)."
+
+msgid "Cancel pending jobs"
+msgstr "Cancel·lar jobs pendents"
+
+msgid "Queue is empty."
+msgstr "La cua és buida."
+
+msgid "done"
+msgstr "fetes"
+
+msgid "pending"
+msgstr "pendents"
+
+msgid "errors"
+msgstr "errors"
+
+msgid "Queued for background processing..."
+msgstr "En cua per processar en segon pla..."
+
+msgid "images queued."
+msgstr "imatges en cua."
+
+msgid "Backup retention"
+msgstr "Retenció de còpies de seguretat"
+
+msgid "Auto-delete TSO backups under uploads/tso-image-master/ (0 = disabled)."
+msgstr "Elimina automàticament les còpies TSO a uploads/tso-image-master/ (0 = desactivat)."
+
+msgid "Keep backups (days)"
+msgstr "Conservar còpies (dies)"
+
+msgid "Max total size (MB, 0 = unlimited)"
+msgstr "Mida màxima total (MB, 0 = il·limitat)"
+
+msgid "Purge now"
+msgstr "Purga ara"
+
+msgid "Duplicate images"
+msgstr "Imatges duplicades"
+
+msgid "Scan duplicates"
+msgstr "Escanejar duplicats"
+
+msgid "No duplicate groups found."
+msgstr "No s'han trobat grups de duplicats."
+
+msgid "duplicate groups"
+msgstr "grups de duplicats"
+
+msgid "Wasted space"
+msgstr "Espai malgastat"
+
+msgid "Largest images"
+msgstr "Imatges més pesades"
+
+msgid "Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)"
+msgstr "Ometre auto-optimitzar si WebP/AVIF ≤ (KB, 0 = off)"
+
+msgid "Fill missing alt text on upload"
+msgstr "Omplir alt absent en pujar"
+
+msgid "AVIF"
+msgstr "AVIF"
+
+msgid "Attachment %d: could not build alt text."
+msgstr "Adjunt %d: no s'ha pogut generar el text alt."
+
+msgid "Image Master"
+msgstr "Image Master"
+
+msgid "Queue optimize (Image Master)"
+msgstr "Encuar optimització (Image Master)"
+
+msgid "No images were queued for optimization."
+msgstr "No s'ha encuat cap imatge per optimitzar."
+
+msgid "%1$d images queued for background optimization. <a href=\"%2$s\">View queue in Image Master</a>."
+msgstr "%1$d imatges encuades per optimitzar en segon pla. <a href=\"%2$s\">Veure la cua a Image Master</a>."
+
+msgid "Auto-optimized on upload."
+msgstr "Auto-optimitzada en pujar."
+
+msgid "Backup available for revert."
+msgstr "Còpia de seguretat disponible per revertir."

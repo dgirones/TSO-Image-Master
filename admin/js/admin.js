@@ -135,7 +135,55 @@
             interval_monthly: 'Cada mes',
             retention_zero_hint: '0 dies = desactivat',
             retention_saved: 'Desat!',
-            retention_invalid: 'Valor invàlid. Usa 0 per desactivar, o entre 1 i 3650 dies.'
+            retention_invalid: 'Valor invàlid. Usa 0 per desactivar, o entre 1 i 3650 dies.',
+            tab_dashboard: 'Resum',
+            dash_title: 'Resum del lloc',
+            dash_desc: 'Visió ràpida de la salut de les imatges, motors disponibles i accions pendents.',
+            dash_total_images: 'Imatges a la biblioteca',
+            dash_missing_alt: 'Alt text absent',
+            dash_backups: 'Còpies de seguretat TSO',
+            dash_saved: 'Espai estalviat',
+            dash_operations: 'operacions del plugin',
+            dash_auto_on: 'Auto-optimitzar ACTIVAT',
+            dash_auto_off: 'Auto-optimitzar DESACTIVAT',
+            dash_alt_title: 'Imatges sense alt (o alt genèric)',
+            dash_alt_desc: 'Suggereix alt des del títol o nom de fitxer. No sobreescriu un alt ja definit i útil.',
+            dash_alt_used_only: 'Només usades en contingut',
+            dash_alt_fill: 'Omplir alt seleccionades',
+            dash_alt_suggested: 'Alt suggerit',
+            dash_alt_used_in: 'Usada a',
+            dash_alt_updated: 'texts alt actualitzats.',
+            dash_alt_skipped: 'omeses (ja tenien alt).',
+            dash_engine_gd: 'GD WebP',
+            dash_engine_avif: 'GD AVIF',
+            dash_engine_gs: 'GhostScript',
+            dash_engine_imagick: 'Imagick',
+            dash_go_orphans: 'Trobar òrfenes',
+            dash_go_urls: 'Reparar URLs',
+            dash_alt_all_ok: 'Totes les imatges tenen un alt útil.',
+            dash_queue_title: 'Cua en segon pla',
+            dash_queue_desc: 'Les optimitzacions massives s\'executen en segon pla via WP-Cron (5 imatges per lot).',
+            dash_queue_cancel: 'Cancel·lar jobs pendents',
+            dash_queue_empty: 'La cua és buida.',
+            dash_queue_done: 'fetes',
+            dash_queue_pending: 'pendents',
+            dash_queue_errors: 'errors',
+            dash_queue_queued: 'En cua per processar en segon pla...',
+            dash_queue_queued_n: 'imatges en cua.',
+            dash_backup_title: 'Retenció de còpies de seguretat',
+            dash_backup_desc: 'Elimina automàticament les còpies TSO a uploads/tso-image-master/ (0 = desactivat).',
+            dash_backup_days: 'Conservar còpies (dies)',
+            dash_backup_max: 'Mida màxima total (MB, 0 = il·limitat)',
+            dash_backup_purge: 'Purga ara',
+            dash_dup_title: 'Imatges duplicades',
+            dash_dup_scan: 'Escanejar duplicats',
+            dash_dup_none: 'No s\'han trobat grups de duplicats.',
+            dash_dup_groups: 'grups de duplicats',
+            dash_dup_wasted: 'Espai malgastat',
+            dash_heavy_btn: 'Imatges més pesades',
+            auto_skip_kb_label: 'Ometre auto-optimitzar si WebP/AVIF ≤ (KB, 0 = off)',
+            auto_fill_alt_label: 'Omplir alt absent en pujar',
+            fmt_avif: 'AVIF'
         },
         es: {
             tab_optimize: 'Optimizar',
@@ -311,6 +359,54 @@
             ,rogue_reason_tso_pdf_compressed: 'PDF comprimido TSO'
             ,rogue_reason_generic_backup: 'Backup genérico (.bk)'
             ,rogue_reason_unregistered_wp_db: 'Archivo no registrado en la BD de WordPress'
+            ,tab_dashboard: 'Resumen'
+            ,dash_title: 'Resumen del sitio'
+            ,dash_desc: 'Vista rápida de la salud de las imágenes, motores disponibles y acciones pendientes.'
+            ,dash_total_images: 'Imágenes en la biblioteca'
+            ,dash_missing_alt: 'Texto alt ausente'
+            ,dash_backups: 'Copias de seguridad TSO'
+            ,dash_saved: 'Espacio ahorrado'
+            ,dash_operations: 'operaciones del plugin'
+            ,dash_auto_on: 'Auto-optimizar ACTIVADO'
+            ,dash_auto_off: 'Auto-optimizar DESACTIVADO'
+            ,dash_alt_title: 'Imágenes sin alt (o alt genérico)'
+            ,dash_alt_desc: 'Sugiere alt desde el título o nombre de archivo. No sobrescribe un alt útil existente.'
+            ,dash_alt_used_only: 'Solo usadas en contenido'
+            ,dash_alt_fill: 'Rellenar alt seleccionadas'
+            ,dash_alt_suggested: 'Alt sugerido'
+            ,dash_alt_used_in: 'Usada en'
+            ,dash_alt_updated: 'textos alt actualizados.'
+            ,dash_alt_skipped: 'omitidas (ya tenían alt).'
+            ,dash_engine_gd: 'GD WebP'
+            ,dash_engine_avif: 'GD AVIF'
+            ,dash_engine_gs: 'GhostScript'
+            ,dash_engine_imagick: 'Imagick'
+            ,dash_go_orphans: 'Buscar huérfanas'
+            ,dash_go_urls: 'Reparar URLs'
+            ,dash_alt_all_ok: 'Todas las imágenes tienen un alt útil.'
+            ,dash_queue_title: 'Cola en segundo plano'
+            ,dash_queue_desc: 'Las optimizaciones masivas se ejecutan en segundo plano vía WP-Cron (5 imágenes por lote).'
+            ,dash_queue_cancel: 'Cancelar trabajos pendientes'
+            ,dash_queue_empty: 'La cola está vacía.'
+            ,dash_queue_done: 'hechas'
+            ,dash_queue_pending: 'pendientes'
+            ,dash_queue_errors: 'errores'
+            ,dash_queue_queued: 'En cola para procesar en segundo plano...'
+            ,dash_queue_queued_n: 'imágenes en cola.'
+            ,dash_backup_title: 'Retención de copias de seguridad'
+            ,dash_backup_desc: 'Elimina automáticamente las copias TSO en uploads/tso-image-master/ (0 = desactivado).'
+            ,dash_backup_days: 'Conservar copias (días)'
+            ,dash_backup_max: 'Tamaño máximo total (MB, 0 = ilimitado)'
+            ,dash_backup_purge: 'Purgar ahora'
+            ,dash_dup_title: 'Imágenes duplicadas'
+            ,dash_dup_scan: 'Escanear duplicados'
+            ,dash_dup_none: 'No se han encontrado grupos de duplicados.'
+            ,dash_dup_groups: 'grupos de duplicados'
+            ,dash_dup_wasted: 'Espacio desperdiciado'
+            ,dash_heavy_btn: 'Imágenes más pesadas'
+            ,auto_skip_kb_label: 'Omitir auto-optimizar si WebP/AVIF ≤ (KB, 0 = off)'
+            ,auto_fill_alt_label: 'Rellenar alt ausente al subir'
+            ,fmt_avif: 'AVIF'
         },
         en: {
             tab_optimize: 'Optimize',
@@ -486,6 +582,54 @@
             ,rogue_reason_tso_pdf_compressed: 'TSO compressed PDF'
             ,rogue_reason_generic_backup: 'Generic backup (.bk)'
             ,rogue_reason_unregistered_wp_db: 'File not registered in WordPress DB'
+            ,tab_dashboard: 'Overview'
+            ,dash_title: 'Site overview'
+            ,dash_desc: 'Quick view of image health, available engines, and pending actions.'
+            ,dash_total_images: 'Images in library'
+            ,dash_missing_alt: 'Missing alt text'
+            ,dash_backups: 'TSO backups'
+            ,dash_saved: 'Space saved'
+            ,dash_operations: 'operations'
+            ,dash_auto_on: 'Auto-optimize ON'
+            ,dash_auto_off: 'Auto-optimize OFF'
+            ,dash_alt_title: 'Images without alt (or generic alt)'
+            ,dash_alt_desc: 'Suggests alt from title or filename. Does not overwrite useful existing alt text.'
+            ,dash_alt_used_only: 'Only used in content'
+            ,dash_alt_fill: 'Fill alt for selected'
+            ,dash_alt_suggested: 'Suggested alt'
+            ,dash_alt_used_in: 'Used in'
+            ,dash_alt_updated: 'alt texts updated.'
+            ,dash_alt_skipped: 'skipped (already had alt).'
+            ,dash_engine_gd: 'GD WebP'
+            ,dash_engine_avif: 'GD AVIF'
+            ,dash_engine_gs: 'GhostScript'
+            ,dash_engine_imagick: 'Imagick'
+            ,dash_go_orphans: 'Find orphans'
+            ,dash_go_urls: 'Fix URLs'
+            ,dash_alt_all_ok: 'All images have useful alt text.'
+            ,dash_queue_title: 'Background queue'
+            ,dash_queue_desc: 'Bulk optimize jobs run in the background via WP-Cron (5 images per batch).'
+            ,dash_queue_cancel: 'Cancel pending jobs'
+            ,dash_queue_empty: 'Queue is empty.'
+            ,dash_queue_done: 'done'
+            ,dash_queue_pending: 'pending'
+            ,dash_queue_errors: 'errors'
+            ,dash_queue_queued: 'Queued for background processing...'
+            ,dash_queue_queued_n: 'images queued.'
+            ,dash_backup_title: 'Backup retention'
+            ,dash_backup_desc: 'Auto-delete TSO backups under uploads/tso-image-master/ (0 = disabled).'
+            ,dash_backup_days: 'Keep backups (days)'
+            ,dash_backup_max: 'Max total size (MB, 0 = unlimited)'
+            ,dash_backup_purge: 'Purge now'
+            ,dash_dup_title: 'Duplicate images'
+            ,dash_dup_scan: 'Scan duplicates'
+            ,dash_dup_none: 'No duplicate groups found.'
+            ,dash_dup_groups: 'duplicate groups'
+            ,dash_dup_wasted: 'Wasted space'
+            ,dash_heavy_btn: 'Largest images'
+            ,auto_skip_kb_label: 'Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)'
+            ,auto_fill_alt_label: 'Fill missing alt text on upload'
+            ,fmt_avif: 'AVIF'
         }
     };
 
@@ -599,7 +743,55 @@
                 ghost_deleted_ok: 'eliminados correctamente.',
                 ghost_deleted_none: 'Ninguno eliminado.',
                 errors_label: 'Errores:',
-                pdf_engine_warn: '⚠ GhostScript no encontrado. Usando Imagick.'
+                pdf_engine_warn: '⚠ GhostScript no encontrado. Usando Imagick.',
+                tab_dashboard: 'Resumen',
+                dash_title: 'Resumen del sitio',
+                dash_desc: 'Vista rápida de la salud de las imágenes, motores disponibles y acciones pendientes.',
+                dash_total_images: 'Imágenes en la biblioteca',
+                dash_missing_alt: 'Texto alt ausente',
+                dash_backups: 'Copias de seguridad TSO',
+                dash_saved: 'Espacio ahorrado',
+                dash_operations: 'operaciones del plugin',
+                dash_auto_on: 'Auto-optimizar ACTIVADO',
+                dash_auto_off: 'Auto-optimizar DESACTIVADO',
+                dash_alt_title: 'Imágenes sin alt (o alt genérico)',
+                dash_alt_desc: 'Sugiere alt desde el título o nombre de archivo. No sobrescribe un alt útil existente.',
+                dash_alt_used_only: 'Solo usadas en contenido',
+                dash_alt_fill: 'Rellenar alt seleccionadas',
+                dash_alt_suggested: 'Alt sugerido',
+                dash_alt_used_in: 'Usada en',
+                dash_alt_updated: 'textos alt actualizados.',
+                dash_alt_skipped: 'omitidas (ya tenían alt).',
+                dash_engine_gd: 'GD WebP',
+                dash_engine_avif: 'GD AVIF',
+                dash_engine_gs: 'GhostScript',
+                dash_engine_imagick: 'Imagick',
+                dash_go_orphans: 'Buscar huérfanas',
+                dash_go_urls: 'Reparar URLs',
+                dash_alt_all_ok: 'Todas las imágenes tienen un alt útil.',
+                dash_queue_title: 'Cola en segundo plano',
+                dash_queue_desc: 'Las optimizaciones masivas se ejecutan en segundo plano vía WP-Cron (5 imágenes por lote).',
+                dash_queue_cancel: 'Cancelar trabajos pendientes',
+                dash_queue_empty: 'La cola está vacía.',
+                dash_queue_done: 'hechas',
+                dash_queue_pending: 'pendientes',
+                dash_queue_errors: 'errores',
+                dash_queue_queued: 'En cola para procesar en segundo plano...',
+                dash_queue_queued_n: 'imágenes en cola.',
+                dash_backup_title: 'Retención de copias de seguridad',
+                dash_backup_desc: 'Elimina automáticamente las copias TSO en uploads/tso-image-master/ (0 = desactivado).',
+                dash_backup_days: 'Conservar copias (días)',
+                dash_backup_max: 'Tamaño máximo total (MB, 0 = ilimitado)',
+                dash_backup_purge: 'Purgar ahora',
+                dash_dup_title: 'Imágenes duplicadas',
+                dash_dup_scan: 'Escanear duplicados',
+                dash_dup_none: 'No se han encontrado grupos de duplicados.',
+                dash_dup_groups: 'grupos de duplicados',
+                dash_dup_wasted: 'Espacio desperdiciado',
+                dash_heavy_btn: 'Imágenes más pesadas',
+                auto_skip_kb_label: 'Omitir auto-optimizar si WebP/AVIF ≤ (KB, 0 = off)',
+                auto_fill_alt_label: 'Rellenar alt ausente al subir',
+                fmt_avif: 'AVIF'
             },
             en: {
                 confirm_delete: 'Delete selected images? This cannot be undone.',
@@ -708,7 +900,55 @@
                 ghost_deleted_ok: 'deleted successfully.',
                 ghost_deleted_none: 'None deleted.',
                 errors_label: 'Errors:',
-                pdf_engine_warn: '⚠ GhostScript not found. Using Imagick.'
+                pdf_engine_warn: '⚠ GhostScript not found. Using Imagick.',
+                tab_dashboard: 'Overview',
+                dash_title: 'Site overview',
+                dash_desc: 'Quick view of image health, available engines, and pending actions.',
+                dash_total_images: 'Images in library',
+                dash_missing_alt: 'Missing alt text',
+                dash_backups: 'TSO backups',
+                dash_saved: 'Space saved',
+                dash_operations: 'operations',
+                dash_auto_on: 'Auto-optimize ON',
+                dash_auto_off: 'Auto-optimize OFF',
+                dash_alt_title: 'Images without alt (or generic alt)',
+                dash_alt_desc: 'Suggests alt from title or filename. Does not overwrite useful existing alt text.',
+                dash_alt_used_only: 'Only used in content',
+                dash_alt_fill: 'Fill alt for selected',
+                dash_alt_suggested: 'Suggested alt',
+                dash_alt_used_in: 'Used in',
+                dash_alt_updated: 'alt texts updated.',
+                dash_alt_skipped: 'skipped (already had alt).',
+                dash_engine_gd: 'GD WebP',
+                dash_engine_avif: 'GD AVIF',
+                dash_engine_gs: 'GhostScript',
+                dash_engine_imagick: 'Imagick',
+                dash_go_orphans: 'Find orphans',
+                dash_go_urls: 'Fix URLs',
+                dash_alt_all_ok: 'All images have useful alt text.',
+                dash_queue_title: 'Background queue',
+                dash_queue_desc: 'Bulk optimize jobs run in the background via WP-Cron (5 images per batch).',
+                dash_queue_cancel: 'Cancel pending jobs',
+                dash_queue_empty: 'Queue is empty.',
+                dash_queue_done: 'done',
+                dash_queue_pending: 'pending',
+                dash_queue_errors: 'errors',
+                dash_queue_queued: 'Queued for background processing...',
+                dash_queue_queued_n: 'images queued.',
+                dash_backup_title: 'Backup retention',
+                dash_backup_desc: 'Auto-delete TSO backups under uploads/tso-image-master/ (0 = disabled).',
+                dash_backup_days: 'Keep backups (days)',
+                dash_backup_max: 'Max total size (MB, 0 = unlimited)',
+                dash_backup_purge: 'Purge now',
+                dash_dup_title: 'Duplicate images',
+                dash_dup_scan: 'Scan duplicates',
+                dash_dup_none: 'No duplicate groups found.',
+                dash_dup_groups: 'duplicate groups',
+                dash_dup_wasted: 'Wasted space',
+                dash_heavy_btn: 'Largest images',
+                auto_skip_kb_label: 'Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)',
+                auto_fill_alt_label: 'Fill missing alt text on upload',
+                fmt_avif: 'AVIF'
             },
             ca: {
                 confirm_delete: 'Eliminar les imatges seleccionades? Aquesta acció és irreversible.',
@@ -817,7 +1057,55 @@
                 ghost_deleted_ok: 'eliminats correctament.',
                 ghost_deleted_none: 'Cap eliminat.',
                 errors_label: 'Errades:',
-                pdf_engine_warn: '⚠ GhostScript no trobat. S\'està utilitzant Imagick.'
+                pdf_engine_warn: '⚠ GhostScript no trobat. S\'està utilitzant Imagick.',
+                tab_dashboard: 'Resum',
+                dash_title: 'Resum del lloc',
+                dash_desc: 'Visió ràpida de la salut de les imatges, motors disponibles i accions pendents.',
+                dash_total_images: 'Imatges a la biblioteca',
+                dash_missing_alt: 'Alt text absent',
+                dash_backups: 'Còpies de seguretat TSO',
+                dash_saved: 'Espai estalviat',
+                dash_operations: 'operacions del plugin',
+                dash_auto_on: 'Auto-optimitzar ACTIVAT',
+                dash_auto_off: 'Auto-optimitzar DESACTIVAT',
+                dash_alt_title: 'Imatges sense alt (o alt genèric)',
+                dash_alt_desc: 'Suggereix alt des del títol o nom de fitxer. No sobreescriu un alt ja definit i útil.',
+                dash_alt_used_only: 'Només usades en contingut',
+                dash_alt_fill: 'Omplir alt seleccionades',
+                dash_alt_suggested: 'Alt suggerit',
+                dash_alt_used_in: 'Usada a',
+                dash_alt_updated: 'texts alt actualitzats.',
+                dash_alt_skipped: 'omeses (ja tenien alt).',
+                dash_engine_gd: 'GD WebP',
+                dash_engine_avif: 'GD AVIF',
+                dash_engine_gs: 'GhostScript',
+                dash_engine_imagick: 'Imagick',
+                dash_go_orphans: 'Trobar òrfenes',
+                dash_go_urls: 'Reparar URLs',
+                dash_alt_all_ok: 'Totes les imatges tenen un alt útil.',
+                dash_queue_title: 'Cua en segon pla',
+                dash_queue_desc: 'Les optimitzacions massives s\'executen en segon pla via WP-Cron (5 imatges per lot).',
+                dash_queue_cancel: 'Cancel·lar jobs pendents',
+                dash_queue_empty: 'La cua és buida.',
+                dash_queue_done: 'fetes',
+                dash_queue_pending: 'pendents',
+                dash_queue_errors: 'errors',
+                dash_queue_queued: 'En cua per processar en segon pla...',
+                dash_queue_queued_n: 'imatges en cua.',
+                dash_backup_title: 'Retenció de còpies de seguretat',
+                dash_backup_desc: 'Elimina automàticament les còpies TSO a uploads/tso-image-master/ (0 = desactivat).',
+                dash_backup_days: 'Conservar còpies (dies)',
+                dash_backup_max: 'Mida màxima total (MB, 0 = il·limitat)',
+                dash_backup_purge: 'Purga ara',
+                dash_dup_title: 'Imatges duplicades',
+                dash_dup_scan: 'Escanejar duplicats',
+                dash_dup_none: 'No s\'han trobat grups de duplicats.',
+                dash_dup_groups: 'grups de duplicats',
+                dash_dup_wasted: 'Espai malgastat',
+                dash_heavy_btn: 'Imatges més pesades',
+                auto_skip_kb_label: 'Ometre auto-optimitzar si WebP/AVIF ≤ (KB, 0 = off)',
+                auto_fill_alt_label: 'Omplir alt absent en pujar',
+                fmt_avif: 'AVIF'
             }
         };
         [ 'ca', 'es', 'en' ].forEach(function(l) {
