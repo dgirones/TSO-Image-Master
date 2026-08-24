@@ -2,6 +2,11 @@
 
 All notable changes to TSO Image Master are documented in this file. Recent releases (1.9.x) are also summarized in readme.txt for WordPress.org.
 
+= 1.9.3 =
+
+* Added: Overview dashboard tab with site health metrics (images, missing alt, backups, space saved, engines).
+* Added: Missing/generic alt audit with bulk fill from suggested title or filename.
+
 = 1.9.2 =
 * Improved: WordPress 7.1 compatibility (readme and tested declaration).
 * Docs: older changelog entries moved to CHANGELOG.txt; readme.txt keeps 1.9.x releases only.

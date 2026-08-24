@@ -780,6 +780,38 @@
 .imp-stat-card .imp-stat-label { font-size: 11px; color: var(--imp-text-muted); letter-spacing: 0.06em; letter-spacing: .6px; display: block; margin-bottom: 8px; }
 .imp-stat-card .imp-stat-val   { font-size: 26px; font-weight: 700; color: var(--imp-text); display: block; }
 .imp-stat-card .imp-stat-sub   { font-size: 11px; color: var(--imp-text-muted); margin-top: 4px; display: block; }
+.imp-stat-card.is-warn .imp-stat-val { color: var(--imp-warn); }
+.imp-stat-card.is-ok .imp-stat-val   { color: var(--imp-success); }
+.imp-stat-card.is-clickable { cursor: pointer; transition: border-color .15s, transform .15s; }
+.imp-stat-card.is-clickable:hover { border-color: var(--imp-accent); transform: translateY(-1px); }
+
+.imp-engine-row {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px;
+}
+.imp-engine-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+    border: 1px solid var(--imp-border); background: var(--imp-surface2);
+}
+.imp-engine-pill.ok  { color: var(--imp-success); border-color: rgba(6,214,160,.35); }
+.imp-engine-pill.nok { color: var(--imp-danger);  border-color: rgba(255,77,109,.35); }
+
+.imp-alt-list { display: flex; flex-direction: column; gap: 8px; }
+.imp-alt-row {
+    display: grid; grid-template-columns: 28px 52px 1fr 1.2fr auto;
+    gap: 12px; align-items: center;
+    padding: 10px 12px; background: var(--imp-surface);
+    border: 1px solid var(--imp-border); border-radius: var(--imp-radius-sm);
+}
+.imp-alt-row img { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; background: var(--imp-surface2); }
+.imp-alt-filename { font-size: 12px; color: var(--imp-text-muted); word-break: break-all; }
+.imp-alt-suggest { font-size: 13px; color: var(--imp-accent2); }
+.imp-alt-used { font-size: 11px; color: var(--imp-text-muted); white-space: nowrap; }
+
+@media (max-width: 900px) {
+    .imp-alt-row { grid-template-columns: 28px 48px 1fr; }
+    .imp-alt-used { grid-column: 2 / -1; }
+}
 
 /* ===== HISTORY TABLE ===== */
 .imp-history-table { width: 100%; border-collapse: collapse; font-size: 13px; }

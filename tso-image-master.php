@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       TSO Image Master
  * Description:       Complete image optimization suite for WordPress: convert to WebP/JPG, resize, compress PDFs, find orphaned images, scan rogue files, fix broken image URLs, and manage SEO fields. Requires PHP GD library.
- * Version:           1.9.2
+ * Version:           1.9.3
  * Requires at least: 5.9
  * Requires PHP:      7.4
  * Tested up to:      7.1
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // ── Constants ────────────────────────────────────────────────────────
-define( 'TSOIMMA_VERSION',    '1.9.2' );
+define( 'TSOIMMA_VERSION',    '1.9.3' );
 define( 'TSOIMMA_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'TSOIMMA_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -32,6 +32,7 @@ require_once TSOIMMA_PLUGIN_DIR . 'includes/class-rogue-scanner.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-url-fixer.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-pdf-compressor.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-auto-optimizer.php';
+require_once TSOIMMA_PLUGIN_DIR . 'includes/class-dashboard.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-ajax-handler.php';
 require_once TSOIMMA_PLUGIN_DIR . 'admin/class-admin-page.php';
 

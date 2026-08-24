@@ -599,4 +599,27 @@ class TSOIMMA_Image_Manager {
         $source   = ! empty( $title ) ? $title : $filename;
         return self::slugify( $source );
     }
+
+    /**
+     * Suggest accessible alt text from title or filename.
+     *
+     * @param int $attachment_id Attachment ID.
+     * @return string
+     */
+    public static function suggest_alt_text( $attachment_id ) {
+        $attachment_id = absint( $attachment_id );
+        $title         = trim( (string) get_the_title( $attachment_id ) );
+
+        if ( '' !== $title && ! preg_match( '/^(IMG[-_]?|DSC[-_]?|Auto Draft)/i', $title ) ) {
+            return $title;
+        }
+
+        $file_path = get_attached_file( $attachment_id );
+        $base      = $file_path ? pathinfo( basename( $file_path ), PATHINFO_FILENAME ) : '';
+        if ( '' === $base ) {
+            return '';
+        }
+
+        return ucwords( str_replace( array( '-', '_' ), ' ', $base ) );
+    }
 }

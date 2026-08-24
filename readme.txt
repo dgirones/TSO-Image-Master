@@ -5,7 +5,7 @@ Tags: image optimization, webp, media library, seo, pdf compression
 Requires at least: 5.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.9.2
+Stable tag: 1.9.3
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -106,6 +106,10 @@ This can happen with images that are already well-optimized, very small images, 
 
 For the full release history, see CHANGELOG.txt in the plugin folder.
 
+= 1.9.3 =
+* Added: Overview dashboard tab with site health metrics (images, missing alt, backups, space saved, engines).
+* Added: Missing/generic alt audit with bulk fill from suggested title or filename.
+
 = 1.9.2 =
 * Improved: WordPress 7.1 compatibility (readme and tested declaration).
 * Docs: older changelog entries moved to CHANGELOG.txt.
@@ -128,6 +132,9 @@ For the full release history, see CHANGELOG.txt in the plugin folder.
 * Added: index.php in plugin subdirectories; upgrade hook reschedules history cron on version bump.
 
 == Upgrade Notice ==
+
+= 1.9.3 =
+New Overview tab: health metrics plus bulk alt-text fill for images missing accessible alt.
 
 = 1.9.2 =
 Compatibility update: tested with WordPress 7.1 (no code changes required).

@@ -160,6 +160,30 @@ class TSOIMMA_Admin_Page {
                 'no_ghosts'           => __( 'No ghost attachments found.', 'tso-image-master' ),
                 'delete_ghosts'       => __( 'Delete selected', 'tso-image-master' ),
                 'confirm_delete_ghosts' => __( 'Delete', 'tso-image-master' ),
+                'tab_dashboard'       => __( 'Overview', 'tso-image-master' ),
+                'dash_title'            => __( 'Site overview', 'tso-image-master' ),
+                'dash_desc'             => __( 'Quick view of image health, available engines, and pending actions.', 'tso-image-master' ),
+                'dash_total_images'     => __( 'Images in library', 'tso-image-master' ),
+                'dash_missing_alt'      => __( 'Missing alt text', 'tso-image-master' ),
+                'dash_backups'          => __( 'TSO backups', 'tso-image-master' ),
+                'dash_saved'            => __( 'Space saved', 'tso-image-master' ),
+                'dash_operations'       => __( 'Plugin operations', 'tso-image-master' ),
+                'dash_auto_on'          => __( 'Auto-optimize ON', 'tso-image-master' ),
+                'dash_auto_off'         => __( 'Auto-optimize OFF', 'tso-image-master' ),
+                'dash_alt_title'        => __( 'Images without alt (or generic alt)', 'tso-image-master' ),
+                'dash_alt_desc'         => __( 'Suggests alt from title or filename. Does not overwrite useful existing alt text.', 'tso-image-master' ),
+                'dash_alt_used_only'    => __( 'Only used in content', 'tso-image-master' ),
+                'dash_alt_fill'         => __( 'Fill alt for selected', 'tso-image-master' ),
+                'dash_alt_suggested'    => __( 'Suggested alt', 'tso-image-master' ),
+                'dash_alt_used_in'      => __( 'Used in', 'tso-image-master' ),
+                'dash_alt_updated'      => __( 'alt texts updated.', 'tso-image-master' ),
+                'dash_alt_skipped'      => __( 'skipped (already had alt).', 'tso-image-master' ),
+                'dash_engine_gd'        => __( 'GD WebP', 'tso-image-master' ),
+                'dash_engine_gs'        => __( 'GhostScript', 'tso-image-master' ),
+                'dash_engine_imagick'   => __( 'Imagick', 'tso-image-master' ),
+                'dash_go_orphans'       => __( 'Find orphans', 'tso-image-master' ),
+                'dash_go_urls'          => __( 'Fix URLs', 'tso-image-master' ),
+                'dash_alt_all_ok'       => __( 'All images have useful alt text.', 'tso-image-master' ),
             ),
         ) );
     }
@@ -327,7 +351,10 @@ class TSOIMMA_Admin_Page {
 
             <!-- TABS -->
             <nav class="imp-tabs" role="tablist">
-                <button class="imp-tab active" data-tab="optimize" role="tab">
+                <button class="imp-tab active" data-tab="dashboard" role="tab">
+                    <span>📊</span> <span data-i18n="tab_dashboard">Resum</span>
+                </button>
+                <button class="imp-tab" data-tab="optimize" role="tab">
                     <span>🔧</span> <span data-i18n="tab_optimize">Optimitzar</span>
                 </button>
                 <button class="imp-tab" data-tab="orphans" role="tab">
@@ -351,9 +378,46 @@ class TSOIMMA_Admin_Page {
             </nav>
 
             <!-- =====================================================
+                 TAB: DASHBOARD
+                 ===================================================== -->
+            <div id="tab-dashboard" class="imp-tab-content active">
+                <div class="imp-panel">
+                    <h2 class="imp-panel-title" data-i18n="dash_title">Resum del lloc</h2>
+                    <p class="imp-panel-desc" data-i18n="dash_desc">Visió ràpida de la salut de les imatges, motors disponibles i accions pendents.</p>
+                    <div id="imp-dashboard-stats" class="imp-stats-grid">
+                        <div class="imp-loading" data-i18n="loading_data">Carregant...</div>
+                    </div>
+                    <div id="imp-dashboard-engines" class="imp-engine-row"></div>
+                </div>
+
+                <div class="imp-panel">
+                    <div class="imp-toolbar" style="margin-bottom:16px;">
+                        <div class="imp-toolbar-left">
+                            <h2 class="imp-panel-title" style="margin:0;" data-i18n="dash_alt_title">Imatges sense alt (o alt genèric)</h2>
+                        </div>
+                        <div class="imp-toolbar-right">
+                            <label class="imp-field-check" style="margin:0;">
+                                <input type="checkbox" id="imp-alt-used-only">
+                                <span data-i18n="dash_alt_used_only">Només usades en contingut</span>
+                            </label>
+                            <button id="imp-alt-select-all" class="imp-btn imp-btn-ghost" data-i18n="select_all">Seleccionar tot</button>
+                            <button id="imp-alt-deselect" class="imp-btn imp-btn-ghost" data-i18n="deselect">Deseleccionar</button>
+                            <button id="imp-alt-bulk-fill" class="imp-btn imp-btn-primary" data-i18n="dash_alt_fill">Omplir alt seleccionades</button>
+                        </div>
+                    </div>
+                    <p class="imp-panel-desc" data-i18n="dash_alt_desc">Suggereix alt des del títol o nom de fitxer. No sobreescriu un alt ja definit i útil.</p>
+                    <div id="imp-alt-grid" class="imp-alt-list">
+                        <div class="imp-loading" data-i18n="loading_data">Carregant...</div>
+                    </div>
+                    <div id="imp-alt-pagination" class="imp-pagination"></div>
+                    <div id="imp-alt-bulk-result" style="display:none;margin-top:12px;font-size:13px;"></div>
+                </div>
+            </div>
+
+            <!-- =====================================================
                  TAB: OPTIMITZAR
                  ===================================================== -->
-            <div id="tab-optimize" class="imp-tab-content active">
+            <div id="tab-optimize" class="imp-tab-content">
                 <div class="imp-panel">
                     <h2 class="imp-panel-title" data-i18n="opt_config_title">Configuració d'Optimització</h2>
                     <div class="imp-settings-grid">

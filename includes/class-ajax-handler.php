@@ -36,6 +36,9 @@ class TSOIMMA_Ajax_Handler {
             'tso_im_remove_url_issues',
             'tso_im_find_ghost_attachments',
             'tso_im_delete_ghost_attachments',
+            'tso_im_get_dashboard_overview',
+            'tso_im_get_missing_alt',
+            'tso_im_bulk_fill_alt',
         );
         foreach ( $actions as $action ) {
             add_action( 'wp_ajax_' . $action, array( __CLASS__, 'handle_' . $action ) );
@@ -1198,6 +1201,43 @@ class TSOIMMA_Ajax_Handler {
                 ? $deleted . ' adjunts fantasma eliminats correctament.'
                 : 'Cap adjunt eliminat.',
         ) );
+    }
+
+    // ----------------------------------------------------------------
+    // Dashboard overview
+    // ----------------------------------------------------------------
+    public static function handle_tso_im_get_dashboard_overview() {
+        check_ajax_referer( 'tso_im_nonce', 'nonce' );
+        self::require_admin();
+        wp_send_json_success( TSOIMMA_Dashboard::get_overview() );
+    }
+
+    public static function handle_tso_im_get_missing_alt() {
+        check_ajax_referer( 'tso_im_nonce', 'nonce' );
+        self::require_admin();
+
+        wp_send_json_success(
+            TSOIMMA_Dashboard::get_missing_alt_list(
+                absint( $_POST['page'] ?? 1 ),
+                absint( $_POST['per_page'] ?? 35 ),
+                ! empty( $_POST['used_only'] )
+            )
+        );
+    }
+
+    public static function handle_tso_im_bulk_fill_alt() {
+        check_ajax_referer( 'tso_im_nonce', 'nonce' );
+        self::require_admin();
+
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash
+        $ids = array_map( 'absint', isset( $_POST['ids'] ) ? (array) $_POST['ids'] : array() );
+        if ( empty( $ids ) ) {
+            wp_send_json_error( __( 'Select at least one image.', 'tso-image-master' ) );
+        }
+
+        $source = sanitize_key( wp_unslash( $_POST['source'] ?? 'suggested' ) );
+        $result = TSOIMMA_Dashboard::bulk_fill_alt( $ids, $source );
+        wp_send_json_success( $result );
     }
 
 

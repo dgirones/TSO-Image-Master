@@ -25,6 +25,7 @@
         },
         orphans: { found: [] },
         orphanSelected: new Set(),
+        dashboard: { altPage: 1, altSelected: new Set() },
         currentModalId: null,
         imgCacheTs: {}
     };
@@ -37,6 +38,7 @@
         initImpCustomSelects();
         initLanguageSwitcher();
         initTabs();
+        initDashboard();
         initQualitySliders();
         initSearch();
         initOptimizeTab();
@@ -1122,6 +1124,165 @@
 
         rebuildList();
         syncFromSelect();
+    }
+
+    // ================================================================
+    // Dashboard
+    // ================================================================
+    function initDashboard() {
+        loadDashboardOverview();
+        loadMissingAlt();
+
+        $(document).on('click', '.imp-tab[data-tab="dashboard"]', function() {
+            loadDashboardOverview();
+            loadMissingAlt();
+        });
+
+        $('#imp-alt-used-only').on('change', function() {
+            state.dashboard.altPage = 1;
+            state.dashboard.altSelected.clear();
+            loadMissingAlt();
+        });
+
+        $('#imp-alt-select-all').on('click', function() {
+            $('#imp-alt-grid .imp-alt-check').prop('checked', true).each(function() {
+                state.dashboard.altSelected.add(parseInt($(this).data('id'), 10));
+            });
+        });
+
+        $('#imp-alt-deselect').on('click', function() {
+            $('#imp-alt-grid .imp-alt-check').prop('checked', false);
+            state.dashboard.altSelected.clear();
+        });
+
+        $(document).on('change', '.imp-alt-check', function() {
+            var id = parseInt($(this).data('id'), 10);
+            if ($(this).is(':checked')) state.dashboard.altSelected.add(id);
+            else state.dashboard.altSelected.delete(id);
+        });
+
+        $('#imp-alt-bulk-fill').on('click', function() {
+            if (!state.dashboard.altSelected.size) {
+                alert(uiText('no_selection', 'Select at least one image.'));
+                return;
+            }
+            var $btn = $(this);
+            var $res = $('#imp-alt-bulk-result');
+            $btn.prop('disabled', true).text(uiText('processing', 'Processing...'));
+            ajax('tso_im_bulk_fill_alt', {
+                ids: Array.from(state.dashboard.altSelected),
+                source: 'suggested'
+            }, function(data) {
+                $btn.prop('disabled', false).text(uiText('dash_alt_fill', 'Fill alt for selected'));
+                var msg = '✓ ' + (data.updated || 0) + ' ' + uiText('dash_alt_updated', 'alt texts updated.');
+                if (data.skipped) {
+                    msg += ' ' + data.skipped + ' ' + uiText('dash_alt_skipped', 'skipped (already had alt).');
+                }
+                $res.show().css('color', 'var(--imp-success)').text(msg);
+                state.dashboard.altSelected.clear();
+                loadDashboardOverview();
+                loadMissingAlt();
+            }, function(err) {
+                $btn.prop('disabled', false).text(uiText('dash_alt_fill', 'Fill alt for selected'));
+                $res.show().css('color', 'var(--imp-danger)').text(err);
+            });
+        });
+
+        $(document).on('click', '.imp-dash-jump', function(e) {
+            e.preventDefault();
+            var tab = $(this).data('jump-tab');
+            if (!tab) return;
+            $('.imp-tab[data-tab="' + tab + '"]').trigger('click');
+        });
+    }
+
+    function loadDashboardOverview() {
+        var $stats = $('#imp-dashboard-stats');
+        var $engines = $('#imp-dashboard-engines');
+        $stats.html('<div class="imp-loading">' + uiText('loading_data', 'Loading...') + '</div>');
+        ajax('tso_im_get_dashboard_overview', {}, function(data) {
+            var warnAlt = (data.missing_alt || 0) > 0;
+            var cards = [
+                { label: uiText('dash_total_images', 'Images in library'), val: data.total_images || 0, sub: '', cls: '' },
+                { label: uiText('dash_missing_alt', 'Missing alt text'), val: data.missing_alt || 0, sub: warnAlt ? uiText('dash_alt_title', 'Review below') : '✓', cls: warnAlt ? 'is-warn is-clickable imp-dash-jump' : 'is-ok', jump: 'dashboard' },
+                { label: uiText('dash_backups', 'TSO backups'), val: data.backup_count || 0, sub: data.backup_bytes_h || '0 B', cls: (data.backup_count || 0) > 0 ? 'is-warn' : 'is-ok' },
+                { label: uiText('dash_saved', 'Space saved'), val: data.total_saved_h || '0 B', sub: (data.total_operations || 0) + ' ' + uiText('dash_operations', 'operations'), cls: 'is-ok' },
+                { label: data.auto_enabled ? uiText('dash_auto_on', 'Auto-optimize ON') : uiText('dash_auto_off', 'Auto-optimize OFF'), val: (data.auto_format || 'webp').toUpperCase(), sub: '', cls: data.auto_enabled ? 'is-ok is-clickable imp-dash-jump' : '', jump: 'auto' }
+            ];
+            $stats.empty();
+            cards.forEach(function(card) {
+                var attrs = card.jump ? ' data-jump-tab="' + card.jump + '"' : '';
+                $stats.append(
+                    '<div class="imp-stat-card ' + (card.cls || '') + '"' + attrs + '>' +
+                    '<span class="imp-stat-label">' + escHtml(card.label) + '</span>' +
+                    '<span class="imp-stat-val">' + escHtml(String(card.val)) + '</span>' +
+                    (card.sub ? '<span class="imp-stat-sub">' + escHtml(card.sub) + '</span>' : '') +
+                    '</div>'
+                );
+            });
+
+            var engines = data.engines || {};
+            var pills = [
+                { key: 'gd_webp', label: uiText('dash_engine_gd', 'GD WebP') },
+                { key: 'ghostscript', label: uiText('dash_engine_gs', 'GhostScript') },
+                { key: 'imagick', label: uiText('dash_engine_imagick', 'Imagick') }
+            ];
+            $engines.empty();
+            pills.forEach(function(pill) {
+                var ok = !!engines[pill.key];
+                $engines.append('<span class="imp-engine-pill ' + (ok ? 'ok' : 'nok') + '">' + (ok ? '✓' : '✗') + ' ' + escHtml(pill.label) + '</span>');
+            });
+        }, function(err) {
+            $stats.html('<div class="imp-error">' + escHtml(err) + '</div>');
+        });
+    }
+
+    function loadMissingAlt() {
+        var $grid = $('#imp-alt-grid');
+        $grid.html('<div class="imp-loading">' + uiText('loading_data', 'Loading...') + '</div>');
+        ajax('tso_im_get_missing_alt', {
+            page: state.dashboard.altPage,
+            per_page: 35,
+            used_only: $('#imp-alt-used-only').is(':checked') ? 1 : 0
+        }, function(data) {
+            $grid.empty();
+            if (!data.items || !data.items.length) {
+                $grid.html('<p style="color:var(--imp-success);padding:12px;">✓ ' + uiText('dash_alt_all_ok', 'All images have useful alt text.') + '</p>');
+                $('#imp-alt-pagination').empty();
+                return;
+            }
+            data.items.forEach(function(item) {
+                var checked = state.dashboard.altSelected.has(item.id) ? ' checked' : '';
+                $grid.append(
+                    '<div class="imp-alt-row">' +
+                    '<input type="checkbox" class="imp-alt-check" data-id="' + item.id + '"' + checked + '>' +
+                    '<img src="' + escHtml(item.thumb || '') + '" alt="">' +
+                    '<div><div class="imp-alt-filename">' + escHtml(item.filename || '') + '</div>' +
+                    '<div>' + escHtml(item.title || '') + '</div></div>' +
+                    '<div><span class="imp-alt-suggest">' + escHtml(item.suggested_alt || '') + '</span></div>' +
+                    '<div class="imp-alt-used">' + (item.used_in_count || 0) + ' ' + uiText('dash_alt_used_in', 'Used in') + '</div>' +
+                    '</div>'
+                );
+            });
+            renderAltPagination(data.page, data.total_pages);
+        }, function(err) {
+            $grid.html('<div class="imp-error">' + escHtml(err) + '</div>');
+        });
+    }
+
+    function renderAltPagination(page, totalPages) {
+        var $p = $('#imp-alt-pagination');
+        $p.empty();
+        if (totalPages <= 1) return;
+        for (var i = 1; i <= totalPages; i++) {
+            var $btn = $('<button class="imp-btn imp-btn-ghost imp-btn-sm" data-page="' + i + '"></button>').text(i);
+            if (i === page) $btn.addClass('active');
+            $p.append($btn);
+        }
+        $p.off('click', 'button').on('click', 'button', function() {
+            state.dashboard.altPage = parseInt($(this).attr('data-page'), 10);
+            loadMissingAlt();
+        });
     }
 
     // ================================================================
