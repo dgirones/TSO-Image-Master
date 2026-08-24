@@ -5,7 +5,7 @@ Tags: image optimization, webp, media library, seo, pdf compression
 Requires at least: 5.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.10.1
+Stable tag: 1.9.5
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -106,15 +106,7 @@ This can happen with images that are already well-optimized, very small images, 
 
 For the full release history, see CHANGELOG.txt in the plugin folder.
 
-= 1.10.1 =
-* Fixed: Auto settings save now persists fill-alt-on-upload and skip-small-file options.
-* Fixed: Media Library bulk optimize hook names, image-only filtering, and success notice on upload screen.
-* Fixed: Queue status excludes cancelled jobs; skips duplicate pending attachment IDs.
-* Fixed: AVIF load/save fallback, backup delete verification, and deep-link opens Optimize tab.
-* Improved: Dashboard alt filter and duplicate scan use fast reference checks (avoids timeouts).
-* Improved: Queue polling on dashboard load; backup directory scan handles permission errors.
-
-= 1.10.0 =
+= 1.9.5 =
 * Added: Background job queue for bulk optimize (WP-Cron, 5 images per batch).
 * Added: TSO backup retention (max age + max total size) with daily purge cron.
 * Added: AVIF output format when GD supports `imageavif()`.
@@ -123,6 +115,12 @@ For the full release history, see CHANGELOG.txt in the plugin folder.
 * Added: Media Library row action, bulk queue action, and attachment box note.
 * Improved: Orphan detection scans FSE templates/parts/patterns, term meta, and menu items.
 * Improved: Cache purge also clears Breeze, SiteGround Optimizer, and Autoptimize when present.
+* Fixed: Auto settings save persists fill-alt-on-upload and skip-small-file options.
+* Fixed: Media Library bulk optimize hooks, image-only filtering, and upload-screen notice.
+* Fixed: Queue status excludes cancelled jobs; skips duplicate pending attachment IDs.
+* Fixed: AVIF load/save fallback, backup delete verification, and deep-link opens Optimize tab.
+* Improved: Dashboard alt filter and duplicate scan use fast reference checks (avoids timeouts).
+* Improved: Queue polling on dashboard load; backup directory scan handles permission errors.
 
 = 1.9.3 =
 * Added: Overview dashboard tab with site health metrics (images, missing alt, backups, space saved, engines).
@@ -151,11 +149,8 @@ For the full release history, see CHANGELOG.txt in the plugin folder.
 
 == Upgrade Notice ==
 
-= 1.10.1 =
-Bugfix release: queue, Media Library bulk action, auto settings, AVIF, and dashboard performance fixes.
-
-= 1.10.0 =
-Major release: background bulk queue, backup retention, AVIF, duplicate scanner, auto-alt on upload, and Media Library integration.
+= 1.9.5 =
+Queue, backup retention, AVIF, duplicate scanner, Media Library integration, and related bug fixes.
 
 = 1.9.3 =
 New Overview tab: health metrics plus bulk alt-text fill for images missing accessible alt.
