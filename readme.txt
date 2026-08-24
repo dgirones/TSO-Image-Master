@@ -5,7 +5,7 @@ Tags: image optimization, webp, media library, seo, pdf compression
 Requires at least: 5.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.9.3
+Stable tag: 1.10.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -106,6 +106,16 @@ This can happen with images that are already well-optimized, very small images, 
 
 For the full release history, see CHANGELOG.txt in the plugin folder.
 
+= 1.10.0 =
+* Added: Background job queue for bulk optimize (WP-Cron, 5 images per batch).
+* Added: TSO backup retention (max age + max total size) with daily purge cron.
+* Added: AVIF output format when GD supports `imageavif()`.
+* Added: Duplicate image scanner (MD5 groups) on Overview tab.
+* Added: Auto-upload options — skip small WebP/AVIF files (WP 7.1) and fill missing alt on upload.
+* Added: Media Library row action, bulk queue action, and attachment box note.
+* Improved: Orphan detection scans FSE templates/parts/patterns, term meta, and menu items.
+* Improved: Cache purge also clears Breeze, SiteGround Optimizer, and Autoptimize when present.
+
 = 1.9.3 =
 * Added: Overview dashboard tab with site health metrics (images, missing alt, backups, space saved, engines).
 * Added: Missing/generic alt audit with bulk fill from suggested title or filename.
@@ -132,6 +142,9 @@ For the full release history, see CHANGELOG.txt in the plugin folder.
 * Added: index.php in plugin subdirectories; upgrade hook reschedules history cron on version bump.
 
 == Upgrade Notice ==
+
+= 1.10.0 =
+Major release: background bulk queue, backup retention, AVIF, duplicate scanner, auto-alt on upload, and Media Library integration.
 
 = 1.9.3 =
 New Overview tab: health metrics plus bulk alt-text fill for images missing accessible alt.

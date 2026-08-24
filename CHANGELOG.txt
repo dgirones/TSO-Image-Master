@@ -2,6 +2,17 @@
 
 All notable changes to TSO Image Master are documented in this file. Recent releases (1.9.x) are also summarized in readme.txt for WordPress.org.
 
+= 1.10.0 =
+
+* Added: Background job queue for bulk optimize (WP-Cron, 5 images per batch).
+* Added: TSO backup retention (max age + max total size) with daily purge cron.
+* Added: AVIF output format when GD supports `imageavif()`.
+* Added: Duplicate image scanner (MD5 groups) on Overview tab.
+* Added: Auto-upload options — skip small WebP/AVIF files (WP 7.1) and fill missing alt on upload.
+* Added: Media Library row action, bulk queue action, and attachment box note.
+* Improved: Orphan detection scans FSE templates/parts/patterns, term meta, and menu items.
+* Improved: Cache purge also clears Breeze, SiteGround Optimizer, and Autoptimize when present.
+
 = 1.9.3 =
 
 * Added: Overview dashboard tab with site health metrics (images, missing alt, backups, space saved, engines).
