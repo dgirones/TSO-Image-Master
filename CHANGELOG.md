@@ -1,0 +1,143 @@
+# Changelog
+
+All notable changes to **TSO Image Master** are documented in this file. Recent releases (1.9.x) are also summarized in `readme.txt` for WordPress.org.
+
+## 1.9.2
+
+* Improved: WordPress 7.1 compatibility (readme and tested declaration).
+* Docs: older changelog entries moved to `CHANGELOG.md`; `readme.txt` keeps 1.9.x releases only.
+
+## 1.9.1
+
+* Improved: empty folders under `uploads/tso-image-master/` are removed automatically after a backup is deleted (manual delete, revert, attachment delete, rogue scanner).
+* Fixed: orphan empty backup directories when backup creation failed or the file was already gone from disk.
+* Fixed: delete-backup and attachment delete now validate backup paths before removal.
+
+## 1.9.0
+
+* Added: URL Fixer — manually remove broken image references from content when no automatic fix is available (img tags, Gutenberg blocks, widgets).
+* Improved: history auto-cleanup — separate retention days and check frequency (daily/weekly/monthly); save feedback fixed.
+* Improved: clearer revert error when backup no longer matches after a file rename.
+* Fixed: image/PDF search matches filename prefix only (e.g. "ar" finds "arbre", not "mar").
+* Added: PDF preview modal in the PDFs tab (iframe + open in new tab fallback).
+* Improved: Rogue Scanner UI renamed to “extra upload files”; TSO backups shown as informational (not “problematic”).
+* Fixed: image rename failed with fatal error (private URL replace method now callable from Image Manager).
+* Fixed: history filename search uses prefix match (consistent with image/PDF search).
+* Fixed: history retention accepts 1–3650 days (0 = disabled).
+* Added: index.php in plugin subdirectories; upgrade hook reschedules history cron on version bump.
+
+## 1.8.0
+
+* Fixed: GIF, PNG, WebP and other formats — reliable conversion with truecolor palette handling; failed conversions no longer leave empty `_tso_im_opt.*` temp files or zero-byte backups.
+* Fixed: backup files stored per upload subfolder; optimize modal shows backup only when the physical file exists (stale DB meta cleared automatically).
+* Fixed: optimize rolls back filesystem changes when WordPress metadata update (FASE 2) fails.
+* Fixed: URL repair after conversion/rename covers legacy sizes, `-scaled`, postmeta, widgets, and serialized data (ACF).
+* Fixed: MIME and orphan-meta repair tools no longer regenerate WebP thumbnails when only MIME/path metadata was wrong.
+* Fixed: file rename copies all variants before deleting originals; revert and delete-backup validate paths and file size.
+* Fixed: readable AJAX error messages; 7-column image grid (35 per page); admin dropdowns on Windows/dark admin.
+* Fixed: Plugin Check compliance — postmeta updates use `update_metadata()` instead of direct `meta_value` writes.
+* Improved: WordPress 7.0 compatibility (readme).
+
+## 1.7.0
+
+* Fixed: static GIF and PNG conversion to WebP (palette images converted to truecolor before save).
+* Fixed: failed conversions no longer leave empty `_tso_im_opt.*` temp files or zero-byte backups on disk.
+* Fixed: backup paths include upload subfolder to avoid collisions between same-named files.
+* Fixed: optimize rolls back filesystem changes when metadata update (FASE 2) fails.
+* Fixed: MIME repair no longer regenerates thumbnails when only the MIME type was wrong.
+* Fixed: orphan-meta repair regenerates attachment metadata and guid after WebP path fix.
+* Fixed: serialized postmeta/options are updated safely during URL replacement (ACF/widgets).
+* Fixed: rename copies all files before deleting originals; revert validates backup copy.
+* Fixed: backup badge in optimize modal only appears when the backup file exists on disk (stale meta is cleared).
+* Fixed: optimize errors now show readable messages instead of `[object Object]`.
+* Fixed: image grid uses 7 columns with 35 images per page (5 full rows); main nav tabs span the full width.
+* Fixed: file rename updates URLs from real filenames, renames `-scaled` files, and syncs posts, postmeta, excerpts, and options.
+* Fixed: URL Fixer shows the correct destination filename; admin dropdowns readable on Windows and dark admin.
+* Fixed: Plugin Check compliance — postmeta updates use `update_metadata()` instead of direct `meta_value` writes.
+* Improved: WordPress 7.0 compatibility (readme).
+
+## 1.6.0
+
+* Fixed: manual WebP/JPG conversion repairs broken image URLs after thumbnail regeneration — all legacy sizes (`-150x150`, `-300x200`, `-1024x768`, `-scaled`, etc.), cross-extension links (`.jpg` in content / `.webp` on disk), relative `/wp-content/uploads/` paths, postmeta and widget options.
+* Fixed: bulk optimize runs the same URL repair pass when the output format does not change.
+* Fixed: auto-optimizer on upload passes pre-regeneration metadata to URL repair (same pipeline as manual optimize).
+* Fixed: file rename updates thumbnail URLs from real filenames (not reconstructed dimensions), renames `-scaled` variants, and updates postmeta/excerpts/widgets — not only post content.
+* Fixed: thumbnail conversion quality during metadata update; dimension-variant regex updates postmeta and excerpts, not only post content.
+* Fixed: URL Fixer shows the correct destination filename when the suggested replacement uses a different size or base name.
+* Fixed: admin UI — custom dropdown lists readable on Windows and dark admin; restored settings toolbar layout and search field styling; clearer auto-convert format options.
+* Improved: WordPress 7.0 compatibility (readme).
+
+## 1.5.9
+
+* Security: URL Fixer only applies database replacements when both URLs point to the site uploads directory; destination files are resolved with `realpath()` so paths cannot escape uploads.
+* Security: Rogue file deletion resolves each path with `realpath()` and requires the file to stay inside `wp-content/uploads`.
+* Improved: translations load via `load_textdomain()` with bundled or language-pack `.mo` files (Plugin Check compatibility; avoids discouraged `load_plugin_textdomain()` call).
+* Fixed: use `wp_parse_url()` instead of `parse_url()` for error messages (coding standards).
+
+## 1.5.8
+
+* Fixed: plugin name and description on the WordPress Plugins screen now appear in Catalan and Spanish when the site language is set accordingly.
+* Added: bundled `languages/*.mo` files and early textdomain loading for site-locale translations.
+* Fixed: URL Fixer now scans all public custom post types (e.g. portfolio, portfolio-item, diapositivas), not only posts and pages.
+* Improved: URL Fixer also inspects rendered block/shortcode output and post excerpts so broken image URLs inside CPT content are detected.
+* Improved: URL Fixer summary label now refers to scanned content items instead of posts only.
+
+## 1.5.7
+
+* Updated: screenshot descriptions in readme to match the current plugin UI.
+
+## 1.5.6
+
+* Updated: version bump to 1.5.6.
+
+## 1.5.5
+
+* Fixed: sanitize manual rename input in AJAX handler to satisfy PHPCS while preserving UTF-8 characters (e.g. ç, ñ).
+
+## 1.5.4
+
+* Fixed: strict UTF-8 search behavior in image and PDF finders (no false positives with characters like ñ).
+* Fixed: manual image transform URL updates for encoded/non-encoded filenames with accents and special characters.
+* Fixed: URL Inconsistencies scan/fix handling for UTF-8 paths and encoded URLs.
+* Fixed: History and Rogue dynamic UI language refresh after changing plugin language.
+* Improved: mobile readability in Rogue and History sections (better card/table layout on small screens).
+
+## 1.5.3
+
+* Fixed: PDF compression flow now avoids long indefinite waits with a strict timeout and faster polling.
+* Added: automatic GhostScript-to-Imagick fallback in background PDF compression when no output is produced in time.
+* Added: pre-checks for encrypted/protected PDFs and already-compressed PDFs to fail fast with clear feedback.
+* Added: persistent "not compressible" PDF status with reason/timestamp, including UI badge and disabled re-try button.
+* Improved: timeout and error handling now refreshes PDF list immediately to reflect status changes.
+
+## 1.5.2
+
+* Added: auto-conversion source format selector in Auto-Optimizer settings (JPG/JPEG, PNG, WEBP, GIF static-only, BMP, TIFF).
+* Added: support for auto-optimizing static GIF, BMP and TIFF uploads when selected.
+* Improved: robust GIF handling — animated GIFs are never auto-converted, with fail-safe behavior if frame detection cannot be verified.
+* Improved: broader mime support for TIFF/TIF detection in auto-optimizer.
+* Fixed: consistency of "original format" behavior for BMP/TIFF in auto mode (now safely skipped instead of unexpected fallback).
+
+## 1.5.1
+
+* Fixed: complete in-plugin language switching (CA/ES/EN) for dynamic AJAX messages and URL Fixer summaries/lists.
+* Fixed: mixed-language residual strings after changing language from Catalan to Spanish/English.
+* Fixed: mobile header overlap/cropping in WordPress admin top bar.
+* Improved: responsive layout for mobile tabs, header, and history/auto-history table rendering.
+
+## 1.5.0
+
+* Added: URL Fixer tab — scans and repairs broken image URLs in posts and pages.
+* Added: Rogue File Scanner — detects unregistered files and double-extension backups.
+* Added: base64-encoded path handling in rogue file deletion for correct UTF-8/latin1 filesystem encoding.
+* Added: TIPO B2 URL fix — detects thumbnails missing because of dimension suffix renaming.
+* Fixed: Auto-optimizer now uses a transient-based mechanism to prevent re-optimization on internal regenerations.
+* Fixed: PDF compression now updates `_wp_attachment_metadata[filesize]` for correct display in WP 6.0+.
+* Fixed: Rogue scanner path normalization for cross-platform compatibility.
+* Improved: All i18n strings moved from JS JSON.parse to PHP `wp_localize_script()`.
+* Improved: Inline CSS now uses `wp_add_inline_style()` instead of `echo '<style>'`.
+* Changed: Class prefix updated to `TSOIMMA_` to comply with WordPress plugin guidelines.
+
+## 1.0.0
+
+* Initial release.
