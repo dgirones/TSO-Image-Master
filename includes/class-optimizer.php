@@ -1373,6 +1373,99 @@ class TSOIMMA_Optimizer {
     }
 
     /**
+     * Whether GD can encode AVIF images.
+     *
+     * @return bool
+     */
+    public static function avif_supported() {
+        return function_exists( 'imageavif' ) && function_exists( 'imagecreatefromavif' );
+    }
+
+    /**
+     * Run full optimize pipeline for one attachment (used by bulk + queue).
+     *
+     * @param int    $attachment_id Attachment ID.
+     * @param string $format        Output format.
+     * @param int    $quality       Quality.
+     * @param bool   $replace       Replace original.
+     * @return array<string, mixed>|WP_Error
+     */
+    public static function run_optimize_pipeline( $attachment_id, $format, $quality, $replace = true ) {
+        $attachment_id = absint( $attachment_id );
+        $format        = sanitize_key( $format );
+        $quality       = min( 100, max( 50, absint( $quality ) ) );
+
+        $res = self::optimize( $attachment_id, $format, $quality, $replace );
+        if ( is_wp_error( $res ) ) {
+            return $res;
+        }
+
+        if ( ! empty( $res['replaced'] ) ) {
+            try {
+                self::update_wp_metadata_only( $attachment_id, $res, $format );
+            } catch ( \Throwable $ex ) {
+                self::rollback_optimize_files( $res );
+                return new WP_Error( 'metadata_failed', 'FASE 2: ' . $ex->getMessage() );
+            }
+
+            $ext_changed = ! empty( $res['old_ext'] ) && ! empty( $res['new_ext'] )
+                && ! self::extensions_match( $res['old_ext'], $res['new_ext'] );
+
+            if ( $ext_changed ) {
+                self::process_thumbnails_background( $attachment_id, $format, $quality );
+            } else {
+                self::optimize_thumbnails( $attachment_id, $format, $quality );
+                self::repair_content_urls_for_attachment( $attachment_id );
+            }
+        }
+
+        $bulk_file = get_attached_file( $attachment_id );
+        TSOIMMA_History::log(
+            $attachment_id,
+            'optimize',
+            array(
+                'filename'      => $bulk_file ? basename( $bulk_file ) : '',
+                'format'        => $format,
+                'quality'       => $quality,
+                'savings_bytes' => $res['savings_bytes'] ?? 0,
+                'savings_pct'   => $res['savings_pct'] ?? 0,
+            )
+        );
+
+        TSOIMMA_Cache_Helper::purge_after_change( $attachment_id );
+        return $res;
+    }
+
+    /**
+     * Skip auto-optimize when upload is already small/optimized (WP 7.1 client-side uploads).
+     *
+     * @param int $attachment_id Attachment ID.
+     * @param int $max_kb        Max file size in KB to skip (0 = disabled).
+     * @return bool
+     */
+    public static function should_skip_auto_optimize( $attachment_id, $max_kb = 0 ) {
+        $max_kb = absint( $max_kb );
+        if ( $max_kb <= 0 ) {
+            return false;
+        }
+
+        $file_path = get_attached_file( $attachment_id );
+        if ( ! $file_path || ! file_exists( $file_path ) ) {
+            return false;
+        }
+
+        $mime = get_post_mime_type( $attachment_id );
+        if ( 'image/webp' === $mime || 'image/avif' === $mime ) {
+            $size_kb = (int) ceil( filesize( $file_path ) / 1024 );
+            if ( $size_kb > 0 && $size_kb <= $max_kb ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Remove all backup post meta for an attachment.
      *
      * @param int $attachment_id Attachment ID.
@@ -1842,6 +1935,9 @@ class TSOIMMA_Optimizer {
         if ( 'webp' === $output_format && ! self::webp_supported() ) {
             return 'jpg';
         }
+        if ( 'avif' === $output_format && ! self::avif_supported() ) {
+            return self::webp_supported() ? 'webp' : 'jpg';
+        }
         return $output_format;
     }
 
@@ -1952,6 +2048,11 @@ class TSOIMMA_Optimizer {
                 return imagepng( $image, $path, $png_q );
             case 'gif':
                 return imagegif( $image, $path );
+            case 'avif':
+                if ( ! function_exists( 'imageavif' ) ) {
+                    return false;
+                }
+                return imageavif( $image, $path, $quality );
         }
         return false;
     }
@@ -1979,6 +2080,7 @@ class TSOIMMA_Optimizer {
             return in_array( $ext, array( 'jpg', 'jpeg', 'png', 'gif', 'webp' ), true ) ? $ext : 'jpg';
         }
         if ( $output_format === 'webp' )     return 'webp';
+        if ( $output_format === 'avif' )     return 'avif';
         if ( $output_format === 'jpg' )      return 'jpg';
         return strtolower( $original_ext );
     }
@@ -2016,6 +2118,7 @@ class TSOIMMA_Optimizer {
             'png'  => 'image/png',
             'gif'  => 'image/gif',
             'webp' => 'image/webp',
+            'avif' => 'image/avif',
         );
         return isset( $map[ strtolower( $ext ) ] ) ? $map[ strtolower( $ext ) ] : 'image/jpeg';
     }

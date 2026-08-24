@@ -54,6 +54,10 @@
         loadOptImages();
         loadSeoImages();
         loadAutoSettings();
+        var deepId = parseInt(new URLSearchParams(window.location.search).get('tsoimma_id') || '0', 10);
+        if (deepId > 0) {
+            setTimeout(function() { openModal(deepId, 'optimize'); }, 400);
+        }
     });
 
     // ================================================================
@@ -1193,6 +1197,101 @@
             var tab = $(this).data('jump-tab');
             if (!tab) return;
             $('.imp-tab[data-tab="' + tab + '"]').trigger('click');
+            if (tab === 'optimize') {
+                state.opt.page = 1;
+                state.opt.search = '';
+                loadOptImages();
+            }
+        });
+
+        $('#imp-queue-cancel').on('click', function() {
+            ajax('tso_im_cancel_queue', {}, function(data) {
+                renderQueueStatus(data);
+            });
+        });
+
+        $('#imp-save-backup-retention').on('click', function() {
+            ajax('tso_im_save_backup_retention', {
+                days: $('#imp-backup-days').val(),
+                max_mb: $('#imp-backup-max-mb').val()
+            }, function() {
+                $('#imp-backup-retention-msg').show().css('color', 'var(--imp-success)').text(uiText('save_ok', 'Saved!'));
+            });
+        });
+
+        $('#imp-purge-backups-now').on('click', function() {
+            ajax('tso_im_purge_backups_now', {}, function(data) {
+                var msg = '✓ ' + (data.deleted || 0) + ' deleted, ' + (data.freed_h || '0 B') + ' freed.';
+                $('#imp-backup-retention-msg').show().css('color', 'var(--imp-success)').text(msg);
+                loadDashboardOverview();
+            });
+        });
+
+        $('#imp-scan-duplicates').on('click', function() {
+            var $btn = $(this);
+            $btn.prop('disabled', true);
+            $('#imp-duplicates-result').html('<div class="imp-loading">' + uiText('scanning_msg', 'Scanning...') + '</div>');
+            $('#imp-duplicates-list').empty();
+            ajax('tso_im_scan_duplicates', { limit: 500 }, function(data) {
+                $btn.prop('disabled', false);
+                if (!data.group_count) {
+                    $('#imp-duplicates-result').html('<p style="color:var(--imp-success);">✓ ' + uiText('dash_dup_none', 'No duplicate groups found.') + '</p>');
+                    return;
+                }
+                $('#imp-duplicates-result').html(
+                    '<p>' + data.group_count + ' ' + uiText('dash_dup_groups', 'duplicate groups') +
+                    ' · ' + uiText('dash_dup_wasted', 'Wasted space') + ': ' + escHtml(data.wasted_h || '0 B') + '</p>'
+                );
+                var $list = $('#imp-duplicates-list');
+                (data.groups || []).slice(0, 20).forEach(function(group) {
+                    var html = '<div class="imp-dup-group"><strong>Hash ' + escHtml(group.hash.slice(0, 8)) + '… (' + group.items.length + ')</strong><ul>';
+                    group.items.forEach(function(item) {
+                        html += '<li>#' + item.id + ' ' + escHtml(item.filename) + ' · ' + item.used_in + ' ' + uiText('dash_alt_used_in', 'Used in') + '</li>';
+                    });
+                    html += '</ul></div>';
+                    $list.append(html);
+                });
+            }, function(err) {
+                $btn.prop('disabled', false);
+                $('#imp-duplicates-result').html('<div class="imp-error">' + escHtml(err) + '</div>');
+            });
+        });
+
+        loadBackupRetention();
+    }
+
+    function renderQueueStatus(queue) {
+        var $el = $('#imp-queue-status');
+        if (!$el.length) return;
+        if (!queue.total) {
+            $el.html('<span style="color:var(--imp-text-muted);">' + uiText('dash_queue_empty', 'Queue is empty.') + '</span>');
+            $('#imp-queue-cancel').prop('disabled', true);
+            return;
+        }
+        $el.html(
+            '<span>' + (queue.done || 0) + '/' + queue.total + ' ' + uiText('dash_queue_done', 'done') +
+            ' · ' + (queue.pending || 0) + ' ' + uiText('dash_queue_pending', 'pending') +
+            (queue.errors ? ' · ' + queue.errors + ' ' + uiText('dash_queue_errors', 'errors') : '') + '</span>'
+        );
+        $('#imp-queue-cancel').prop('disabled', !(queue.pending > 0));
+    }
+
+    function loadBackupRetention() {
+        ajax('tso_im_get_backup_retention', {}, function(data) {
+            $('#imp-backup-days').val(data.days || 0);
+            $('#imp-backup-max-mb').val(data.max_mb || 0);
+        });
+    }
+
+    function pollQueueStatus() {
+        if (!$('#tab-dashboard').hasClass('active')) return;
+        ajax('tso_im_get_queue_status', {}, function(data) {
+            renderQueueStatus(data);
+            if (data.running) {
+                setTimeout(pollQueueStatus, 4000);
+            } else if (data.total > 0) {
+                loadDashboardOverview();
+            }
         });
     }
 
@@ -1224,6 +1323,7 @@
             var engines = data.engines || {};
             var pills = [
                 { key: 'gd_webp', label: uiText('dash_engine_gd', 'GD WebP') },
+                { key: 'gd_avif', label: uiText('dash_engine_avif', 'GD AVIF') },
                 { key: 'ghostscript', label: uiText('dash_engine_gs', 'GhostScript') },
                 { key: 'imagick', label: uiText('dash_engine_imagick', 'Imagick') }
             ];
@@ -1232,6 +1332,8 @@
                 var ok = !!engines[pill.key];
                 $engines.append('<span class="imp-engine-pill ' + (ok ? 'ok' : 'nok') + '">' + (ok ? '✓' : '✗') + ' ' + escHtml(pill.label) + '</span>');
             });
+
+            renderQueueStatus(data.queue || {});
         }, function(err) {
             $stats.html('<div class="imp-error">' + escHtml(err) + '</div>');
         });
@@ -1433,6 +1535,28 @@
         var quality = $('#imp-quality').val();
         var replace = $('#imp-replace').is(':checked') ? 1 : 0;
         var total   = ids.length;
+
+        if (total > 2) {
+            $('#imp-bulk-progress').show();
+            $('#imp-progress-fill').css('width', '0%');
+            $('#imp-progress-text').text(uiText('dash_queue_queued', 'Queued for background processing...'));
+            $('#imp-opt-log').show();
+            $('#imp-bulk-optimize').prop('disabled', true);
+            ajax('tso_im_enqueue_optimize_queue', {
+                ids: ids, format: format, quality: quality, replace: replace
+            }, function(data) {
+                $('#imp-bulk-optimize').prop('disabled', false);
+                addLog('info', '✓ ' + total + ' ' + uiText('dash_queue_queued_n', 'images queued.'));
+                renderQueueStatus(data);
+                $('.imp-tab[data-tab="dashboard"]').trigger('click');
+                pollQueueStatus();
+            }, function(err) {
+                $('#imp-bulk-optimize').prop('disabled', false);
+                addLog('err', err);
+            });
+            return;
+        }
+
         var done    = 0;
         $('#imp-bulk-progress').show();
         $('#imp-progress-fill').css('width', '0%');
@@ -2376,7 +2500,9 @@
                 enabled: $('#imp-auto-enabled').is(':checked') ? 1 : 0,
                 format:  $('#imp-auto-format').val(),
                 quality: $('#imp-auto-quality').val(),
-                source_formats: selectedSourceFormats
+                source_formats: selectedSourceFormats,
+                fill_alt_on_upload: $('#imp-auto-fill-alt').is(':checked') ? 1 : 0,
+                skip_small_kb: $('#imp-auto-skip-kb').val()
             }, function(data) {
                 $('#imp-auto-saved').show().delay(2000).fadeOut();
                 updateAutoToggleUI(data.enabled);
@@ -2530,6 +2656,8 @@
             (data.source_formats || ['jpg', 'png', 'webp']).forEach(function(fmt) {
                 $('.imp-auto-src-format[value="' + fmt + '"]').prop('checked', true);
             });
+            $('#imp-auto-fill-alt').prop('checked', !!data.fill_alt_on_upload);
+            $('#imp-auto-skip-kb').val(data.skip_small_kb || 0);
             updateAutoToggleUI(!!data.enabled);
         });
     }

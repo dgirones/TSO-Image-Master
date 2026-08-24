@@ -105,6 +105,46 @@ class TSOIMMA_Orphan_Finder {
             if ( $found > 0 ) return false;
         }
 
+        // 7. Site Editor templates, template parts, and block patterns.
+        foreach ( $urls as $url ) {
+            $url_escaped = $wpdb->esc_like( $url );
+            $found = $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->posts}
+                 WHERE post_type IN ('wp_template','wp_template_part','wp_block')
+                 AND post_status != 'trash'
+                 AND post_content LIKE %s",
+                '%' . $url_escaped . '%'
+            ) );
+            if ( $found > 0 ) {
+                return false;
+            }
+        }
+
+        // 8. Term meta (ACF on taxonomies, etc.).
+        foreach ( $urls as $url ) {
+            $url_escaped = $wpdb->esc_like( $url );
+            $found = $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->termmeta} WHERE meta_value LIKE %s",
+                '%' . $url_escaped . '%'
+            ) );
+            if ( $found > 0 ) {
+                return false;
+            }
+        }
+
+        // 9. Navigation menu items referencing attachment ID or URL.
+        $found_menu = $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->postmeta} pm
+             INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+             WHERE p.post_type = 'nav_menu_item'
+             AND p.post_status != 'trash'
+             AND ( pm.meta_key = '_menu_item_object_id' AND pm.meta_value = %s )",
+            (string) $attachment_id
+        ) );
+        if ( $found_menu > 0 ) {
+            return false;
+        }
+
         // phpcs:enable
 
         return true;

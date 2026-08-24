@@ -29,6 +29,7 @@ class TSOIMMA_Dashboard {
 			'total_operations'   => (int) $history['total_operations'],
 			'auto_enabled'       => ! empty( $auto['enabled'] ),
 			'auto_format'        => isset( $auto['format'] ) ? (string) $auto['format'] : 'webp',
+			'queue'              => TSOIMMA_Queue::get_status(),
 			'engines'            => self::get_engine_status(),
 		);
 	}
@@ -305,6 +306,7 @@ class TSOIMMA_Dashboard {
 	private static function get_engine_status() {
 		return array(
 			'gd_webp'  => TSOIMMA_Optimizer::webp_supported(),
+			'gd_avif'  => TSOIMMA_Optimizer::avif_supported(),
 			'ghostscript' => TSOIMMA_PDF_Compressor::ghostscript_available(),
 			'imagick'  => class_exists( 'Imagick' ),
 		);

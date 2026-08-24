@@ -808,6 +808,13 @@
 .imp-alt-suggest { font-size: 13px; color: var(--imp-accent2); }
 .imp-alt-used { font-size: 11px; color: var(--imp-text-muted); white-space: nowrap; }
 
+.imp-dup-group {
+    margin-bottom: 12px; padding: 12px; background: var(--imp-surface);
+    border: 1px solid var(--imp-border); border-radius: var(--imp-radius-sm);
+}
+.imp-dup-group ul { margin: 8px 0 0 18px; font-size: 13px; color: var(--imp-text-muted); }
+.imp-queue-status { margin-bottom: 12px; font-size: 13px; }
+
 @media (max-width: 900px) {
     .imp-alt-row { grid-template-columns: 28px 48px 1fr; }
     .imp-alt-used { grid-column: 2 / -1; }

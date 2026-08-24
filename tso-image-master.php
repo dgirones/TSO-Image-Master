@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       TSO Image Master
  * Description:       Complete image optimization suite for WordPress: convert to WebP/JPG, resize, compress PDFs, find orphaned images, scan rogue files, fix broken image URLs, and manage SEO fields. Requires PHP GD library.
- * Version:           1.9.3
+ * Version:           1.10.0
  * Requires at least: 5.9
  * Requires PHP:      7.4
  * Tested up to:      7.1
@@ -19,12 +19,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // ── Constants ────────────────────────────────────────────────────────
-define( 'TSOIMMA_VERSION',    '1.9.3' );
+define( 'TSOIMMA_VERSION',    '1.10.0' );
 define( 'TSOIMMA_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'TSOIMMA_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
 // ── Load all classes ──────────────────────────────────────────────────
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-history.php';
+require_once TSOIMMA_PLUGIN_DIR . 'includes/class-cache-helper.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-optimizer.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-image-manager.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-orphan-finder.php';
@@ -33,6 +34,10 @@ require_once TSOIMMA_PLUGIN_DIR . 'includes/class-url-fixer.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-pdf-compressor.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-auto-optimizer.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-dashboard.php';
+require_once TSOIMMA_PLUGIN_DIR . 'includes/class-queue.php';
+require_once TSOIMMA_PLUGIN_DIR . 'includes/class-backup-manager.php';
+require_once TSOIMMA_PLUGIN_DIR . 'includes/class-duplicate-finder.php';
+require_once TSOIMMA_PLUGIN_DIR . 'includes/class-media-library.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-ajax-handler.php';
 require_once TSOIMMA_PLUGIN_DIR . 'admin/class-admin-page.php';
 
@@ -44,6 +49,9 @@ function tsoimma_init() {
     TSOIMMA_Admin_Page::init();
     TSOIMMA_Ajax_Handler::init();
     TSOIMMA_Auto_Optimizer::init();
+    TSOIMMA_Queue::init();
+    TSOIMMA_Backup_Manager::init();
+    TSOIMMA_Media_Library::init();
 
     // WP-Cron: thumbnail processing in background after optimize
     add_action(
@@ -135,6 +143,7 @@ function tsoimma_activate() {
     TSOIMMA_History::maybe_install();
 
     TSOIMMA_History::schedule_purge_cron();
+    TSOIMMA_Backup_Manager::schedule_purge_cron();
     update_option( 'tsoimma_version', TSOIMMA_VERSION );
 }
 register_activation_hook( __FILE__, 'tsoimma_activate' );
@@ -149,6 +158,7 @@ function tsoimma_maybe_upgrade() {
     }
 
     TSOIMMA_History::schedule_purge_cron();
+    TSOIMMA_Backup_Manager::schedule_purge_cron();
     update_option( 'tsoimma_version', TSOIMMA_VERSION );
 }
 add_action( 'plugins_loaded', 'tsoimma_maybe_upgrade', 20 );
@@ -159,6 +169,7 @@ add_action( 'plugins_loaded', 'tsoimma_maybe_upgrade', 20 );
 function tsoimma_deactivate() {
     wp_clear_scheduled_hook( 'tsoimma_history_purge' );
     wp_clear_scheduled_hook( 'tsoimma_process_thumbnails' );
+    wp_clear_scheduled_hook( 'tsoimma_process_queue' );
+    wp_clear_scheduled_hook( 'tsoimma_backup_purge' );
 }
 register_deactivation_hook( __FILE__, 'tsoimma_deactivate' );
-

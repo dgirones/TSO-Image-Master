@@ -57,6 +57,12 @@ class TSOIMMA_Auto_Optimizer {
             return $metadata;
         }
 
+        $skip_kb = isset( $settings['skip_small_kb'] ) ? absint( $settings['skip_small_kb'] ) : 0;
+        if ( TSOIMMA_Optimizer::should_skip_auto_optimize( $attachment_id, $skip_kb ) ) {
+            self::maybe_fill_alt_on_upload( $attachment_id, $settings );
+            return $metadata;
+        }
+
         // Comprovar que és una imatge
         $mime = get_post_mime_type( $attachment_id );
         if ( false === strpos( $mime, 'image/' ) ) {
@@ -165,6 +171,7 @@ class TSOIMMA_Auto_Optimizer {
             ) );
 
             update_post_meta( $attachment_id, '_tso_im_auto_optimized', time() );
+            self::maybe_fill_alt_on_upload( $attachment_id, $settings );
         }
 
         $saved = wp_get_attachment_metadata( $attachment_id );
@@ -180,6 +187,8 @@ class TSOIMMA_Auto_Optimizer {
             'format'  => 'webp',
             'quality' => 82,
             'source_formats' => array( 'jpg', 'png', 'webp', 'gif', 'bmp', 'tiff' ),
+            'fill_alt_on_upload' => false,
+            'skip_small_kb'      => 0,
         );
         $saved = get_option( 'tsoimma_auto_optimize_settings', array() );
         if ( empty( $saved['source_formats'] ) || ! is_array( $saved['source_formats'] ) ) {
@@ -201,10 +210,12 @@ class TSOIMMA_Auto_Optimizer {
         }
         $clean = array(
             'enabled' => ! empty( $settings['enabled'] ),
-            'format'  => in_array( $format_raw, array( 'webp', 'jpg', 'original' ), true )
+            'format'  => in_array( $format_raw, array( 'webp', 'jpg', 'avif', 'original' ), true )
                             ? $format_raw : 'webp',
             'quality' => min( 100, max( 50, absint( isset( $settings['quality'] ) ? $settings['quality'] : 82 ) ) ),
             'source_formats' => $source_clean,
+            'fill_alt_on_upload' => ! empty( $settings['fill_alt_on_upload'] ),
+            'skip_small_kb'      => min( 5120, max( 0, absint( $settings['skip_small_kb'] ?? 0 ) ) ),
         );
         update_option( 'tsoimma_auto_optimize_settings', $clean );
         return $clean;
@@ -247,5 +258,38 @@ class TSOIMMA_Auto_Optimizer {
         }
 
         return preg_match_all( '#\x00\x21\xF9\x04.{4}\x00\x2C#s', $bytes ) > 1;
+    }
+
+    /**
+     * Fill missing alt text after upload when enabled in settings.
+     *
+     * @param int                  $attachment_id Attachment ID.
+     * @param array<string, mixed> $settings      Auto settings.
+     * @return void
+     */
+    private static function maybe_fill_alt_on_upload( $attachment_id, $settings ) {
+        if ( empty( $settings['fill_alt_on_upload'] ) ) {
+            return;
+        }
+
+        $current_alt = trim( (string) get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ) );
+        if ( '' !== $current_alt && ! TSOIMMA_Dashboard::is_weak_alt( $current_alt, $attachment_id ) ) {
+            return;
+        }
+
+        $suggested = TSOIMMA_Image_Manager::suggest_alt_text( $attachment_id );
+        if ( '' === $suggested ) {
+            return;
+        }
+
+        TSOIMMA_Image_Manager::update_seo_fields( $attachment_id, null, $suggested, null, null );
+        TSOIMMA_History::log(
+            $attachment_id,
+            'seo_update',
+            array(
+                'alt'    => $suggested,
+                'source' => 'auto_upload_alt',
+            )
+        );
     }
 }

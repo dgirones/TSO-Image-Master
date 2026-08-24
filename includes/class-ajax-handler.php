@@ -39,6 +39,13 @@ class TSOIMMA_Ajax_Handler {
             'tso_im_get_dashboard_overview',
             'tso_im_get_missing_alt',
             'tso_im_bulk_fill_alt',
+            'tso_im_enqueue_optimize_queue',
+            'tso_im_get_queue_status',
+            'tso_im_cancel_queue',
+            'tso_im_get_backup_retention',
+            'tso_im_save_backup_retention',
+            'tso_im_purge_backups_now',
+            'tso_im_scan_duplicates',
         );
         foreach ( $actions as $action ) {
             add_action( 'wp_ajax_' . $action, array( __CLASS__, 'handle_' . $action ) );
@@ -205,45 +212,11 @@ class TSOIMMA_Ajax_Handler {
 
         $results = array();
         foreach ( $ids as $id ) {
-            $res = TSOIMMA_Optimizer::optimize( $id, $format, $quality, true );
+            $res = TSOIMMA_Optimizer::run_optimize_pipeline( $id, $format, $quality, true );
             if ( is_wp_error( $res ) ) {
                 $results[] = array( 'id' => $id, 'error' => $res->get_error_message() );
                 continue;
             }
-
-            if ( ! empty( $res['replaced'] ) ) {
-                try {
-                    TSOIMMA_Optimizer::update_wp_metadata_only( $id, $res, $format );
-                } catch ( \Throwable $ex ) {
-                    TSOIMMA_Optimizer::rollback_optimize_files( $res );
-                    $results[] = array(
-                        'id'    => $id,
-                        'error' => 'FASE 2: ' . $ex->getMessage() . ' (fitxers restaurats des del backup)',
-                    );
-                    continue;
-                }
-
-                $ext_changed = ! empty( $res['old_ext'] ) && ! empty( $res['new_ext'] )
-                    && ! TSOIMMA_Optimizer::extensions_match( $res['old_ext'], $res['new_ext'] );
-
-                if ( $ext_changed ) {
-                    // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
-                    @set_time_limit( 300 );
-                    TSOIMMA_Optimizer::process_thumbnails_background( $id, $format, $quality );
-                } else {
-                    TSOIMMA_Optimizer::optimize_thumbnails( $id, $format, $quality );
-                    TSOIMMA_Optimizer::repair_content_urls_for_attachment( $id );
-                }
-            }
-
-            $bulk_file = get_attached_file( $id );
-            TSOIMMA_History::log( $id, 'optimize', array(
-                'filename'      => $bulk_file ? basename( $bulk_file ) : '',
-                'format'        => $format,
-                'quality'       => $quality,
-                'savings_bytes' => $res['savings_bytes'] ?? 0,
-                'savings_pct'   => $res['savings_pct'] ?? 0,
-            ) );
             $results[] = $res;
         }
         wp_send_json_success( $results );
@@ -1238,6 +1211,71 @@ class TSOIMMA_Ajax_Handler {
         $source = sanitize_key( wp_unslash( $_POST['source'] ?? 'suggested' ) );
         $result = TSOIMMA_Dashboard::bulk_fill_alt( $ids, $source );
         wp_send_json_success( $result );
+    }
+
+    public static function handle_tso_im_enqueue_optimize_queue() {
+        check_ajax_referer( 'tso_im_nonce', 'nonce' );
+        self::require_admin();
+
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash
+        $ids     = array_map( 'absint', isset( $_POST['ids'] ) ? (array) $_POST['ids'] : array() );
+        $format  = sanitize_key( wp_unslash( $_POST['format'] ?? 'webp' ) );
+        $quality = absint( $_POST['quality'] ?? 82 );
+        $replace = ! empty( $_POST['replace'] );
+
+        if ( empty( $ids ) ) {
+            wp_send_json_error( __( 'Select at least one image.', 'tso-image-master' ) );
+        }
+
+        wp_send_json_success(
+            TSOIMMA_Queue::enqueue_optimize( $ids, $format, $quality, $replace )
+        );
+    }
+
+    public static function handle_tso_im_get_queue_status() {
+        check_ajax_referer( 'tso_im_nonce', 'nonce' );
+        self::require_admin();
+        wp_send_json_success( TSOIMMA_Queue::get_status() );
+    }
+
+    public static function handle_tso_im_cancel_queue() {
+        check_ajax_referer( 'tso_im_nonce', 'nonce' );
+        self::require_admin();
+        TSOIMMA_Queue::cancel_pending();
+        wp_send_json_success( TSOIMMA_Queue::get_status() );
+    }
+
+    public static function handle_tso_im_get_backup_retention() {
+        check_ajax_referer( 'tso_im_nonce', 'nonce' );
+        self::require_admin();
+        wp_send_json_success( TSOIMMA_Backup_Manager::get_settings() );
+    }
+
+    public static function handle_tso_im_save_backup_retention() {
+        check_ajax_referer( 'tso_im_nonce', 'nonce' );
+        self::require_admin();
+
+        wp_send_json_success(
+            TSOIMMA_Backup_Manager::save_settings(
+                array(
+                    'days'   => absint( $_POST['days'] ?? 0 ),
+                    'max_mb' => absint( $_POST['max_mb'] ?? 0 ),
+                )
+            )
+        );
+    }
+
+    public static function handle_tso_im_purge_backups_now() {
+        check_ajax_referer( 'tso_im_nonce', 'nonce' );
+        self::require_admin();
+        wp_send_json_success( TSOIMMA_Backup_Manager::purge_old_backups() );
+    }
+
+    public static function handle_tso_im_scan_duplicates() {
+        check_ajax_referer( 'tso_im_nonce', 'nonce' );
+        self::require_admin();
+        $limit = absint( $_POST['limit'] ?? 500 );
+        wp_send_json_success( TSOIMMA_Duplicate_Finder::scan( $limit ) );
     }
 
 

@@ -57,10 +57,14 @@ delete_option( 'tsoimma_db_version' );
 delete_option( 'tsoimma_history_retention_days' );
 delete_option( 'tsoimma_history_purge_interval' );
 delete_option( 'tsoimma_version' );
+delete_option( 'tsoimma_job_queue' );
+delete_option( 'tsoimma_backup_retention' );
 
 // ── Clear scheduled cron events ───────────────────────────────────
 wp_clear_scheduled_hook( 'tsoimma_history_purge' );
 wp_clear_scheduled_hook( 'tsoimma_process_thumbnails' );
+wp_clear_scheduled_hook( 'tsoimma_process_queue' );
+wp_clear_scheduled_hook( 'tsoimma_backup_purge' );
 
 // ── Drop custom history table ─────────────────────────────────────
 global $wpdb;

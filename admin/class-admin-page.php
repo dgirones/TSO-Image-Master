@@ -184,6 +184,30 @@ class TSOIMMA_Admin_Page {
                 'dash_go_orphans'       => __( 'Find orphans', 'tso-image-master' ),
                 'dash_go_urls'          => __( 'Fix URLs', 'tso-image-master' ),
                 'dash_alt_all_ok'       => __( 'All images have useful alt text.', 'tso-image-master' ),
+                'dash_engine_avif'      => __( 'GD AVIF', 'tso-image-master' ),
+                'dash_queue_title'      => __( 'Background queue', 'tso-image-master' ),
+                'dash_queue_desc'       => __( 'Bulk optimize jobs run in the background via WP-Cron (5 images per batch).', 'tso-image-master' ),
+                'dash_queue_cancel'     => __( 'Cancel pending jobs', 'tso-image-master' ),
+                'dash_queue_empty'      => __( 'Queue is empty.', 'tso-image-master' ),
+                'dash_queue_done'       => __( 'done', 'tso-image-master' ),
+                'dash_queue_pending'    => __( 'pending', 'tso-image-master' ),
+                'dash_queue_errors'     => __( 'errors', 'tso-image-master' ),
+                'dash_queue_queued'     => __( 'Queued for background processing...', 'tso-image-master' ),
+                'dash_queue_queued_n'   => __( 'images queued.', 'tso-image-master' ),
+                'dash_backup_title'     => __( 'Backup retention', 'tso-image-master' ),
+                'dash_backup_desc'      => __( 'Auto-delete TSO backups under uploads/tso-image-master/ (0 = disabled).', 'tso-image-master' ),
+                'dash_backup_days'      => __( 'Keep backups (days)', 'tso-image-master' ),
+                'dash_backup_max'       => __( 'Max total size (MB, 0 = unlimited)', 'tso-image-master' ),
+                'dash_backup_purge'     => __( 'Purge now', 'tso-image-master' ),
+                'dash_dup_title'        => __( 'Duplicate images', 'tso-image-master' ),
+                'dash_dup_scan'         => __( 'Scan duplicates', 'tso-image-master' ),
+                'dash_dup_none'         => __( 'No duplicate groups found.', 'tso-image-master' ),
+                'dash_dup_groups'       => __( 'duplicate groups', 'tso-image-master' ),
+                'dash_dup_wasted'       => __( 'Wasted space', 'tso-image-master' ),
+                'dash_heavy_btn'        => __( 'Largest images', 'tso-image-master' ),
+                'auto_skip_kb_label'    => __( 'Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)', 'tso-image-master' ),
+                'auto_fill_alt_label'   => __( 'Fill missing alt text on upload', 'tso-image-master' ),
+                'fmt_avif'              => __( 'AVIF', 'tso-image-master' ),
             ),
         ) );
     }
@@ -215,12 +239,19 @@ class TSOIMMA_Admin_Page {
      */
     private static function format_output_options( $keep_label, $keep_i18n ) {
         $webp_ok = TSOIMMA_Optimizer::webp_supported();
+        $avif_ok = TSOIMMA_Optimizer::avif_supported();
         return array(
             array(
                 'value'    => 'webp',
                 'label'    => 'WebP (recomanat)',
                 'i18n'     => 'fmt_webp',
                 'disabled' => ! $webp_ok,
+            ),
+            array(
+                'value'    => 'avif',
+                'label'    => 'AVIF',
+                'i18n'     => 'fmt_avif',
+                'disabled' => ! $avif_ok,
             ),
             array(
                 'value' => 'jpg',
@@ -411,6 +442,41 @@ class TSOIMMA_Admin_Page {
                     </div>
                     <div id="imp-alt-pagination" class="imp-pagination"></div>
                     <div id="imp-alt-bulk-result" style="display:none;margin-top:12px;font-size:13px;"></div>
+                </div>
+
+                <div class="imp-panel">
+                    <h2 class="imp-panel-title" data-i18n="dash_queue_title">Background queue</h2>
+                    <p class="imp-panel-desc" data-i18n="dash_queue_desc">Bulk optimize jobs run in the background via WP-Cron (5 images per batch).</p>
+                    <div id="imp-queue-status" class="imp-queue-status"></div>
+                    <button id="imp-queue-cancel" class="imp-btn imp-btn-ghost" data-i18n="dash_queue_cancel">Cancel pending jobs</button>
+                </div>
+
+                <div class="imp-panel">
+                    <h2 class="imp-panel-title" data-i18n="dash_backup_title">Backup retention</h2>
+                    <p class="imp-panel-desc" data-i18n="dash_backup_desc">Auto-delete TSO backups under uploads/tso-image-master/ (0 = disabled).</p>
+                    <div class="imp-settings-grid">
+                        <div class="imp-field">
+                            <label for="imp-backup-days" data-i18n="dash_backup_days">Keep backups (days)</label>
+                            <input type="number" id="imp-backup-days" min="0" max="3650" value="0">
+                        </div>
+                        <div class="imp-field">
+                            <label for="imp-backup-max-mb" data-i18n="dash_backup_max">Max total size (MB, 0 = unlimited)</label>
+                            <input type="number" id="imp-backup-max-mb" min="0" max="102400" value="0">
+                        </div>
+                    </div>
+                    <button id="imp-save-backup-retention" class="imp-btn imp-btn-primary" data-i18n="save_config">Save settings</button>
+                    <button id="imp-purge-backups-now" class="imp-btn imp-btn-ghost" data-i18n="dash_backup_purge">Purge now</button>
+                    <span id="imp-backup-retention-msg" style="display:none;margin-left:10px;font-size:13px;"></span>
+                </div>
+
+                <div class="imp-panel">
+                    <div class="imp-toolbar" style="margin-bottom:12px;">
+                        <h2 class="imp-panel-title" style="margin:0;" data-i18n="dash_dup_title">Duplicate images</h2>
+                        <button id="imp-scan-duplicates" class="imp-btn imp-btn-ghost" data-i18n="dash_dup_scan">Scan duplicates</button>
+                        <button id="imp-heavy-images" class="imp-btn imp-btn-ghost imp-dash-jump" data-jump-tab="optimize" data-i18n="dash_heavy_btn">Largest images</button>
+                    </div>
+                    <div id="imp-duplicates-result"></div>
+                    <div id="imp-duplicates-list"></div>
                 </div>
             </div>
 
@@ -836,6 +902,16 @@ class TSOIMMA_Admin_Page {
                                 <label class="imp-auto-src-item"><input type="checkbox" class="imp-auto-src-format" value="bmp" checked> <span data-i18n="auto_src_bmp">BMP</span></label>
                                 <label class="imp-auto-src-item"><input type="checkbox" class="imp-auto-src-format" value="tiff" checked> <span data-i18n="auto_src_tiff">TIFF</span></label>
                             </div>
+                        </div>
+                        <div class="imp-field">
+                            <label for="imp-auto-skip-kb" data-i18n="auto_skip_kb_label">Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)</label>
+                            <input type="number" id="imp-auto-skip-kb" min="0" max="5120" value="0">
+                        </div>
+                        <div class="imp-field imp-field-check">
+                            <label>
+                                <input type="checkbox" id="imp-auto-fill-alt">
+                                <span data-i18n="auto_fill_alt_label">Fill missing alt text on upload</span>
+                            </label>
                         </div>
                     </div>
                     <button id="imp-save-auto" class="imp-btn imp-btn-primary" style="margin-top:20px;" data-i18n="save_config">💾 Guardar configuració</button>
