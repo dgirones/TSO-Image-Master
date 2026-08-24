@@ -3,9 +3,9 @@ Contributors: deadko
 Donate link: https://ko-fi.com/deadko_cat
 Tags: image optimization, webp, media library, seo, pdf compression
 Requires at least: 5.9
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.9.1
+Stable tag: 1.9.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,7 +25,7 @@ TSO Image Master is a complete media management and image optimization plugin fo
 
 **PDF Compressor** — Reduce the file size of PDFs in the Media Library using GhostScript (recommended) or the Imagick PHP extension as a fallback. The original URL never changes.
 
-**Auto-Optimizer** — Automatically optimize every new image on upload using the configured format and quality. Uses a transient-based mechanism to ensure each image is processed only once and regenerations do not trigger re-optimization.
+**Auto-Optimizer** — Automatically optimize every new image on upload using the configured format and quality. Uses a transient-based mechanism to ensure each image is processed only once and regenerations do not trigger re-optimization. On WordPress 7.1, when Auto-Optimizer is enabled the plugin disables core client-side media processing so conversion uses the plugin's server-side pipeline, after thumbnail generation has finished.
 
 **History** — Full audit log of all operations performed by the plugin: optimizations, renames, SEO updates, PDF compressions, and reversions. Filterable by action type, date range, and filename. Configurable automatic cleanup.
 
@@ -36,7 +36,7 @@ TSO Image Master is a complete media management and image optimization plugin fo
 = Requirements =
 
 * PHP 7.4 or higher (tested up to 8.3)
-* WordPress 5.9 or higher (tested up to 7.0)
+* WordPress 5.9 or higher (tested up to 7.1)
 * PHP GD library with JPEG, PNG, GIF, and WebP support
 * GhostScript (optional, required for PDF compression)
 * Imagick PHP extension (optional, fallback for PDF compression)
@@ -103,6 +103,11 @@ This can happen with images that are already well-optimized, very small images, 
 3. Per-image Optimize modal with output format, resize, and replace-original options.
 
 == Changelog ==
+
+= 1.9.2 =
+* Improved: WordPress 7.1 compatibility (tested up to 7.1).
+* Fixed: Auto-Optimizer waits for the final attachment metadata pass so WordPress 7.1 client-side media uploads are converted once, with complete thumbnails.
+* Changed: when Auto-Optimizer is enabled, WordPress 7.1 client-side media processing is disabled so conversion uses the plugin's GD pipeline.
 
 = 1.9.1 =
 * Improved: empty folders under `uploads/tso-image-master/` are removed automatically after a backup is deleted (manual delete, revert, attachment delete, rogue scanner).
@@ -224,6 +229,9 @@ This can happen with images that are already well-optimized, very small images, 
 * Initial release.
 
 == Upgrade Notice ==
+
+= 1.9.2 =
+WordPress 7.1 compatibility: Auto-Optimizer now waits for the final metadata pass and uses the server-side pipeline when enabled.
 
 = 1.9.1 =
 Cleans up empty backup folders under uploads/tso-image-master after backup deletion; safer backup path validation.

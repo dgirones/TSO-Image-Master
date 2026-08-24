@@ -792,10 +792,10 @@ class TSOIMMA_Ajax_Handler {
         // ja no hauria de disparar-se (no hi ha transient de "pujada nova" per a
         // aquestes imatges). Però mantenim el remove/add com a segon nivell de protecció.
         $auto_optimizer_active = class_exists( 'TSOIMMA_Auto_Optimizer' )
-            && has_action( 'wp_generate_attachment_metadata', array( 'TSOIMMA_Auto_Optimizer', 'on_upload' ) );
+            && has_filter( 'wp_generate_attachment_metadata', array( 'TSOIMMA_Auto_Optimizer', 'on_upload' ) );
 
         if ( $auto_optimizer_active ) {
-            remove_action( 'wp_generate_attachment_metadata', array( 'TSOIMMA_Auto_Optimizer', 'on_upload' ), 20 );
+            remove_filter( 'wp_generate_attachment_metadata', array( 'TSOIMMA_Auto_Optimizer', 'on_upload' ), 20 );
         }
 
         foreach ( $all_rows as $id => $row ) {
@@ -865,7 +865,7 @@ class TSOIMMA_Ajax_Handler {
 
         // Restaurar l'auto-optimizer
         if ( $auto_optimizer_active ) {
-            add_action( 'wp_generate_attachment_metadata', array( 'TSOIMMA_Auto_Optimizer', 'on_upload' ), 20, 2 );
+            add_filter( 'wp_generate_attachment_metadata', array( 'TSOIMMA_Auto_Optimizer', 'on_upload' ), 20, 3 );
         }
 
         $scanned = count( $all_rows );

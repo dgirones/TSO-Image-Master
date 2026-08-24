@@ -17,10 +17,31 @@ class TSOIMMA_Auto_Optimizer {
         // ni cap altre procés intern o de plugins externs.
         add_action( 'add_attachment', array( __CLASS__, 'mark_new_upload' ) );
 
-        // wp_generate_attachment_metadata: s'executa tant en pujades noves COM en
-        // regeneracions. La comprovació del transient garanteix que NOMÉS processa
-        // pujades reals de l'usuari.
-        add_action( 'wp_generate_attachment_metadata', array( __CLASS__, 'on_upload' ), 20, 2 );
+        // wp_generate_attachment_metadata is a filter (WP 5.3+ passes $context).
+        // It runs for new uploads AND regenerations; the transient limits work to
+        // real user uploads. WP 7.1 client-side media fires 'create' then 'update'.
+        add_filter( 'wp_generate_attachment_metadata', array( __CLASS__, 'on_upload' ), 20, 3 );
+
+        // Keep Auto-Optimizer on the server-side GD pipeline. Client-side processing
+        // would generate thumbs in the browser while this plugin converts the file.
+        add_filter( 'wp_client_side_media_processing_enabled', array( __CLASS__, 'maybe_disable_client_side_media' ) );
+    }
+
+    /**
+     * Disable WordPress 7.1 client-side media processing while Auto-Optimizer is on.
+     *
+     * @param bool $enabled Whether core client-side processing is enabled.
+     * @return bool
+     */
+    public static function maybe_disable_client_side_media( $enabled ) {
+        if ( ! $enabled ) {
+            return false;
+        }
+        $settings = self::get_settings();
+        if ( ! empty( $settings['enabled'] ) ) {
+            return false;
+        }
+        return (bool) $enabled;
     }
 
     /**
@@ -29,16 +50,56 @@ class TSOIMMA_Auto_Optimizer {
      * quan l'usuari puja un fitxer nou. Mai es crida en regeneracions.
      */
     public static function mark_new_upload( $attachment_id ) {
-        // TTL 5 minuts: suficient per cobrir la generació de metadata posterior.
-        set_transient( self::upload_transient_key( $attachment_id ), '1', 300 );
+        // TTL 10 minutes: covers WP 7.1 client-side thumbnail sideloads + finalize.
+        set_transient( self::upload_transient_key( $attachment_id ), '1', 600 );
+    }
+
+    /**
+     * Whether this request is a REST API call (block editor / WP 7.1 media).
+     *
+     * @return bool
+     */
+    private static function is_rest_request() {
+        if ( function_exists( 'wp_is_serving_rest_request' ) ) {
+            return wp_is_serving_rest_request();
+        }
+        return defined( 'REST_REQUEST' ) && REST_REQUEST;
+    }
+
+    /**
+     * True when metadata is still incomplete (wait for the 'update' pass).
+     *
+     * WP 7.1 client-side media fires this filter with context 'create' before the
+     * browser sideloads sub-sizes, then again with 'update' on finalize. Optimizing
+     * on 'create' races those uploads and can leave mixed JPEG/WebP thumbnails.
+     *
+     * @param string $context 'create' or 'update'.
+     * @return bool
+     */
+    private static function should_defer_until_metadata_update( $context ) {
+        if ( 'update' === $context ) {
+            return false;
+        }
+        if ( ! function_exists( 'wp_is_client_side_media_processing_enabled' ) ) {
+            return false;
+        }
+        if ( ! wp_is_client_side_media_processing_enabled() ) {
+            return false;
+        }
+        return self::is_rest_request();
     }
 
     /**
      * S'executa quan WordPress genera la metadata d'un attachment.
      * Gracies al transient, NOMES optimitza si és una pujada nova real.
      * Qualsevol regeneració interna o externa és ignorada completament.
+     *
+     * @param array  $metadata      Attachment metadata.
+     * @param int    $attachment_id Attachment ID.
+     * @param string $context       'create' on first pass, 'update' after sub-sizes.
+     * @return array
      */
-    public static function on_upload( $metadata, $attachment_id ) {
+    public static function on_upload( $metadata, $attachment_id, $context = 'create' ) {
         // FILTRE PRINCIPAL: és una pujada nova real?
         // Si no existeix el transient, no és una pujada nova de l'usuari,
         // sino una regeneració interna/externa. Retornar sense fer res.
@@ -48,8 +109,18 @@ class TSOIMMA_Auto_Optimizer {
             return $metadata;
         }
 
+        // Keep the transient until the final metadata pass (WP 7.1 client-side
+        // media, or any other deferred sub-size generation).
+        if ( self::should_defer_until_metadata_update( $context ) ) {
+            return $metadata;
+        }
+
         // Consumir el transient immediatament: una sola optimització per upload.
         delete_transient( self::upload_transient_key( $attachment_id ) );
+
+        if ( get_post_meta( $attachment_id, '_tso_im_auto_optimized', true ) ) {
+            return $metadata;
+        }
 
         // Comprovar que l'auto-optimització està activada
         $settings = self::get_settings();

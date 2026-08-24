@@ -4,7 +4,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: TSO Image Master 1.9.1\n"
+"Project-Id-Version: TSO Image Master 1.9.2\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/tso-image-master\n"
 "POT-Creation-Date: 2026-04-17 21:10+0000\n"
 "PO-Revision-Date: 2026-05-22 12:00+0000\n"
