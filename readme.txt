@@ -104,11 +104,11 @@ This can happen with images that are already well-optimized, very small images, 
 
 == Changelog ==
 
-For the full release history, see [CHANGELOG.md](https://github.com/dgirones/TSO-Image-Master/blob/main/CHANGELOG.md).
+For the full release history, see CHANGELOG.txt in the plugin folder.
 
 = 1.9.2 =
 * Improved: WordPress 7.1 compatibility (readme and tested declaration).
-* Docs: older changelog entries moved to `CHANGELOG.md`.
+* Docs: older changelog entries moved to CHANGELOG.txt.
 
 = 1.9.1 =
 * Improved: empty folders under `uploads/tso-image-master/` are removed automatically after a backup is deleted (manual delete, revert, attachment delete, rogue scanner).
