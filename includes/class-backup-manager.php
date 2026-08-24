@@ -137,9 +137,13 @@ class TSOIMMA_Backup_Manager {
 			return $files;
 		}
 
-		$iterator = new RecursiveIteratorIterator(
-			new RecursiveDirectoryIterator( $base_dir, FilesystemIterator::SKIP_DOTS )
-		);
+		try {
+			$iterator = new RecursiveIteratorIterator(
+				new RecursiveDirectoryIterator( $base_dir, FilesystemIterator::SKIP_DOTS )
+			);
+		} catch ( UnexpectedValueException $e ) {
+			return $files;
+		}
 
 		foreach ( $iterator as $file_info ) {
 			if ( ! $file_info->isFile() ) {
@@ -172,6 +176,9 @@ class TSOIMMA_Backup_Manager {
 			return false;
 		}
 		wp_delete_file( $resolved );
+		if ( file_exists( $resolved ) ) {
+			return false;
+		}
 		TSOIMMA_Optimizer::prune_empty_backup_dirs( $resolved );
 		return true;
 	}

@@ -352,6 +352,8 @@ class TSOIMMA_Ajax_Handler {
             'quality' => absint( $_POST['quality'] ?? 82 ),
             // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized in save_settings()
             'source_formats' => isset( $_POST['source_formats'] ) ? (array) wp_unslash( $_POST['source_formats'] ) : array(),
+            'fill_alt_on_upload' => ! empty( $_POST['fill_alt_on_upload'] ),
+            'skip_small_kb'      => absint( $_POST['skip_small_kb'] ?? 0 ),
         ) );
         wp_send_json_success( $settings );
     }

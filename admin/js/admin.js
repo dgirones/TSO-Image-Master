@@ -56,6 +56,7 @@
         loadAutoSettings();
         var deepId = parseInt(new URLSearchParams(window.location.search).get('tsoimma_id') || '0', 10);
         if (deepId > 0) {
+            $('.imp-tab[data-tab="optimize"]').trigger('click');
             setTimeout(function() { openModal(deepId, 'optimize'); }, 400);
         }
     });
@@ -1334,6 +1335,9 @@
             });
 
             renderQueueStatus(data.queue || {});
+            if (data.queue && data.queue.running) {
+                pollQueueStatus();
+            }
         }, function(err) {
             $stats.html('<div class="imp-error">' + escHtml(err) + '</div>');
         });
@@ -1546,6 +1550,7 @@
                 ids: ids, format: format, quality: quality, replace: replace
             }, function(data) {
                 $('#imp-bulk-optimize').prop('disabled', false);
+                $('#imp-bulk-progress').hide();
                 addLog('info', '✓ ' + total + ' ' + uiText('dash_queue_queued_n', 'images queued.'));
                 renderQueueStatus(data);
                 $('.imp-tab[data-tab="dashboard"]').trigger('click');

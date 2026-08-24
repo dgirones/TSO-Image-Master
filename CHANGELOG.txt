@@ -2,6 +2,15 @@
 
 All notable changes to TSO Image Master are documented in this file. Recent releases (1.9.x) are also summarized in readme.txt for WordPress.org.
 
+= 1.10.1 =
+
+* Fixed: Auto settings save now persists fill-alt-on-upload and skip-small-file options.
+* Fixed: Media Library bulk optimize hook names, image-only filtering, and success notice on upload screen.
+* Fixed: Queue status excludes cancelled jobs; skips duplicate pending attachment IDs.
+* Fixed: AVIF load/save fallback, backup delete verification, and deep-link opens Optimize tab.
+* Improved: Dashboard alt filter and duplicate scan use fast reference checks (avoids timeouts).
+* Improved: Queue polling on dashboard load; backup directory scan handles permission errors.
+
 = 1.10.0 =
 
 * Added: Background job queue for bulk optimize (WP-Cron, 5 images per batch).

@@ -5,7 +5,7 @@ Tags: image optimization, webp, media library, seo, pdf compression
 Requires at least: 5.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.10.0
+Stable tag: 1.10.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -106,6 +106,14 @@ This can happen with images that are already well-optimized, very small images, 
 
 For the full release history, see CHANGELOG.txt in the plugin folder.
 
+= 1.10.1 =
+* Fixed: Auto settings save now persists fill-alt-on-upload and skip-small-file options.
+* Fixed: Media Library bulk optimize hook names, image-only filtering, and success notice on upload screen.
+* Fixed: Queue status excludes cancelled jobs; skips duplicate pending attachment IDs.
+* Fixed: AVIF load/save fallback, backup delete verification, and deep-link opens Optimize tab.
+* Improved: Dashboard alt filter and duplicate scan use fast reference checks (avoids timeouts).
+* Improved: Queue polling on dashboard load; backup directory scan handles permission errors.
+
 = 1.10.0 =
 * Added: Background job queue for bulk optimize (WP-Cron, 5 images per batch).
 * Added: TSO backup retention (max age + max total size) with daily purge cron.
@@ -142,6 +150,9 @@ For the full release history, see CHANGELOG.txt in the plugin folder.
 * Added: index.php in plugin subdirectories; upgrade hook reschedules history cron on version bump.
 
 == Upgrade Notice ==
+
+= 1.10.1 =
+Bugfix release: queue, Media Library bulk action, auto settings, AVIF, and dashboard performance fixes.
 
 = 1.10.0 =
 Major release: background bulk queue, backup retention, AVIF, duplicate scanner, auto-alt on upload, and Media Library integration.

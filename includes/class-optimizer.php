@@ -1840,6 +1840,8 @@ class TSOIMMA_Optimizer {
                 return function_exists( 'imagecreatefromgif' ) ? @imagecreatefromgif( $path ) : false;
             case 'image/webp':
                 return function_exists( 'imagecreatefromwebp' ) ? @imagecreatefromwebp( $path ) : false;
+            case 'image/avif':
+                return function_exists( 'imagecreatefromavif' ) ? @imagecreatefromavif( $path ) : false;
             case 'image/bmp':
             case 'image/x-ms-bmp':
             case 'image/x-bmp':
@@ -2077,7 +2079,7 @@ class TSOIMMA_Optimizer {
     private static function get_extension( $output_format, $original_ext ) {
         if ( $output_format === 'original' ) {
             $ext = strtolower( $original_ext );
-            return in_array( $ext, array( 'jpg', 'jpeg', 'png', 'gif', 'webp' ), true ) ? $ext : 'jpg';
+            return in_array( $ext, array( 'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif' ), true ) ? $ext : 'jpg';
         }
         if ( $output_format === 'webp' )     return 'webp';
         if ( $output_format === 'avif' )     return 'avif';

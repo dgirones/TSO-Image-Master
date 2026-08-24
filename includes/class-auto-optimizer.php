@@ -100,9 +100,12 @@ class TSOIMMA_Auto_Optimizer {
             return $metadata;
         }
 
-        // Verificar suport WebP si cal
+        // Verificar suport WebP/AVIF si cal
         if ( 'webp' === $format && ! TSOIMMA_Optimizer::webp_supported() ) {
             $format = 'jpg';
+        }
+        if ( 'avif' === $format && ! TSOIMMA_Optimizer::avif_supported() ) {
+            $format = TSOIMMA_Optimizer::webp_supported() ? 'webp' : 'jpg';
         }
 
         // Optimitzar imatge principal.

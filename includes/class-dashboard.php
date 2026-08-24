@@ -51,10 +51,7 @@ class TSOIMMA_Dashboard {
 			$ids = array_values(
 				array_filter(
 					$ids,
-					function ( $attachment_id ) {
-						$used = TSOIMMA_Image_Manager::get_used_in_posts( $attachment_id );
-						return ! empty( $used );
-					}
+					array( 'TSOIMMA_Image_Manager', 'is_attachment_referenced' )
 				)
 			);
 		}
@@ -281,9 +278,13 @@ class TSOIMMA_Dashboard {
 			return $stats;
 		}
 
-		$iterator = new RecursiveIteratorIterator(
-			new RecursiveDirectoryIterator( $base_dir, FilesystemIterator::SKIP_DOTS )
-		);
+		try {
+			$iterator = new RecursiveIteratorIterator(
+				new RecursiveDirectoryIterator( $base_dir, FilesystemIterator::SKIP_DOTS )
+			);
+		} catch ( UnexpectedValueException $e ) {
+			return $stats;
+		}
 
 		foreach ( $iterator as $file_info ) {
 			if ( ! $file_info->isFile() ) {

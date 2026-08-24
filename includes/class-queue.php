@@ -32,9 +32,15 @@ class TSOIMMA_Queue {
 		$format  = sanitize_key( $format );
 		$quality = min( 100, max( 50, absint( $quality ) ) );
 		$queue   = self::get_queue();
+		$pending = array();
+		foreach ( $queue['jobs'] as $job ) {
+			if ( isset( $job['status'], $job['attachment_id'] ) && 'pending' === $job['status'] ) {
+				$pending[ absint( $job['attachment_id'] ) ] = true;
+			}
+		}
 
 		foreach ( array_map( 'absint', (array) $attachment_ids ) as $attachment_id ) {
-			if ( $attachment_id <= 0 ) {
+			if ( $attachment_id <= 0 || isset( $pending[ $attachment_id ] ) ) {
 				continue;
 			}
 			$queue['jobs'][] = array(
@@ -67,8 +73,13 @@ class TSOIMMA_Queue {
 		$pending = 0;
 		$done    = 0;
 		$errors  = 0;
+		$total   = 0;
 		foreach ( $jobs as $job ) {
 			$status = isset( $job['status'] ) ? (string) $job['status'] : 'pending';
+			if ( 'cancelled' === $status ) {
+				continue;
+			}
+			++$total;
 			if ( 'pending' === $status ) {
 				++$pending;
 			} elseif ( 'error' === $status ) {
@@ -79,7 +90,7 @@ class TSOIMMA_Queue {
 		}
 
 		return array(
-			'total'   => count( $jobs ),
+			'total'   => $total,
 			'pending' => $pending,
 			'done'    => $done,
 			'errors'  => $errors,

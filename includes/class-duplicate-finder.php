@@ -55,7 +55,7 @@ class TSOIMMA_Duplicate_Finder {
 				'filename' => basename( $file_path ),
 				'url'      => wp_get_attachment_url( $attachment_id ),
 				'thumb'    => wp_get_attachment_image_url( $attachment_id, 'thumbnail' ),
-				'used_in'  => count( TSOIMMA_Image_Manager::get_used_in_posts( $attachment_id ) ),
+				'used_in'  => TSOIMMA_Image_Manager::is_attachment_referenced( $attachment_id ) ? 1 : 0,
 			);
 		}
 

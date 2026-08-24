@@ -524,6 +524,21 @@ class TSOIMMA_Image_Manager {
     }
 
     /**
+     * Fast check whether an attachment is referenced anywhere (inverse of orphan check).
+     *
+     * @param int $attachment_id Attachment ID.
+     * @return bool
+     */
+    public static function is_attachment_referenced( $attachment_id ) {
+        $attachment_id = absint( $attachment_id );
+        if ( $attachment_id <= 0 ) {
+            return false;
+        }
+
+        return ! TSOIMMA_Orphan_Finder::is_orphan( $attachment_id );
+    }
+
+    /**
      * Converteix mime type a extensió curta.
      */
     private static function mime_to_ext( $mime ) {
