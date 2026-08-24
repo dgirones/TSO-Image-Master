@@ -111,10 +111,11 @@ class TSOIMMA_Media_Library {
 			return;
 		}
 
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only admin notice flag.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only admin notice flag after capability + screen check.
 		if ( ! isset( $_GET['tsoimma_queued'] ) ) {
 			return;
 		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only admin notice flag after capability + screen check.
 		$count = absint( wp_unslash( $_GET['tsoimma_queued'] ) );
 		if ( $count <= 0 ) {
 			echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'No images were queued for optimization.', 'tso-image-master' ) . '</p></div>';

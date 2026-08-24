@@ -6,10 +6,12 @@ All notable changes to TSO Image Master are documented in this file. Recent rele
 
 * Added: Background job queue for bulk optimize (WP-Cron, 5 images per batch).
 * Added: TSO backup retention (max age + max total size) with daily purge cron.
-* Added: AVIF output format when GD supports `imageavif()`.
+* Added: AVIF and PNG output formats (AVIF when GD supports `imageavif()`).
 * Added: Duplicate image scanner (MD5 groups) on Overview tab.
 * Added: Auto-upload options — skip small WebP/AVIF files (WP 7.1) and fill missing alt on upload.
 * Added: Media Library row action, bulk queue action, and attachment box note.
+* Added: Per-page selector (21/35/49/70/105) on Optimize and SEO grids.
+* Improved: History shows SEO field details (title/alt/caption/description); History tab moved to end of nav.
 * Improved: Orphan detection scans FSE templates/parts/patterns, term meta, and menu items.
 * Improved: Cache purge also clears Breeze, SiteGround Optimizer, and Autoptimize when present.
 * Fixed: Auto settings save persists fill-alt-on-upload and skip-small-file options.
@@ -18,6 +20,15 @@ All notable changes to TSO Image Master are documented in this file. Recent rele
 * Fixed: AVIF load/save fallback, backup delete verification, and deep-link opens Optimize tab.
 * Improved: Dashboard alt filter and duplicate scan use fast reference checks (avoids timeouts).
 * Improved: Queue polling on dashboard load; backup directory scan handles permission errors.
+* Fixed: Queue lock + per-job status writes (no lost enqueue, no double-process, stuck reclaim).
+* Fixed: Backup retention purge clears related attachment meta; purge-now no-op when retention is off.
+* Fixed: AVIF thumbnail cleanup and truecolor encode; orphan-meta repair finds `.avif`.
+* Fixed: Fill-alt-on-upload works without auto-optimize; weak-alt no longer fights humanized fills.
+* Fixed: Removed global `wp_cache_flush()` from cache helper (plugin caches only).
+* Fixed: Uninstall removes all backup meta keys and queue lock option.
+* Fixed: History no longer shows attachment title as SEO title on alt-only updates.
+* Fixed: PNG compression level clamped to 0–9; invalid output formats normalized.
+* Fixed: Catalan/Spanish strings for per-page selector and format labels.
 
 = 1.9.3 =
 

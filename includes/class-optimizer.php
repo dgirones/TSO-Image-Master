@@ -19,6 +19,7 @@ class TSOIMMA_Optimizer {
     ) {
         $attachment_id   = absint( $attachment_id );
         $output_format   = self::normalize_output_format( $output_format );
+        $quality         = min( 100, max( 1, absint( $quality ) ) );
         $file_path       = get_attached_file( $attachment_id );
 
         if ( ! $file_path || ! file_exists( $file_path ) ) {
@@ -375,7 +376,7 @@ class TSOIMMA_Optimizer {
                 }
                 // Eliminar variants d'extensió alternativa (seguretat addicional)
                 $pi_t = pathinfo( $thumb_path );
-                foreach ( array( 'webp', 'jpg', 'jpeg', 'png', 'gif' ) as $try_ext ) {
+                foreach ( array( 'webp', 'jpg', 'jpeg', 'png', 'gif', 'avif' ) as $try_ext ) {
                     if ( strtolower( isset( $pi_t['extension'] ) ? $pi_t['extension'] : '' ) === $try_ext ) {
                         continue;
                     }
@@ -1934,6 +1935,13 @@ class TSOIMMA_Optimizer {
      */
     private static function normalize_output_format( $output_format ) {
         $output_format = sanitize_key( (string) $output_format );
+        $allowed       = array( 'webp', 'jpg', 'jpeg', 'avif', 'png', 'original' );
+        if ( ! in_array( $output_format, $allowed, true ) ) {
+            $output_format = 'webp';
+        }
+        if ( 'jpeg' === $output_format ) {
+            $output_format = 'jpg';
+        }
         if ( 'webp' === $output_format && ! self::webp_supported() ) {
             return 'jpg';
         }
@@ -1957,7 +1965,7 @@ class TSOIMMA_Optimizer {
             return false;
         }
         $image = self::prepare_image_for_output( $image, $ext );
-        if ( 'webp' === strtolower( (string) $ext ) ) {
+        if ( in_array( strtolower( (string) $ext ), array( 'webp', 'avif', 'png' ), true ) ) {
             $image = self::ensure_truecolor_image( $image, true );
         }
         $saved = self::save_image( $image, $path, $ext, $quality );
@@ -2046,7 +2054,9 @@ class TSOIMMA_Optimizer {
             case 'jpeg':
                 return imagejpeg( $image, $path, $quality );
             case 'png':
-                $png_q = (int) round( ( 100 - $quality ) / 10 );
+                // imagepng() compression level must be 0–9 (quality 100→0, quality 0→9).
+                $png_q = (int) round( ( 100 - max( 0, min( 100, (int) $quality ) ) ) / 10 );
+                $png_q = max( 0, min( 9, $png_q ) );
                 return imagepng( $image, $path, $png_q );
             case 'gif':
                 return imagegif( $image, $path );
@@ -2084,6 +2094,7 @@ class TSOIMMA_Optimizer {
         if ( $output_format === 'webp' )     return 'webp';
         if ( $output_format === 'avif' )     return 'avif';
         if ( $output_format === 'jpg' )      return 'jpg';
+        if ( $output_format === 'png' )      return 'png';
         return strtolower( $original_ext );
     }
 

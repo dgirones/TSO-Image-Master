@@ -171,5 +171,6 @@ function tsoimma_deactivate() {
     wp_clear_scheduled_hook( 'tsoimma_process_thumbnails' );
     wp_clear_scheduled_hook( 'tsoimma_process_queue' );
     wp_clear_scheduled_hook( 'tsoimma_backup_purge' );
+    delete_option( 'tsoimma_queue_lock' );
 }
 register_deactivation_hook( __FILE__, 'tsoimma_deactivate' );

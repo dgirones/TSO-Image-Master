@@ -1,7 +1,7 @@
 === TSO Image Master ===
 Contributors: deadko
 Donate link: https://ko-fi.com/deadko_cat
-Tags: image optimization, webp, media library, seo, pdf compression
+Tags: image optimization, webp, avif, media library, pdf compression
 Requires at least: 5.9
 Tested up to: 7.1
 Requires PHP: 7.4
@@ -9,36 +9,40 @@ Stable tag: 1.9.5
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Complete image optimization suite: convert to WebP/JPG, resize, compress PDFs, find orphans, fix broken URLs.
+Complete image optimization suite: WebP/AVIF/JPG/PNG, PDFs, orphans, SEO, queue, and URL repair.
 
 == Description ==
 
 TSO Image Master is a complete media management and image optimization plugin for WordPress. It provides the following features from a single admin screen:
 
-**Image Optimizer** — Convert images to WebP or JPG, set quality and dimensions, replace originals and automatically update all content links. Supports bulk operations. Requires the PHP GD library with WebP support.
+**Overview** — Site health metrics (image count, missing alt, TSO backups, space saved, server engines). Bulk-fill missing or weak alt text. Scan for duplicate image files. Configure backup retention and watch the background optimize queue.
 
-**Orphaned Image Finder** — Detects images in the Media Library that are not referenced in any post, page, widget, meta field, or theme customizer setting. Supports paginated batch scanning to avoid timeouts on large sites.
+**Image Optimizer** — Convert images to WebP, AVIF (when GD supports it), JPG, or PNG. Set quality and dimensions, replace originals, and update content links. Bulk optimize runs in the background via WP-Cron (5 images per batch). Choose how many images to show per page (21–105). Requires PHP GD (WebP strongly recommended).
 
-**Rogue File Scanner** — Scans the uploads directory for physical files that WordPress does not know about: double-extension files (e.g. image.jpg.webp), plugin backup files, temporary files, and other unregistered images that waste disk space.
+**Orphaned Image Finder** — Detects Media Library images that are not referenced in posts, pages, widgets, meta, theme Customizer settings, FSE templates/parts/patterns, term meta, or menu items. Paginated batch scanning helps avoid timeouts on large sites.
+
+**Rogue File Scanner** — Scans the uploads directory for physical files WordPress does not know about: double-extension files (e.g. image.jpg.webp), plugin backup files, temporary files, and other unregistered images that waste disk space.
 
 **SEO & File Names** — Edit title, alt text, caption, and description for any image. Rename files using SEO-friendly slugs (lowercase, no accents, hyphens instead of spaces). All internal links are updated automatically.
 
-**PDF Compressor** — Reduce the file size of PDFs in the Media Library using GhostScript (recommended) or the Imagick PHP extension as a fallback. The original URL never changes.
+**PDF Compressor** — Reduce PDF file size in the Media Library using GhostScript (recommended) or the Imagick PHP extension as a fallback. The original URL never changes.
 
-**Auto-Optimizer** — Automatically optimize every new image on upload using the configured format and quality. Uses a transient-based mechanism to ensure each image is processed only once and regenerations do not trigger re-optimization.
+**Auto-Optimizer** — Automatically optimize new uploads with your chosen format and quality. Optional: skip already-small WebP/AVIF files, and fill missing alt text on upload (even when auto-optimize is off). Each image is processed only once so regenerations do not re-trigger optimization.
 
-**History** — Full audit log of all operations performed by the plugin: optimizations, renames, SEO updates, PDF compressions, and reversions. Filterable by action type, date range, and filename. Configurable automatic cleanup.
+**Media Library** — Row action and bulk action to queue images for background optimization, plus a short note on the attachment screen.
 
-**URL Fixer** — Scans all public content types (posts, pages, and custom post types such as portfolio or slides) for broken image URLs caused by format conversions (e.g. references to .jpg files that have been converted to .webp). Renders blocks and shortcodes when needed so embedded images are detected. Automatically finds the correct replacement and updates the database in one click.
+**History** — Audit log of optimizations, renames, SEO updates (with field details), PDF compressions, and related actions. Filter by action type, date range, and filename. Configurable automatic cleanup.
 
-**Cache Compatibility** — After any operation that modifies file URLs or content, the plugin automatically purges LiteSpeed Cache, WP Rocket, W3 Total Cache, and WP Fastest Cache when they are active.
+**URL Fixer** — Scans public content (posts, pages, and custom post types) for broken image URLs after format conversions (e.g. `.jpg` still referenced after conversion to `.webp`). Renders blocks and shortcodes when needed so embedded images are detected. Finds replacements and updates the database in one click; can also remove broken references when no fix exists.
+
+**Cache Compatibility** — After operations that change file URLs or content, the plugin purges LiteSpeed Cache, WP Rocket, W3 Total Cache, WP Fastest Cache, Breeze, SiteGround Optimizer, and Autoptimize when they are active.
 
 = Requirements =
 
 * PHP 7.4 or higher (tested up to 8.3)
 * WordPress 5.9 or higher (tested up to 7.1)
-* PHP GD library with JPEG, PNG, GIF, and WebP support
-* GhostScript (optional, required for PDF compression)
+* PHP GD library with JPEG, PNG, GIF, and WebP support (AVIF output needs GD with `imageavif()` / `imagecreatefromavif()`)
+* GhostScript (optional, required for best PDF compression)
 * Imagick PHP extension (optional, fallback for PDF compression)
 
 = Source Code =
@@ -68,7 +72,11 @@ If you would like to contribute a translation into another language, you can do 
 
 = Does the plugin modify original image files? =
 
-Only if you check the "Replace original" option. When replacing, the plugin saves a backup copy in a dedicated folder inside your uploads directory: `wp-content/uploads/tso-image-master/`. The backup file is named `originalname_tso_im_backup.ext`. You can revert to the backup at any time from the editor modal, or delete it to free disk space. Backup files are never stored inside the plugin folder.
+Only if you check the "Replace original" option. When replacing, the plugin saves a backup copy under `wp-content/uploads/tso-image-master/` (mirroring your upload year/month folders when applicable). Backup files use a `_tso_im_backup` name pattern. You can revert from the editor modal or delete backups to free disk space. Empty backup folders are removed automatically after deletion. Backups are never stored inside the plugin folder.
+
+= Can backups be deleted automatically? =
+
+Yes. On the Overview tab you can set backup retention by maximum age (days) and/or maximum total size (MB). A daily cron purges old or oversized TSO backups. Set both to `0` to disable automatic purge. You can also run **Purge now** from Overview.
 
 = What happens to my images if I uninstall the plugin? =
 
@@ -78,9 +86,21 @@ Uninstalling the plugin removes the following data:
 * **Backup folder:** the `wp-content/uploads/tso-image-master/` folder and all backup copies inside it are deleted.
 * **Original images:** your actual image files in the uploads folder are **never** deleted. Only the plugin-created backup copies are removed.
 
+= Which output formats are supported? =
+
+**WebP**, **JPG**, **PNG**, and **keep original**. **AVIF** appears when your PHP GD build supports AVIF read/write. If AVIF or WebP is requested but unavailable, the plugin falls back to a supported format.
+
+= Why is AVIF disabled or missing? =
+
+AVIF needs PHP GD compiled with AVIF support (`imageavif` / `imagecreatefromavif`). Many hosts still lack this. Check **Overview → server engines** (GD AVIF). WebP remains the recommended default for broad browser and host support.
+
+= How does bulk / Media Library optimize work? =
+
+Selected images are added to a background queue processed by WP-Cron (about 5 images per batch). Progress appears on the Overview tab; you can cancel pending jobs. You can also queue from the Media Library row action or bulk actions.
+
 = Does the plugin work with caching plugins? =
 
-Yes. After any operation that modifies content or file URLs, the plugin automatically calls the purge functions of LiteSpeed Cache, WP Rocket, W3 Total Cache, and WP Fastest Cache when they are installed and active.
+Yes. After operations that modify content or file URLs, the plugin calls purge helpers for LiteSpeed Cache, WP Rocket, W3 Total Cache, WP Fastest Cache, Breeze, SiteGround Optimizer, and Autoptimize when they are installed and active.
 
 = Can I use the plugin on a multisite installation? =
 
@@ -88,11 +108,19 @@ The plugin has not been explicitly tested on multisite. It is designed for stand
 
 = The PDF compressor does not work. What should I do? =
 
-PDF compression requires GhostScript or the Imagick PHP extension to be available on your server. The plugin indicates which engines are available at the top of the PDF tab. Contact your hosting provider to install GhostScript for best results.
+PDF compression requires GhostScript or the Imagick PHP extension on your server. The Overview and PDF areas indicate which engines are available. Contact your hosting provider to install GhostScript for best results.
 
 = I optimized an image and the new format weighs more than the original. What happened? =
 
-This can happen with images that are already well-optimized, very small images, or images with a lot of transparency or detail. The plugin will show a warning in this case. You can revert to the original using the backup.
+This can happen with images that are already well-optimized, very small images, or images with a lot of transparency or detail. The plugin will show a warning in this case. You can revert to the original using the backup. On Auto-Optimizer you can optionally skip WebP/AVIF files already under a size threshold (KB).
+
+= How does fill missing alt text work? =
+
+On Overview you can bulk-fill useful alt text for selected images (from title or humanized filename). On Auto-Optimizer you can enable fill-on-upload for new images that lack alt text. Fill-on-upload can run even when auto-optimize is disabled. Generic or weak alt values may be replaced when a better suggestion exists; humanized filename fills are treated as useful.
+
+= What does the duplicate scanner do? =
+
+On Overview, **Scan duplicates** groups Media Library files with the same MD5 hash so you can spot wasted space. It does not delete files automatically; review groups before removing anything.
 
 == Screenshots ==
 
@@ -109,10 +137,12 @@ For the full release history, see CHANGELOG.txt in the plugin folder.
 = 1.9.5 =
 * Added: Background job queue for bulk optimize (WP-Cron, 5 images per batch).
 * Added: TSO backup retention (max age + max total size) with daily purge cron.
-* Added: AVIF output format when GD supports `imageavif()`.
+* Added: AVIF and PNG output formats (AVIF when GD supports `imageavif()`).
 * Added: Duplicate image scanner (MD5 groups) on Overview tab.
 * Added: Auto-upload options — skip small WebP/AVIF files (WP 7.1) and fill missing alt on upload.
 * Added: Media Library row action, bulk queue action, and attachment box note.
+* Added: Per-page selector (21/35/49/70/105) on Optimize and SEO grids.
+* Improved: History shows SEO field details (title/alt/caption/description); History tab moved to end of nav.
 * Improved: Orphan detection scans FSE templates/parts/patterns, term meta, and menu items.
 * Improved: Cache purge also clears Breeze, SiteGround Optimizer, and Autoptimize when present.
 * Fixed: Auto settings save persists fill-alt-on-upload and skip-small-file options.
@@ -121,6 +151,13 @@ For the full release history, see CHANGELOG.txt in the plugin folder.
 * Fixed: AVIF load/save fallback, backup delete verification, and deep-link opens Optimize tab.
 * Improved: Dashboard alt filter and duplicate scan use fast reference checks (avoids timeouts).
 * Improved: Queue polling on dashboard load; backup directory scan handles permission errors.
+* Fixed: Queue lock + per-job status writes (no lost enqueue, no double-process, stuck reclaim).
+* Fixed: Backup retention purge clears related attachment meta; purge-now no-op when retention is off.
+* Fixed: AVIF thumbnail cleanup and truecolor encode; orphan-meta repair finds `.avif`.
+* Fixed: Fill-alt-on-upload works without auto-optimize; weak-alt no longer fights humanized fills.
+* Fixed: Uninstall removes all backup meta keys and queue lock option.
+* Fixed: History no longer shows attachment title as SEO title on alt-only updates.
+* Fixed: PNG compression level clamped to 0–9; invalid output formats normalized.
 
 = 1.9.3 =
 * Added: Overview dashboard tab with site health metrics (images, missing alt, backups, space saved, engines).
@@ -150,7 +187,7 @@ For the full release history, see CHANGELOG.txt in the plugin folder.
 == Upgrade Notice ==
 
 = 1.9.5 =
-Queue, backup retention, AVIF, duplicate scanner, Media Library integration, and related bug fixes.
+Queue, backup retention, AVIF/PNG output, duplicate scanner, Media Library integration, history SEO details, and related bug fixes.
 
 = 1.9.3 =
 New Overview tab: health metrics plus bulk alt-text fill for images missing accessible alt.

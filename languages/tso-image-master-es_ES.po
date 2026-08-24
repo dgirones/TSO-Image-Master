@@ -536,6 +536,39 @@ msgstr "Rellenar alt ausente al subir"
 msgid "AVIF"
 msgstr "AVIF"
 
+msgid "PNG"
+msgstr "PNG"
+
+msgid "WebP (recommended)"
+msgstr "WebP (recomendado)"
+
+msgid "Keep original format"
+msgstr "Mantener formato original"
+
+msgid "Keep current format"
+msgstr "Mantener formato actual"
+
+msgid "📄 21 per page"
+msgstr "📄 21 / página"
+
+msgid "📄 35 per page"
+msgstr "📄 35 / página"
+
+msgid "📄 49 per page"
+msgstr "📄 49 / página"
+
+msgid "📄 70 per page"
+msgstr "📄 70 / página"
+
+msgid "📄 105 per page"
+msgstr "📄 105 / página"
+
+msgid "Bulk fill"
+msgstr "Rellenado masivo"
+
+msgid "On upload"
+msgstr "Al subir"
+
 msgid "Attachment %d: could not build alt text."
 msgstr "Adjunto %d: no se pudo generar el texto alt."
 

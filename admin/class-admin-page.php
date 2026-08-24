@@ -173,7 +173,9 @@ class TSOIMMA_Admin_Page {
                 'dash_auto_label'       => __( 'Auto-optimize', 'tso-image-master' ),
                 'dash_auto_status_on'   => __( 'ON', 'tso-image-master' ),
                 'dash_auto_status_off'  => __( 'OFF', 'tso-image-master' ),
-                'dash_auto_format_sub'  => __( 'Output format: %s', 'tso-image-master' ),
+                'dash_auto_format_sub'  =>
+                    /* translators: %s: output format name (e.g. WebP, AVIF, JPG). */
+                    __( 'Output format: %s', 'tso-image-master' ),
                 'dash_auto_disabled_hint' => __( 'Disabled — enable in Auto tab', 'tso-image-master' ),
                 'dash_alt_title'        => __( 'Images without alt (or generic alt)', 'tso-image-master' ),
                 'dash_alt_desc'         => __( 'Suggests alt from title or filename. The «Suggested alt» column shows what will be written. Does not overwrite useful existing alt text.', 'tso-image-master' ),
@@ -216,6 +218,7 @@ class TSOIMMA_Admin_Page {
                 'dash_backup_days'      => __( 'Keep backups (days)', 'tso-image-master' ),
                 'dash_backup_max'       => __( 'Max total size (MB, 0 = unlimited)', 'tso-image-master' ),
                 'dash_backup_purge'     => __( 'Purge now', 'tso-image-master' ),
+                'dash_backup_purge_noop'=> __( 'Retention is disabled (0 days and 0 MB). Nothing to purge.', 'tso-image-master' ),
                 'dash_dup_title'        => __( 'Duplicate images', 'tso-image-master' ),
                 'dash_dup_scan'         => __( 'Scan duplicates', 'tso-image-master' ),
                 'dash_dup_none'         => __( 'No duplicate groups found.', 'tso-image-master' ),
@@ -225,6 +228,17 @@ class TSOIMMA_Admin_Page {
                 'auto_skip_kb_label'    => __( 'Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)', 'tso-image-master' ),
                 'auto_fill_alt_label'   => __( 'Fill missing alt text on upload', 'tso-image-master' ),
                 'fmt_avif'              => __( 'AVIF', 'tso-image-master' ),
+                'fmt_png'               => __( 'PNG', 'tso-image-master' ),
+                'fmt_webp'              => __( 'WebP (recommended)', 'tso-image-master' ),
+                'fmt_keep'              => __( 'Keep original format', 'tso-image-master' ),
+                'fmt_keep_current'      => __( 'Keep current format', 'tso-image-master' ),
+                'per_page_21'           => __( '📄 21 per page', 'tso-image-master' ),
+                'per_page_35'           => __( '📄 35 per page', 'tso-image-master' ),
+                'per_page_49'           => __( '📄 49 per page', 'tso-image-master' ),
+                'per_page_70'           => __( '📄 70 per page', 'tso-image-master' ),
+                'per_page_105'          => __( '📄 105 per page', 'tso-image-master' ),
+                'hist_seo_bulk'         => __( 'Bulk fill', 'tso-image-master' ),
+                'hist_seo_auto'         => __( 'On upload', 'tso-image-master' ),
             ),
         ) );
     }
@@ -275,11 +289,44 @@ class TSOIMMA_Admin_Page {
                 'label' => 'JPG',
             ),
             array(
+                'value' => 'png',
+                'label' => 'PNG',
+                'i18n'  => 'fmt_png',
+            ),
+            array(
                 'value' => 'original',
                 'label' => $keep_label,
                 'i18n'  => $keep_i18n,
             ),
         );
+    }
+
+    /**
+     * Per-page options for image grids (multiples of 7 for the 7-column layout).
+     *
+     * @param string $selected Selected value.
+     * @return array<int, array<string, mixed>>
+     */
+    private static function per_page_options( $selected = '35' ) {
+        $selected = (string) $selected;
+        // Default labels in Catalan (UI markup language); JS i18n switches CA/ES/EN.
+        $map      = array(
+            '21'  => '📄 21 / pàgina',
+            '35'  => '📄 35 / pàgina',
+            '49'  => '📄 49 / pàgina',
+            '70'  => '📄 70 / pàgina',
+            '105' => '📄 105 / pàgina',
+        );
+        $options = array();
+        foreach ( $map as $value => $label ) {
+            $options[] = array(
+                'value'    => $value,
+                'label'    => $label,
+                'i18n'     => 'per_page_' . $value,
+                'selected' => ( $selected === (string) $value ),
+            );
+        }
+        return $options;
     }
 
     /**
@@ -417,11 +464,11 @@ class TSOIMMA_Admin_Page {
                 <button class="imp-tab" data-tab="auto" role="tab">
                     <span>🤖</span> <span data-i18n="tab_auto">Auto-optimització</span>
                 </button>
-                <button class="imp-tab" data-tab="history" role="tab">
-                    <span>📋</span> <span data-i18n="tab_history">Historial</span>
-                </button>
                 <button class="imp-tab" data-tab="urlfixer" role="tab">
                     <span>🔗</span> <span data-i18n="tab_urls">URLs</span>
+                </button>
+                <button class="imp-tab" data-tab="history" role="tab">
+                    <span>📋</span> <span data-i18n="tab_history">Historial</span>
                 </button>
             </nav>
 
@@ -532,6 +579,17 @@ class TSOIMMA_Admin_Page {
                         <input type="text" id="imp-search-opt" class="imp-search" placeholder="🔎 Cercar imatge..." data-i18n-placeholder="search_image_ph">
                         <button id="imp-select-all" class="imp-btn imp-btn-ghost" data-i18n="select_all">Seleccionar tot</button>
                         <button id="imp-deselect-all" class="imp-btn imp-btn-ghost" data-i18n="deselect">Deseleccionar</button>
+                        <?php
+                        self::render_custom_select(
+                            array(
+                                'id'         => 'imp-opt-per-page',
+                                'class'      => 'imp-select',
+                                'wrap_style' => 'width:auto;min-width:150px;',
+                                'selected'   => '35',
+                                'options'    => self::per_page_options( '35' ),
+                            )
+                        );
+                        ?>
                     </div>
                     <div class="imp-toolbar-right">
                         <span id="imp-selected-count" class="imp-count-badge">0 seleccionades</span>
@@ -660,6 +718,15 @@ class TSOIMMA_Admin_Page {
                                     array( 'value' => 'date', 'label' => '📅 Ordenar per data de creació', 'i18n' => 'sort_date' ),
                                     array( 'value' => 'modified', 'label' => '✏️ Ordenar per data de modificació', 'i18n' => 'sort_modified' ),
                                 ),
+                            )
+                        );
+                        self::render_custom_select(
+                            array(
+                                'id'         => 'imp-seo-per-page',
+                                'class'      => 'imp-select',
+                                'wrap_style' => 'width:auto;min-width:150px;',
+                                'selected'   => '35',
+                                'options'    => self::per_page_options( '35' ),
                             )
                         );
                         ?>

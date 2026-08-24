@@ -15,13 +15,67 @@
     // ================================================================
     // State
     // ================================================================
+    var PER_PAGE_ALLOWED = [21, 35, 49, 70, 105];
+    var PER_PAGE_STORAGE_KEY = 'tsoimma_images_per_page';
+
+    function readStoredPerPage() {
+        try {
+            var stored = parseInt(window.localStorage.getItem(PER_PAGE_STORAGE_KEY), 10);
+            if (PER_PAGE_ALLOWED.indexOf(stored) !== -1) {
+                return stored;
+            }
+        } catch (e) {}
+        return 35;
+    }
+
+    function writeStoredPerPage(value) {
+        try {
+            window.localStorage.setItem(PER_PAGE_STORAGE_KEY, String(value));
+        } catch (e) {}
+    }
+
+    function setSelectValue($select, value) {
+        if (!$select.length) return;
+        $select.val(String(value));
+        var api = $select.closest('.imp-csel').data('impCselApi');
+        if (api && typeof api.sync === 'function') {
+            api.sync();
+        } else {
+            var $label = $select.closest('.imp-csel').find('.imp-csel-label');
+            var text = $select.find('option:selected').first().text();
+            if ($label.length && text) {
+                $label.text(text);
+            }
+        }
+    }
+
+    function applyPerPage(value, reload) {
+        var n = parseInt(value, 10);
+        if (PER_PAGE_ALLOWED.indexOf(n) === -1) {
+            n = 35;
+        }
+        state.opt.perPage = n;
+        state.seo.perPage = n;
+        writeStoredPerPage(n);
+        setSelectValue($('#imp-opt-per-page'), n);
+        setSelectValue($('#imp-seo-per-page'), n);
+        if (reload) {
+            state.opt.page = 1;
+            state.seo.page = 1;
+            state.opt.selected.clear();
+            updateSelectedCount();
+            loadOptImages();
+            loadSeoImages();
+        }
+    }
+
     var state = {
         opt: {
-            page: 1, perPage: 35, search: '', totalPages: 1,
+            page: 1, perPage: readStoredPerPage(), search: '', totalPages: 1,
             selected: new Set()
         },
         seo: {
-            page: 1, perPage: 35, search: '', totalPages: 1
+            page: 1, perPage: readStoredPerPage(), search: '', totalPages: 1
         },
         orphans: { found: [] },
         orphanSelected: new Set(),
@@ -37,6 +91,7 @@
     $(function() {
         initImpCustomSelects();
         initLanguageSwitcher();
+        applyPerPage(readStoredPerPage(), false);
         initTabs();
         initDashboard();
         initHelpTips();
@@ -194,6 +249,7 @@
             dash_backup_days: 'Conservar còpies (dies)',
             dash_backup_max: 'Mida màxima total (MB, 0 = il·limitat)',
             dash_backup_purge: 'Purga ara',
+            dash_backup_purge_noop: 'La retenció està desactivada (0 dies i 0 MB). Res a netejar.',
             dash_dup_title: 'Imatges duplicades',
             dash_dup_scan: 'Escanejar duplicats',
             dash_dup_none: 'No s\'han trobat grups de duplicats.',
@@ -202,7 +258,18 @@
             dash_heavy_btn: 'Imatges més pesades',
             auto_skip_kb_label: 'Ometre auto-optimitzar si WebP/AVIF ≤ (KB, 0 = off)',
             auto_fill_alt_label: 'Omplir alt absent en pujar',
-            fmt_avif: 'AVIF'
+            fmt_avif: 'AVIF',
+            fmt_png: 'PNG',
+            fmt_webp: 'WebP (recomanat)',
+            fmt_keep: 'Mantenir format original',
+            fmt_keep_current: 'Mantenir format actual',
+            per_page_21: '📄 21 / pàgina',
+            per_page_35: '📄 35 / pàgina',
+            per_page_49: '📄 49 / pàgina',
+            per_page_70: '📄 70 / pàgina',
+            per_page_105: '📄 105 / pàgina',
+            hist_seo_bulk: 'Omplerta en bloc',
+            hist_seo_auto: 'En pujar'
         },
         es: {
             tab_optimize: 'Optimizar',
@@ -434,6 +501,7 @@
             ,dash_backup_days: 'Conservar copias (días)'
             ,dash_backup_max: 'Tamaño máximo total (MB, 0 = ilimitado)'
             ,dash_backup_purge: 'Purgar ahora'
+            ,dash_backup_purge_noop: 'La retención está desactivada (0 días y 0 MB). Nada que purgar.'
             ,dash_dup_title: 'Imágenes duplicadas'
             ,dash_dup_scan: 'Escanear duplicados'
             ,dash_dup_none: 'No se han encontrado grupos de duplicados.'
@@ -443,6 +511,14 @@
             ,auto_skip_kb_label: 'Omitir auto-optimizar si WebP/AVIF ≤ (KB, 0 = off)'
             ,auto_fill_alt_label: 'Rellenar alt ausente al subir'
             ,fmt_avif: 'AVIF'
+            ,fmt_png: 'PNG'
+            ,per_page_21: '📄 21 / página'
+            ,per_page_35: '📄 35 / página'
+            ,per_page_49: '📄 49 / página'
+            ,per_page_70: '📄 70 / página'
+            ,per_page_105: '📄 105 / página'
+            ,hist_seo_bulk: 'Rellenado masivo'
+            ,hist_seo_auto: 'Al subir'
         },
         en: {
             tab_optimize: 'Optimize',
@@ -674,6 +750,7 @@
             ,dash_backup_days: 'Keep backups (days)'
             ,dash_backup_max: 'Max total size (MB, 0 = unlimited)'
             ,dash_backup_purge: 'Purge now'
+            ,dash_backup_purge_noop: 'Retention is disabled (0 days and 0 MB). Nothing to purge.'
             ,dash_dup_title: 'Duplicate images'
             ,dash_dup_scan: 'Scan duplicates'
             ,dash_dup_none: 'No duplicate groups found.'
@@ -683,6 +760,14 @@
             ,auto_skip_kb_label: 'Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)'
             ,auto_fill_alt_label: 'Fill missing alt text on upload'
             ,fmt_avif: 'AVIF'
+            ,fmt_png: 'PNG'
+            ,per_page_21: '📄 21 per page'
+            ,per_page_35: '📄 35 per page'
+            ,per_page_49: '📄 49 per page'
+            ,per_page_70: '📄 70 per page'
+            ,per_page_105: '📄 105 per page'
+            ,hist_seo_bulk: 'Bulk fill'
+            ,hist_seo_auto: 'On upload'
         }
     };
 
@@ -853,6 +938,7 @@
                 dash_backup_days: 'Conservar copias (días)',
                 dash_backup_max: 'Tamaño máximo total (MB, 0 = ilimitado)',
                 dash_backup_purge: 'Purgar ahora',
+                dash_backup_purge_noop: 'La retención está desactivada (0 días y 0 MB). Nada que purgar.',
                 dash_dup_title: 'Imágenes duplicadas',
                 dash_dup_scan: 'Escanear duplicados',
                 dash_dup_none: 'No se han encontrado grupos de duplicados.',
@@ -861,7 +947,15 @@
                 dash_heavy_btn: 'Imágenes más pesadas',
                 auto_skip_kb_label: 'Omitir auto-optimizar si WebP/AVIF ≤ (KB, 0 = off)',
                 auto_fill_alt_label: 'Rellenar alt ausente al subir',
-                fmt_avif: 'AVIF'
+                fmt_avif: 'AVIF',
+                fmt_png: 'PNG',
+                per_page_21: '📄 21 / página',
+                per_page_35: '📄 35 / página',
+                per_page_49: '📄 49 / página',
+                per_page_70: '📄 70 / página',
+                per_page_105: '📄 105 / página',
+                hist_seo_bulk: 'Rellenado masivo',
+                hist_seo_auto: 'Al subir'
             },
             en: {
                 confirm_delete: 'Delete selected images? This cannot be undone.',
@@ -1027,6 +1121,7 @@
                 dash_backup_days: 'Keep backups (days)',
                 dash_backup_max: 'Max total size (MB, 0 = unlimited)',
                 dash_backup_purge: 'Purge now',
+                dash_backup_purge_noop: 'Retention is disabled (0 days and 0 MB). Nothing to purge.',
                 dash_dup_title: 'Duplicate images',
                 dash_dup_scan: 'Scan duplicates',
                 dash_dup_none: 'No duplicate groups found.',
@@ -1035,7 +1130,15 @@
                 dash_heavy_btn: 'Largest images',
                 auto_skip_kb_label: 'Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)',
                 auto_fill_alt_label: 'Fill missing alt text on upload',
-                fmt_avif: 'AVIF'
+                fmt_avif: 'AVIF',
+                fmt_png: 'PNG',
+                per_page_21: '📄 21 per page',
+                per_page_35: '📄 35 per page',
+                per_page_49: '📄 49 per page',
+                per_page_70: '📄 70 per page',
+                per_page_105: '📄 105 per page',
+                hist_seo_bulk: 'Bulk fill',
+                hist_seo_auto: 'On upload'
             },
             ca: {
                 confirm_delete: 'Eliminar les imatges seleccionades? Aquesta acció és irreversible.',
@@ -1201,6 +1304,7 @@
                 dash_backup_days: 'Conservar còpies (dies)',
                 dash_backup_max: 'Mida màxima total (MB, 0 = il·limitat)',
                 dash_backup_purge: 'Purga ara',
+                dash_backup_purge_noop: 'La retenció està desactivada (0 dies i 0 MB). Res a netejar.',
                 dash_dup_title: 'Imatges duplicades',
                 dash_dup_scan: 'Escanejar duplicats',
                 dash_dup_none: 'No s\'han trobat grups de duplicats.',
@@ -1209,7 +1313,18 @@
                 dash_heavy_btn: 'Imatges més pesades',
                 auto_skip_kb_label: 'Ometre auto-optimitzar si WebP/AVIF ≤ (KB, 0 = off)',
                 auto_fill_alt_label: 'Omplir alt absent en pujar',
-                fmt_avif: 'AVIF'
+                fmt_avif: 'AVIF',
+                fmt_png: 'PNG',
+                fmt_webp: 'WebP (recomanat)',
+                fmt_keep: 'Mantenir format original',
+                fmt_keep_current: 'Mantenir format actual',
+                per_page_21: '📄 21 / pàgina',
+                per_page_35: '📄 35 / pàgina',
+                per_page_49: '📄 49 / pàgina',
+                per_page_70: '📄 70 / pàgina',
+                per_page_105: '📄 105 / pàgina',
+                hist_seo_bulk: 'Omplerta en bloc',
+                hist_seo_auto: 'En pujar'
             }
         };
         [ 'ca', 'es', 'en' ].forEach(function(l) {
@@ -1270,22 +1385,24 @@
         var dict = I18N_STATIC[lang] || {};
         $('[data-i18n]').each(function() {
             var key = $(this).data('i18n');
+            // Prefer I18N_STATIC over captured HTML so new keys translated in JS win
+            // even if PHP markup still has English fallbacks.
             var text = (lang === 'ca')
-                ? (CA_ORIGINAL.text[key] || dict[key] || L[key])
+                ? (dict[key] || CA_ORIGINAL.text[key] || L[key])
                 : (dict[key] || L[key]);
             if (text) $(this).html(text);
         });
         $('[data-i18n-placeholder]').each(function() {
             var key = $(this).data('i18n-placeholder');
             var ph = (lang === 'ca')
-                ? (CA_ORIGINAL.placeholder[key] || dict[key] || L[key])
+                ? (dict[key] || CA_ORIGINAL.placeholder[key] || L[key])
                 : (dict[key] || L[key]);
             if (ph) $(this).attr('placeholder', ph);
         });
         $('[data-i18n-html]').each(function() {
             var key = $(this).data('i18n-html');
             var html = (lang === 'ca')
-                ? (CA_ORIGINAL.html[key] || dict[key] || L[key])
+                ? (dict[key] || CA_ORIGINAL.html[key] || L[key])
                 : (dict[key] || L[key]);
             if (html) $(this).html(html);
         });
@@ -1614,7 +1731,12 @@
 
         $('#imp-purge-backups-now').on('click', function() {
             ajax('tso_im_purge_backups_now', {}, function(data) {
-                var msg = '✓ ' + (data.deleted || 0) + ' deleted, ' + (data.freed_h || '0 B') + ' freed.';
+                var msg;
+                if (data.noop) {
+                    msg = uiText('dash_backup_purge_noop', 'Retention is disabled (0 days and 0 MB). Nothing to purge.');
+                } else {
+                    msg = '✓ ' + (data.deleted || 0) + ' deleted, ' + (data.freed_h || '0 B') + ' freed.';
+                }
                 $('#imp-backup-retention-msg').show().css('color', 'var(--imp-success)').text(msg);
                 loadDashboardOverview();
             });
@@ -1695,7 +1817,7 @@
         ajax('tso_im_get_dashboard_overview', {}, function(data) {
             var warnAlt = (data.missing_alt || 0) > 0;
             var fmtKey = String(data.auto_format || 'webp').toLowerCase();
-            var fmtLabels = { webp: 'WebP', avif: 'AVIF', jpg: 'JPG', original: uiText('fmt_keep', 'Original') };
+            var fmtLabels = { webp: 'WebP', avif: 'AVIF', jpg: 'JPG', png: 'PNG', original: uiText('fmt_keep', 'Original') };
             var fmtLabel = fmtLabels[fmtKey] || fmtKey.toUpperCase();
             var autoSub = data.auto_enabled
                 ? uiText('dash_auto_format_sub', 'Output format: %s').replace('%s', fmtLabel)
@@ -1941,6 +2063,9 @@
         $(document).on('click', '#imp-clear-log', function() {
             $('#imp-log-content').empty();
             $('#imp-opt-log').hide();
+        });
+        $('#imp-opt-per-page').on('change', function() {
+            applyPerPage($(this).val(), true);
         });
     }
 
@@ -2304,6 +2429,9 @@
     function initSeoTab() {
         $('#imp-seo-sort').on('change', function() {
             state.seo.page = 1; loadSeoImages();
+        });
+        $('#imp-seo-per-page').on('change', function() {
+            applyPerPage($(this).val(), true);
         });
         $(document).on('click', '#imp-seo-grid .imp-image-card', function(e) {
             if ($(e.target).hasClass('imp-card-edit-btn')) return;
@@ -3232,6 +3360,27 @@
             var details = '';
             if (d.savings_pct)  details += '<span class="imp-history-savings">-' + d.savings_pct + '%</span> (' + formatBytes(d.savings_bytes || 0) + ')';
             if (d.old_filename && d.new_filename) details += '<span style="color:var(--imp-text-muted);display:block;font-size:11px">' + escHtml(d.old_filename) + '</span><span style="color:var(--imp-accent2);display:block;font-size:11px">\u2192 ' + escHtml(d.new_filename) + '</span>';
+            // SEO fields (seo_* keys; legacy alt/caption/description only — never auto-filled title).
+            var seoAlt = d.seo_alt || d.alt || '';
+            var seoTitle = (typeof d.seo_title === 'string') ? d.seo_title : '';
+            var seoCaption = d.seo_caption || d.caption || '';
+            var seoDesc = d.seo_description || d.description || '';
+            if (item.action_type === 'seo_update' || seoAlt || seoTitle || seoCaption || seoDesc) {
+                var seoBits = [];
+                if (seoTitle) seoBits.push('<strong>' + escHtml(uiText('seo_title_label', 'Title')) + ':</strong> ' + escHtml(seoTitle));
+                if (seoAlt) seoBits.push('<strong>' + escHtml(uiText('seo_alt_label', 'Alt')) + ':</strong> ' + escHtml(seoAlt));
+                if (seoCaption) seoBits.push('<strong>' + escHtml(uiText('seo_caption_label', 'Caption')) + ':</strong> ' + escHtml(seoCaption));
+                if (seoDesc) seoBits.push('<strong>' + escHtml(uiText('seo_desc_label', 'Description')) + ':</strong> ' + escHtml(String(seoDesc).slice(0, 120)));
+                if (d.source === 'dashboard_bulk_alt') seoBits.push('<span style="color:var(--imp-text-muted)">' + escHtml(uiText('hist_seo_bulk', 'Bulk fill')) + '</span>');
+                if (d.source === 'auto_upload_alt') seoBits.push('<span style="color:var(--imp-text-muted)">' + escHtml(uiText('hist_seo_auto', 'On upload')) + '</span>');
+                if (seoBits.length) {
+                    details += '<span style="display:block;font-size:11px;line-height:1.4">' + seoBits.join('<br>') + '</span>';
+                }
+            }
+            if (d.format && (item.action_type === 'optimize' || item.action_type === 'auto_optimize' || item.action_type === 'pdf_compress')) {
+                if (details) details += ' · ';
+                details += '<span style="font-size:11px;color:var(--imp-text-muted)">' + escHtml(String(d.format).toUpperCase()) + '</span>';
+            }
             if (!details) details = '<span style="color:var(--imp-text-muted)">—</span>';
             var thumb = item.thumb ? '<img class="imp-thumb-sm" src="' + escHtml(item.thumb) + '" alt="">' : '<span style="font-size:20px">📄</span>';
             var displayFile = d.filename || (d.new_filename || '—');

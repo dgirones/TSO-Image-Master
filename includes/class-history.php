@@ -137,8 +137,13 @@ class TSOIMMA_History {
             }
 
             $file = get_attached_file( $attachment_id );
-            if ( empty( $details['filename'] ) ) $details['filename'] = $file ? basename( $file ) : '';
-            if ( empty( $details['title'] ) )    $details['title']    = get_the_title( $attachment_id );
+            if ( empty( $details['filename'] ) ) {
+                $details['filename'] = $file ? basename( $file ) : '';
+            }
+            // Use attachment_title — never 'title', which collides with SEO seo_title display.
+            if ( empty( $details['attachment_title'] ) ) {
+                $details['attachment_title'] = get_the_title( $attachment_id );
+            }
             // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
             $wpdb->insert(
                 $wpdb->prefix . self::TABLE,

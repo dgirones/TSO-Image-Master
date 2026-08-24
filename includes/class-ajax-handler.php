@@ -302,7 +302,24 @@ class TSOIMMA_Ajax_Handler {
         if ( is_wp_error( $result ) ) {
             wp_send_json_error( $result->get_error_message() );
         }
-        TSOIMMA_History::log( $id, 'seo_update', array( 'title' => $title, 'alt' => $alt ) );
+
+        $seo_details = array( 'source' => 'manual' );
+        if ( null !== $title && '' !== $title ) {
+            $seo_details['seo_title'] = $title;
+        }
+        if ( null !== $alt && '' !== $alt ) {
+            $seo_details['seo_alt'] = $alt;
+        }
+        if ( null !== $caption && '' !== $caption ) {
+            $seo_details['seo_caption'] = $caption;
+        }
+        if ( null !== $description ) {
+            $desc_plain = wp_strip_all_tags( $description );
+            if ( '' !== $desc_plain ) {
+                $seo_details['seo_description'] = $desc_plain;
+            }
+        }
+        TSOIMMA_History::log( $id, 'seo_update', $seo_details );
         wp_send_json_success( $result );
     }
 
@@ -535,7 +552,11 @@ class TSOIMMA_Ajax_Handler {
         self::require_admin();
 
         $page     = absint( $_POST['page'] ?? 1 );
-        $per_page = absint( $_POST['per_page'] ?? 30 );
+        $per_page = absint( $_POST['per_page'] ?? 35 );
+        $allowed  = array( 21, 35, 49, 70, 105 );
+        if ( ! in_array( $per_page, $allowed, true ) ) {
+            $per_page = 35;
+        }
         $search   = sanitize_text_field( wp_unslash( $_POST['search'] ?? '' ) );
         $sort     = sanitize_key( $_POST['sort'] ?? 'date' );
 
@@ -799,7 +820,7 @@ class TSOIMMA_Ajax_Handler {
 
             // Detectar mime type real del fitxer
             $real_ext  = strtolower( pathinfo( $abs_path, PATHINFO_EXTENSION ) );
-            $mime_map  = array( 'webp' => 'image/webp', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'gif' => 'image/gif' );
+            $mime_map  = array( 'webp' => 'image/webp', 'avif' => 'image/avif', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'gif' => 'image/gif' );
             $real_mime = isset( $mime_map[ $real_ext ] ) ? $mime_map[ $real_ext ] : mime_content_type( $abs_path );
 
             // Actualitzar mime type si cal
@@ -1002,24 +1023,35 @@ class TSOIMMA_Ajax_Handler {
 
             $pi       = pathinfo( $old_path );
             $webp     = $pi['dirname'] . '/' . $pi['filename'] . '.webp';
+            $avif     = $pi['dirname'] . '/' . $pi['filename'] . '.avif';
 
-            if ( ! file_exists( $webp ) ) {
+            $replacement = '';
+            $new_mime    = '';
+            if ( file_exists( $webp ) ) {
+                $replacement = $webp;
+                $new_mime    = 'image/webp';
+            } elseif ( file_exists( $avif ) ) {
+                $replacement = $avif;
+                $new_mime    = 'image/avif';
+            }
+
+            if ( '' === $replacement ) {
                 continue;
             }
 
             $post_id = (int) $row->post_id;
-            $new_rel = ltrim( str_replace( $base_dir_norm, '', wp_normalize_path( $webp ) ), '/' );
+            $new_rel = ltrim( str_replace( $base_dir_norm, '', wp_normalize_path( $replacement ) ), '/' );
             update_post_meta( $post_id, '_wp_attached_file', $new_rel );
             // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
             $wpdb->update(
                 $wpdb->posts,
-                array( 'post_mime_type' => 'image/webp' ),
+                array( 'post_mime_type' => $new_mime ),
                 array( 'ID' => $post_id ),
                 array( '%s' ),
                 array( '%d' )
             );
 
-            $new_meta = wp_generate_attachment_metadata( $post_id, $webp );
+            $new_meta = wp_generate_attachment_metadata( $post_id, $replacement );
             if ( $new_meta && ! is_wp_error( $new_meta ) ) {
                 wp_update_attachment_metadata( $post_id, $new_meta );
             }

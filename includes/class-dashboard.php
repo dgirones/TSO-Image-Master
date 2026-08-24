@@ -144,8 +144,8 @@ class TSOIMMA_Dashboard {
 				$attachment_id,
 				'seo_update',
 				array(
-					'alt'    => $new_alt,
-					'source' => 'dashboard_bulk_alt',
+					'seo_alt' => $new_alt,
+					'source'  => 'dashboard_bulk_alt',
 				)
 			);
 			++$updated;
@@ -249,11 +249,8 @@ class TSOIMMA_Dashboard {
 		$file_path = get_attached_file( $attachment_id );
 		if ( $file_path ) {
 			$base = pathinfo( basename( $file_path ), PATHINFO_FILENAME );
+			// Raw basename only (e.g. "foto-vacances") — humanized fills must not stay "weak".
 			if ( strcasecmp( $alt, $base ) === 0 ) {
-				return true;
-			}
-			$human = ucwords( str_replace( array( '-', '_' ), ' ', $base ) );
-			if ( strcasecmp( $alt, $human ) === 0 ) {
 				return true;
 			}
 		}

@@ -48,12 +48,14 @@ class TSOIMMA_Auto_Optimizer {
             return $metadata;
         }
 
-        // Consumir el transient immediatament: una sola optimització per upload.
+        // Consumir el transient immediatament: una sola passada per upload.
         delete_transient( self::upload_transient_key( $attachment_id ) );
 
-        // Comprovar que l'auto-optimització està activada
         $settings = self::get_settings();
+
+        // Fill-alt can run even when auto-optimize is disabled.
         if ( empty( $settings['enabled'] ) ) {
+            self::maybe_fill_alt_on_upload( $attachment_id, $settings );
             return $metadata;
         }
 
@@ -66,11 +68,13 @@ class TSOIMMA_Auto_Optimizer {
         // Comprovar que és una imatge
         $mime = get_post_mime_type( $attachment_id );
         if ( false === strpos( $mime, 'image/' ) ) {
+            self::maybe_fill_alt_on_upload( $attachment_id, $settings );
             return $metadata;
         }
 
         $source_key = self::mime_to_source_key( $mime );
         if ( ! $source_key ) {
+            self::maybe_fill_alt_on_upload( $attachment_id, $settings );
             return $metadata;
         }
 
@@ -80,6 +84,7 @@ class TSOIMMA_Auto_Optimizer {
         }
 
         if ( ! in_array( $source_key, $allowed_sources, true ) ) {
+            self::maybe_fill_alt_on_upload( $attachment_id, $settings );
             return $metadata;
         }
 
@@ -87,6 +92,7 @@ class TSOIMMA_Auto_Optimizer {
         if ( 'gif' === $source_key ) {
             $file_path = get_attached_file( $attachment_id );
             if ( ! $file_path || self::is_animated_gif( $file_path ) ) {
+                self::maybe_fill_alt_on_upload( $attachment_id, $settings );
                 return $metadata;
             }
         }
@@ -97,6 +103,7 @@ class TSOIMMA_Auto_Optimizer {
         // "Original" no és aplicable a BMP/TIFF amb el pipeline actual de GD.
         // Comportament robust: no convertir per evitar un "fallback" inesperat a JPG.
         if ( 'original' === $format && in_array( $source_key, array( 'bmp', 'tiff' ), true ) ) {
+            self::maybe_fill_alt_on_upload( $attachment_id, $settings );
             return $metadata;
         }
 
@@ -174,8 +181,9 @@ class TSOIMMA_Auto_Optimizer {
             ) );
 
             update_post_meta( $attachment_id, '_tso_im_auto_optimized', time() );
-            self::maybe_fill_alt_on_upload( $attachment_id, $settings );
         }
+
+        self::maybe_fill_alt_on_upload( $attachment_id, $settings );
 
         $saved = wp_get_attachment_metadata( $attachment_id );
         return ( $saved && is_array( $saved ) ) ? $saved : $metadata;
@@ -213,7 +221,7 @@ class TSOIMMA_Auto_Optimizer {
         }
         $clean = array(
             'enabled' => ! empty( $settings['enabled'] ),
-            'format'  => in_array( $format_raw, array( 'webp', 'jpg', 'avif', 'original' ), true )
+            'format'  => in_array( $format_raw, array( 'webp', 'jpg', 'avif', 'png', 'original' ), true )
                             ? $format_raw : 'webp',
             'quality' => min( 100, max( 50, absint( isset( $settings['quality'] ) ? $settings['quality'] : 82 ) ) ),
             'source_formats' => $source_clean,
@@ -290,8 +298,8 @@ class TSOIMMA_Auto_Optimizer {
             $attachment_id,
             'seo_update',
             array(
-                'alt'    => $suggested,
-                'source' => 'auto_upload_alt',
+                'seo_alt' => $suggested,
+                'source'  => 'auto_upload_alt',
             )
         );
     }

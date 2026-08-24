@@ -23,7 +23,7 @@ class TSOIMMA_Duplicate_Finder {
 			'posts_per_page' => $limit > 0 ? $limit : -1,
 			'fields'         => 'ids',
 			'orderby'        => 'ID',
-			'order'          => 'ASC',
+			'order'          => 'DESC',
 		);
 
 		$ids    = get_posts( $args );
@@ -86,7 +86,14 @@ class TSOIMMA_Duplicate_Finder {
 		return array(
 			'groups'          => $duplicate_groups,
 			'group_count'     => count( $duplicate_groups ),
-			'duplicate_files' => array_sum( array_map( 'count', $duplicate_groups ) ),
+			'duplicate_files' => array_sum(
+				array_map(
+					function ( $group ) {
+						return isset( $group['items'] ) ? count( $group['items'] ) : 0;
+					},
+					$duplicate_groups
+				)
+			),
 			'wasted_bytes'    => $wasted,
 			'wasted_h'        => size_format( $wasted ),
 			'scanned'         => count( $ids ),

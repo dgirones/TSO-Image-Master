@@ -17,10 +17,6 @@ class TSOIMMA_Cache_Helper {
 	public static function purge_after_change( $post_id = 0 ) {
 		$post_id = absint( $post_id );
 
-		if ( function_exists( 'wp_cache_flush' ) ) {
-			wp_cache_flush();
-		}
-
 		if ( $post_id > 0 ) {
 			clean_post_cache( $post_id );
 			clean_attachment_cache( $post_id );

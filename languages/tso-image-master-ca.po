@@ -533,6 +533,39 @@ msgstr "Omplir alt absent en pujar"
 msgid "AVIF"
 msgstr "AVIF"
 
+msgid "PNG"
+msgstr "PNG"
+
+msgid "WebP (recommended)"
+msgstr "WebP (recomanat)"
+
+msgid "Keep original format"
+msgstr "Mantenir format original"
+
+msgid "Keep current format"
+msgstr "Mantenir format actual"
+
+msgid "📄 21 per page"
+msgstr "📄 21 / pàgina"
+
+msgid "📄 35 per page"
+msgstr "📄 35 / pàgina"
+
+msgid "📄 49 per page"
+msgstr "📄 49 / pàgina"
+
+msgid "📄 70 per page"
+msgstr "📄 70 / pàgina"
+
+msgid "📄 105 per page"
+msgstr "📄 105 / pàgina"
+
+msgid "Bulk fill"
+msgstr "Omplerta en bloc"
+
+msgid "On upload"
+msgstr "En pujar"
+
 msgid "Attachment %d: could not build alt text."
 msgstr "Adjunt %d: no s'ha pogut generar el text alt."
 

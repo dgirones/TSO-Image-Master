@@ -6,9 +6,9 @@
  * Removes all plugin-specific data: options, scheduled events, postmeta,
  * and the custom history table.
  *
- * NOTE: Physical image files and their backups in the uploads folder are
- * intentionally preserved to prevent accidental data loss. Remove them
- * manually via FTP if they are no longer needed.
+ * NOTE: The uploads/tso-image-master/ backup folder is deleted on uninstall
+ * because those files are plugin-owned copies. Original media library images
+ * under uploads/YYYY/MM/ are never deleted.
  */
 
 if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
@@ -59,6 +59,7 @@ delete_option( 'tsoimma_history_purge_interval' );
 delete_option( 'tsoimma_version' );
 delete_option( 'tsoimma_job_queue' );
 delete_option( 'tsoimma_backup_retention' );
+delete_option( 'tsoimma_queue_lock' );
 
 // ── Clear scheduled cron events ───────────────────────────────────
 wp_clear_scheduled_hook( 'tsoimma_history_purge' );
@@ -81,6 +82,8 @@ $tsoimma_meta_keys = array(
     '_tso_im_backup_file',
     '_tso_im_backup_mime',
     '_tso_im_backup_size',
+    '_tso_im_backup_attached_file',
+    '_tso_im_backup_current_name',
     '_tso_im_auto_optimized',
     '_tso_im_pdf_compressed',
     '_tso_im_pdf_bg_temp',

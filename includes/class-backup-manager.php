@@ -75,6 +75,16 @@ class TSOIMMA_Backup_Manager {
 		$deleted  = 0;
 		$freed    = 0;
 
+		if ( $settings['days'] <= 0 && $settings['max_mb'] <= 0 ) {
+			return array(
+				'deleted'     => 0,
+				'freed'       => 0,
+				'freed_h'     => size_format( 0 ),
+				'noop'        => true,
+				'noop_reason' => 'retention_disabled',
+			);
+		}
+
 		$files = self::list_backup_files();
 		$now   = time();
 
@@ -179,7 +189,79 @@ class TSOIMMA_Backup_Manager {
 		if ( file_exists( $resolved ) ) {
 			return false;
 		}
+		self::clear_meta_for_backup_path( $path, $resolved );
 		TSOIMMA_Optimizer::prune_empty_backup_dirs( $resolved );
 		return true;
+	}
+
+	/**
+	 * Clear attachment backup meta that pointed at a deleted backup file.
+	 *
+	 * @param string $original_path Path used for listing/deletion.
+	 * @param string $resolved_path Real path after resolve.
+	 * @return void
+	 */
+	private static function clear_meta_for_backup_path( $original_path, $resolved_path ) {
+		global $wpdb;
+
+		$candidates = array_unique(
+			array_filter(
+				array(
+					(string) $original_path,
+					(string) $resolved_path,
+					wp_normalize_path( (string) $original_path ),
+					wp_normalize_path( (string) $resolved_path ),
+				)
+			)
+		);
+
+		$ids = array();
+		foreach ( $candidates as $candidate ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			$found = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_tso_im_backup_file' AND meta_value = %s",
+					$candidate
+				)
+			);
+			foreach ( (array) $found as $post_id ) {
+				$ids[] = absint( $post_id );
+			}
+		}
+
+		$basename = basename( (string) $resolved_path );
+		if ( '' !== $basename ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			$found = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_tso_im_backup_file' AND meta_value LIKE %s",
+					'%' . $wpdb->esc_like( $basename )
+				)
+			);
+			foreach ( (array) $found as $post_id ) {
+				$ids[] = absint( $post_id );
+			}
+		}
+
+		foreach ( array_unique( array_filter( $ids ) ) as $attachment_id ) {
+			$stored = (string) get_post_meta( $attachment_id, '_tso_im_backup_file', true );
+			if ( '' === $stored ) {
+				continue;
+			}
+			$stored_norm = wp_normalize_path( $stored );
+			$match       = false;
+			foreach ( $candidates as $candidate ) {
+				if ( $stored === $candidate || $stored_norm === wp_normalize_path( $candidate ) ) {
+					$match = true;
+					break;
+				}
+			}
+			if ( ! $match && $basename && false !== strpos( $stored_norm, $basename ) ) {
+				$match = true;
+			}
+			if ( $match ) {
+				TSOIMMA_Optimizer::clear_backup_meta( $attachment_id );
+			}
+		}
 	}
 }
