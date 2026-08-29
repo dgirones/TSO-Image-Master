@@ -164,6 +164,16 @@ class TSOIMMA_Ajax_Handler {
         }
 
         $result['needs_thumbnails'] = false;
+        $result['thumbnails_done']  = false;
+        if ( $replace && ! empty( $result['replaced'] ) && ! empty( $result['old_ext'] ) && ! empty( $result['new_ext'] ) ) {
+            $ext_changed = ! TSOIMMA_Optimizer::extensions_match( $result['old_ext'], $result['new_ext'] );
+            if ( $ext_changed ) {
+                $result['thumbnails_done'] = true;
+            } else {
+                $result['needs_thumbnails'] = true;
+            }
+        }
+
         wp_send_json_success( $result );
     }
 
@@ -578,7 +588,8 @@ class TSOIMMA_Ajax_Handler {
         $real_mime = ( $file && file_exists( $file ) ) ? mime_content_type( $file ) : get_post_mime_type( $id );
         $ext_map   = array(
             'image/jpeg' => 'JPG', 'image/png'  => 'PNG',
-            'image/gif'  => 'GIF', 'image/webp' => 'WEBP', 'image/svg+xml' => 'SVG',
+            'image/gif'  => 'GIF', 'image/webp' => 'WEBP',
+            'image/avif' => 'AVIF', 'image/svg+xml' => 'SVG',
         );
         $real_ext = isset( $ext_map[ $real_mime ] ) ? $ext_map[ $real_mime ] : strtoupper( pathinfo( $file ?? '', PATHINFO_EXTENSION ) );
 

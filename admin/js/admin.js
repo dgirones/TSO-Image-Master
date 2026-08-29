@@ -2581,16 +2581,19 @@
                 max_width:  doResize ? (parseInt($('#imp-modal-width').val(), 10)  || 0) : 0,
                 max_height: doResize ? (parseInt($('#imp-modal-height').val(), 10) || 0) : 0
             }, function(data) {
-                btn.prop('disabled', false).text(L.optimize_now || '⚡ Optimize now');
+                btn.prop('disabled', false).text(uiText('optimize_now', '⚡ Optimize now'));
                 var box = $('#imp-modal-result');
                 if (data.replaced) {
                     var bigger   = data.savings_pct <= 0;
                     var cls      = bigger ? 'imp-result-warn' : 'imp-result-ok';
                     var origSize = data.backup_size ? formatBytes(data.backup_size) : formatBytes(data.original_size);
-                    var thumbNote = '<br><small id="imp-thumb-status" style="color:var(--imp-accent2)">⏳ ' + (L.optimizing_thumbs || 'Optimizing thumbnails...') + '</small>';
+                    var thumbsPending = !!data.needs_thumbnails && !data.thumbnails_done;
+                    var thumbNote = thumbsPending
+                        ? '<br><small id="imp-thumb-status" style="color:var(--imp-accent2)">⏳ ' + uiText('optimizing_thumbs', 'Optimizing thumbnails...') + '</small>'
+                        : '<br><small id="imp-thumb-status" style="color:var(--imp-success)">✓ ' + uiText('thumbs_done', 'Thumbnails processed.') + '</small>';
                     var msg = (bigger ? '⚠ ' : '✓ ') +
-                        (bigger ? (L.converted_bigger || 'Converted but larger') : (L.optimized_ok || 'Optimized!')) +
-                        '<br>Format: <strong>' + data.format.toUpperCase() + '</strong><br>' +
+                        (bigger ? uiText('converted_bigger', 'Converted but larger') : uiText('optimized_ok', 'Optimized!')) +
+                        '<br>Format: <strong>' + String(data.format || '').toUpperCase() + '</strong><br>' +
                         origSize + ' \u2192 <strong>' + formatBytes(data.new_size) + '</strong>' +
                         (data.savings_pct > 0 ? ' | <strong>' + data.savings_pct + '%</strong>' : '') +
                         thumbNote;
@@ -2600,22 +2603,27 @@
                         var ts = state.imgCacheTs[id];
                         $('#imp-modal-img').attr('src', data.new_url + '?_t=' + ts).attr('data-full-url', data.new_url + '?_t=' + ts);
                     }
-                    loadOptImages(); loadSeoImages();
-                    setTimeout(function() {
-                        state.imgCacheTs[id] = Date.now();
-                        var savedHtml = box.html();
-                        var savedCls  = box.attr('class');
-                        savedHtml = savedHtml.replace(/<small id="imp-thumb-status"[^>]*>.*?<\/small>/, '<small id="imp-thumb-status" style="color:var(--imp-success)">✓ ' + (L.thumbs_done || 'Thumbnails processed.') + '</small>');
-                        openModal(id, 'optimize');
-                        setTimeout(function() { $('#imp-modal-result').attr('class', savedCls).html(savedHtml).show(); }, 80);
-                        loadOptImages(); loadSeoImages();
-                    }, 8000);
+                    refreshModalImageInfo(id, true);
+                    if (box[0] && box[0].scrollIntoView) {
+                        box[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                    loadOptImages();
+                    loadSeoImages();
+                    if (thumbsPending) {
+                        setTimeout(function() {
+                            var $thumb = $('#imp-thumb-status');
+                            if ($thumb.length) {
+                                $thumb.replaceWith('<small id="imp-thumb-status" style="color:var(--imp-success)">✓ ' + uiText('thumbs_done', 'Thumbnails processed.') + '</small>');
+                            }
+                            refreshModalImageInfo(id, true);
+                        }, 4000);
+                    }
                 } else {
                     box.removeClass('imp-result-err imp-result-warn').addClass('imp-result-ok imp-result-box').show()
-                       .html('✓ ' + (L.optimized_no_replace || 'Optimized (not replaced).') + ' ' + data.savings_pct + '%');
+                       .html('✓ ' + uiText('optimized_no_replace', 'Optimized (not replaced).') + ' ' + data.savings_pct + '%');
                 }
             }, function(err) {
-                btn.prop('disabled', false).text(L.optimize_now || '⚡ Optimize now');
+                btn.prop('disabled', false).text(uiText('optimize_now', '⚡ Optimize now'));
                 $('#imp-modal-result').show().removeClass('imp-result-ok imp-result-warn').addClass('imp-result-err imp-result-box').text((L.error_prefix || 'Error: ') + err);
             }, 120000);
         });
@@ -2656,6 +2664,56 @@
         }, function(err) { btn.prop('disabled', false).text(L.del_backup || '🗑 Delete backup'); alert((L.error_prefix || 'Error: ') + err); });
     });
 
+    function populateModalFromData(data) {
+        $('#imp-modal-title-head').html('<span class="imp-modal-fname">' + escHtml(data.filename) + '</span>');
+        $('#imp-modal-id').val(data.id);
+        var ts = state.imgCacheTs[data.id] || Date.now();
+        $('#imp-modal-img')
+            .attr('src', (data.thumb || '') + '?t=' + ts)
+            .attr('data-full-url', (data.url || data.thumb || '') + '?t=' + ts)
+            .css('cursor', data.url ? 'zoom-in' : '');
+        $('#imp-modal-fileinfo').html(
+            '<strong>📄</strong> ' + escHtml(data.filename) + '<br>' +
+            '<strong>📐</strong> ' + data.width + '\u00d7' + data.height + 'px<br>' +
+            '<strong>⚖</strong> '   + escHtml(data.filesize_h) + '<br>' +
+            '<strong>🖼</strong> ' + escHtml(data.ext) + ' \u00b7 ' + escHtml(data.mime)
+        );
+        $('#imp-seo-title').val(data.title || '');
+        $('#imp-seo-alt').val(data.alt || '');
+        $('#imp-seo-caption').val(data.caption || '');
+        $('#imp-seo-description').val(data.description || '');
+        renderUsedIn(data.used_in || [], !!data.is_orphan);
+        $('#imp-current-filename').val(data.filename);
+        $('#imp-new-filename').val('');
+        $('#imp-suggested-name').text(data.suggested || '');
+        var backupHtml = data.has_backup
+            ? '<div class="imp-stat-box imp-stat-backup" style="border-color:var(--imp-warn);grid-column:1/-1">' +
+              '<div class="imp-backup-info"><span>💾 <strong>' + uiText('backup_available', 'Backup available') + '</strong>' + (data.backup_size ? ' \u00b7 ' + data.backup_size : '') + '</span></div>' +
+              '<button id="imp-revert-btn" class="imp-btn imp-btn-sm imp-btn-danger">' + uiText('revert_btn', 'Revert to original') + '</button>' +
+              '<button id="imp-delete-backup-btn" class="imp-btn imp-btn-sm" style="border-color:var(--imp-warn);color:var(--imp-warn)">🗑 ' + uiText('del_backup', 'Delete backup') + '</button>' +
+              '</div>'
+            : '';
+        $('#imp-modal-stats').html(
+            '<div class="imp-stat-box"><span class="imp-stat-label">' + uiText('stat_current_size', 'Current size') + '</span><span class="imp-stat-val">' + escHtml(data.filesize_h) + '</span></div>' +
+            '<div class="imp-stat-box"><span class="imp-stat-label">' + uiText('stat_real_format', 'Format') + '</span><span class="imp-stat-val" style="color:var(--imp-accent2)">' + escHtml(data.ext) + '</span></div>' +
+            backupHtml
+        );
+    }
+
+    function refreshModalImageInfo(id, keepResult) {
+        if (!keepResult) {
+            $('#imp-modal-result').hide().text('');
+        }
+        ajax('tso_im_get_image_info', { attachment_id: id }, function(data) {
+            populateModalFromData(data);
+        }, function(err) {
+            var fname = $('#imp-modal-title-head .imp-modal-fname').text();
+            if (!fname) {
+                $('#imp-modal-title-head').html('<span style="color:var(--imp-danger)">' + escHtml((L.error_prefix || 'Error: ') + err) + '</span>');
+            }
+        });
+    }
+
     function openModal(id, defaultTab) {
         state.currentModalId = id;
         $('#imp-modal-result').hide().text('');
@@ -2668,42 +2726,12 @@
         $('.imp-mtab-content').removeClass('active');
         $('.imp-mtab[data-mtab="' + defaultTab + '"]').addClass('active');
         $('#mtab-' + defaultTab).addClass('active');
-        $('#imp-modal-title-head').html('<span style="color:var(--imp-text-muted)">' + (L.loading_modal || 'Loading...') + '</span>');
+        $('#imp-modal-title-head').html('<span style="color:var(--imp-text-muted)">' + uiText('loading_modal', 'Loading...') + '</span>');
         $('#imp-modal-img').attr('src', '');
         ajax('tso_im_get_image_info', { attachment_id: id }, function(data) {
-            $('#imp-modal-title-head').html('<span class="imp-modal-fname">' + escHtml(data.filename) + '</span>');
-            $('#imp-modal-id').val(id);
-            var ts = Date.now();
-            $('#imp-modal-img')
-                .attr('src', (data.thumb || '') + '?t=' + ts)
-                .attr('data-full-url', (data.url || data.thumb || '') + '?t=' + ts)
-                .css('cursor', data.url ? 'zoom-in' : '');
-            $('#imp-modal-fileinfo').html(
-                '<strong>📄</strong> ' + escHtml(data.filename) + '<br>' +
-                '<strong>📐</strong> ' + data.width + '\u00d7' + data.height + 'px<br>' +
-                '<strong>⚖</strong> '   + escHtml(data.filesize_h) + '<br>' +
-                '<strong>🖼</strong> ' + escHtml(data.ext) + ' \u00b7 ' + escHtml(data.mime)
-            );
-            $('#imp-seo-title').val(data.title || '');
-            $('#imp-seo-alt').val(data.alt || '');
-            $('#imp-seo-caption').val(data.caption || '');
-            $('#imp-seo-description').val(data.description || '');
-            renderUsedIn(data.used_in || [], !!data.is_orphan);
-            $('#imp-current-filename').val(data.filename);
-            $('#imp-new-filename').val('');
-            $('#imp-suggested-name').text(data.suggested || '');
-            var backupHtml = data.has_backup
-                ? '<div class="imp-stat-box imp-stat-backup" style="border-color:var(--imp-warn);grid-column:1/-1">' +
-                  '<div class="imp-backup-info"><span>💾 <strong>' + (L.backup_available || 'Backup available') + '</strong>' + (data.backup_size ? ' \u00b7 ' + data.backup_size : '') + '</span></div>' +
-                  '<button id="imp-revert-btn" class="imp-btn imp-btn-sm imp-btn-danger">' + (L.revert_btn || 'Revert to original') + '</button>' +
-                  '<button id="imp-delete-backup-btn" class="imp-btn imp-btn-sm" style="border-color:var(--imp-warn);color:var(--imp-warn)">🗑 ' + (L.del_backup || 'Delete backup') + '</button>' +
-                  '</div>'
-                : '';
-            $('#imp-modal-stats').html(
-                '<div class="imp-stat-box"><span class="imp-stat-label">' + (L.stat_current_size || 'Current size') + '</span><span class="imp-stat-val">' + escHtml(data.filesize_h) + '</span></div>' +
-                '<div class="imp-stat-box"><span class="imp-stat-label">' + (L.stat_real_format || 'Format') + '</span><span class="imp-stat-val" style="color:var(--imp-accent2)">' + escHtml(data.ext) + '</span></div>' +
-                backupHtml
-            );
+            populateModalFromData(data);
+        }, function(err) {
+            $('#imp-modal-title-head').html('<span style="color:var(--imp-danger)">' + escHtml((L.error_prefix || 'Error: ') + err) + '</span>');
         });
     }
 
