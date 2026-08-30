@@ -4,6 +4,13 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class TSOIMMA_Image_Manager {
 
     /**
+     * Per-request cache for attachment reference checks.
+     *
+     * @var array<int, bool>
+     */
+    private static $referenced_cache = array();
+
+    /**
      * Reanomena el fitxer físic d'un attachment i actualitza totes les metadades
      * i referències a la base de dades.
      *
@@ -243,7 +250,7 @@ class TSOIMMA_Image_Manager {
             // de backup (_tso_im_backup.jpg) perquè no és a metadata['sizes'].
             // Cal llegir el path ABANS de cridar wp_delete_attachment (que esborraria
             // el postmeta _tso_im_backup_file i perdríem la referència).
-            $stored_backup = get_post_meta( $id, '_tso_im_backup_file', true );
+            $stored_backup = tsoimma_get_attachment_meta( $id, 'backup_file' );
             $safe_backup   = TSOIMMA_Optimizer::resolve_backup_path( $stored_backup, false );
             if ( false !== $safe_backup ) {
                 if ( file_exists( $safe_backup ) ) {
@@ -253,7 +260,7 @@ class TSOIMMA_Image_Manager {
             }
 
             // ── Eliminar fitxer temporal de compressió PDF si existeix ─
-            $pdf_temp = get_post_meta( $id, '_tso_im_pdf_bg_temp', true );
+            $pdf_temp = tsoimma_get_attachment_meta( $id, 'pdf_bg_temp' );
             if ( $pdf_temp && file_exists( $pdf_temp ) ) {
                 wp_delete_file( $pdf_temp );
             }
@@ -326,11 +333,13 @@ class TSOIMMA_Image_Manager {
             // Llegir mime directament del fitxer per tenir-lo actualitzat (fix bug WebP)
             $real_mime   = ( $file_path && file_exists( $file_path ) ) ? mime_content_type( $file_path ) : $post->post_mime_type;
             $real_ext    = self::mime_to_ext( $real_mime );
+            $alt_text    = (string) get_post_meta( $post->ID, '_wp_attachment_image_alt', true );
 
             $items[] = [
                 'id'           => $post->ID,
                 'title'        => $post->post_title,
-                'alt'          => get_post_meta( $post->ID, '_wp_attachment_image_alt', true ),
+                'alt'          => $alt_text,
+                'alt_ok'       => '' !== trim( $alt_text ) && ! TSOIMMA_Dashboard::is_weak_alt( $alt_text, $post->ID ),
                 'caption'      => $post->post_excerpt,
                 'description'  => $post->post_content,
                 'filename'     => basename( $file_path ?? '' ),
@@ -524,6 +533,175 @@ class TSOIMMA_Image_Manager {
     }
 
     /**
+     * Whether post content explicitly references an attachment ID (blocks/HTML JSON).
+     *
+     * @param int $post_id       Post ID.
+     * @param int $attachment_id Attachment ID.
+     * @return bool
+     */
+    public static function post_content_contains_attachment_id( $post_id, $attachment_id ) {
+        $post_id       = absint( $post_id );
+        $attachment_id = absint( $attachment_id );
+        if ( $post_id <= 0 || $attachment_id <= 0 ) {
+            return false;
+        }
+
+        $content = (string) get_post_field( 'post_content', $post_id );
+        if ( '' === $content ) {
+            return false;
+        }
+
+        $id = (string) $attachment_id;
+        $patterns = array(
+            '/\bdata-id="' . preg_quote( $id, '/' ) . '"/',
+            '/(?:"|\\\\")id(?:"|\\\\")\s*:\s*' . preg_quote( $id, '/' ) . '(?=[,\}\s])/',
+            '/"ids"\s*:\s*\[[^\]]*(?<![0-9])' . preg_quote( $id, '/' ) . '(?![0-9])[^\]]*\]/',
+            '/\bwp-image-' . preg_quote( $id, '/' ) . '\b/',
+        );
+
+        foreach ( $patterns as $pattern ) {
+            if ( preg_match( $pattern, $content ) ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Classify how an attachment is referenced (direct ID vs filename-only match).
+     *
+     * @param int $attachment_id Attachment ID.
+     * @return array<string, mixed>
+     */
+    public static function get_attachment_reference_report( $attachment_id ) {
+        $attachment_id = absint( $attachment_id );
+        $refs          = self::get_used_in_posts( $attachment_id );
+        $direct        = array();
+        $indirect      = array();
+
+        foreach ( $refs as $ref ) {
+            $post_id   = isset( $ref['id'] ) ? absint( $ref['id'] ) : 0;
+            $how       = isset( $ref['how'] ) ? (string) $ref['how'] : '';
+            $is_direct = false;
+
+            if ( ! empty( $ref['featured'] ) ) {
+                $is_direct = true;
+            } elseif ( 'adjunta' === $how ) {
+                $is_direct = true;
+            } elseif ( 'meta (ACF/Elementor)' === $how ) {
+                $is_direct = true;
+            } elseif ( 'bloc Gutenberg' === $how && self::post_content_contains_attachment_id( $post_id, $attachment_id ) ) {
+                $is_direct = true;
+            } elseif ( self::post_content_contains_attachment_id( $post_id, $attachment_id ) ) {
+                $is_direct = true;
+            }
+
+            $ref['edit_url']     = TSOIMMA_Post_Editor_Highlight::get_post_edit_highlight_url( $post_id, $attachment_id );
+            $ref['highlight_id'] = $attachment_id;
+            $ref['detail']       = $is_direct
+                ? self::describe_attachment_usage_in_post( $post_id, $attachment_id )
+                : self::describe_indirect_reference( $post_id, $attachment_id, $how );
+
+            if ( $is_direct ) {
+                $ref['match'] = 'direct';
+                $direct[]     = $ref;
+            } else {
+                $ref['match'] = 'indirect';
+                $indirect[]   = $ref;
+            }
+        }
+
+        $status = 'none';
+        if ( ! empty( $direct ) ) {
+            $status = 'embedded';
+        } elseif ( ! empty( $indirect ) ) {
+            $status = 'filename_only';
+        }
+
+        return array(
+            'status'        => $status,
+            'direct'        => $direct,
+            'indirect'      => $indirect,
+            'used_in_count' => count( $refs ),
+        );
+    }
+
+    /**
+     * Short label for where an attachment ID appears in post content.
+     *
+     * @param int $post_id       Post ID.
+     * @param int $attachment_id Attachment ID.
+     * @return string
+     */
+    private static function describe_attachment_usage_in_post( $post_id, $attachment_id ) {
+        $content = (string) get_post_field( 'post_content', $post_id );
+        $id      = (string) absint( $attachment_id );
+
+        if ( preg_match( '/wp:jetpack\/tiled-gallery/', $content )
+            && preg_match( '/"ids"\s*:\s*\[[^\]]*(?<![0-9])' . preg_quote( $id, '/' ) . '(?![0-9])[^\]]*\]/', $content ) ) {
+            return 'Jetpack Gallery · ids[]';
+        }
+        if ( preg_match( '/\bdata-id="' . preg_quote( $id, '/' ) . '"/', $content ) ) {
+            return 'HTML data-id';
+        }
+        if ( preg_match( '/wp:image[^>]*"id"\s*:\s*' . preg_quote( $id, '/' ) . '\b/', $content ) ) {
+            return 'Bloc imatge';
+        }
+        if ( preg_match( '/\bwp-image-' . preg_quote( $id, '/' ) . '\b/', $content ) ) {
+            return 'Bloc imatge (classe wp-image)';
+        }
+
+        return 'ID al contingut';
+    }
+
+    /**
+     * Explain a weak filename/URL match that does not embed this attachment ID.
+     *
+     * @param int    $post_id       Post ID.
+     * @param int    $attachment_id Attachment ID.
+     * @param string $how           Original match channel.
+     * @return string
+     */
+    private static function describe_indirect_reference( $post_id, $attachment_id, $how ) {
+        unset( $how );
+        $filename = basename( (string) get_attached_file( $attachment_id ) );
+        if ( '' === $filename ) {
+            return 'Coincidència de nom/URL (aquest ID no és al codi)';
+        }
+
+        $content = (string) get_post_field( 'post_content', $post_id );
+        if ( preg_match_all( '/\bdata-id="(\d+)"/', $content, $matches ) && ! empty( $matches[1] ) ) {
+            foreach ( array_unique( array_map( 'absint', $matches[1] ) ) as $embedded_id ) {
+                if ( $embedded_id <= 0 || $embedded_id === $attachment_id ) {
+                    continue;
+                }
+                $embedded_file = get_attached_file( $embedded_id );
+                if ( $embedded_file && basename( $embedded_file ) === $filename ) {
+                    /* translators: 1: attachment ID used in content, 2: duplicate attachment ID */
+                    return sprintf( 'El post usa #%1$d; #%2$d no hi és al codi', $embedded_id, $attachment_id );
+                }
+            }
+        }
+
+        if ( preg_match( '/"ids"\s*:\s*\[([^\]]+)\]/', $content, $ids_match ) ) {
+            $ids = array_map( 'absint', preg_split( '/\s*,\s*/', $ids_match[1] ) );
+            foreach ( $ids as $embedded_id ) {
+                if ( $embedded_id <= 0 || $embedded_id === $attachment_id ) {
+                    continue;
+                }
+                $embedded_file = get_attached_file( $embedded_id );
+                if ( $embedded_file && basename( $embedded_file ) === $filename ) {
+                    /* translators: 1: attachment ID used in content, 2: duplicate attachment ID */
+                    return sprintf( 'El post usa #%1$d (ids[]); #%2$d no hi és al codi', $embedded_id, $attachment_id );
+                }
+            }
+        }
+
+        return 'Coincidència de nom de fitxer (aquest ID no és al codi)';
+    }
+
+    /**
      * Fast check whether an attachment is referenced anywhere (inverse of orphan check).
      *
      * @param int $attachment_id Attachment ID.
@@ -536,6 +714,25 @@ class TSOIMMA_Image_Manager {
         }
 
         return ! TSOIMMA_Orphan_Finder::is_orphan( $attachment_id );
+    }
+
+    /**
+     * Cached wrapper for is_attachment_referenced (dashboard alt list).
+     *
+     * @param int $attachment_id Attachment ID.
+     * @return bool
+     */
+    public static function is_attachment_referenced_cached( $attachment_id ) {
+        $attachment_id = absint( $attachment_id );
+        if ( $attachment_id <= 0 ) {
+            return false;
+        }
+
+        if ( ! array_key_exists( $attachment_id, self::$referenced_cache ) ) {
+            self::$referenced_cache[ $attachment_id ] = self::is_attachment_referenced( $attachment_id );
+        }
+
+        return self::$referenced_cache[ $attachment_id ];
     }
 
     /**
@@ -616,6 +813,18 @@ class TSOIMMA_Image_Manager {
     }
 
     /**
+     * Suggest alt text from the attachment filename only (ignores title/caption).
+     *
+     * @param int $attachment_id Attachment ID.
+     * @return string
+     */
+    public static function suggest_alt_from_filename( $attachment_id ) {
+        $file_path = get_attached_file( absint( $attachment_id ) );
+        $base      = $file_path ? pathinfo( basename( $file_path ), PATHINFO_FILENAME ) : '';
+        return self::humanize_filename_for_alt( $base );
+    }
+
+    /**
      * Suggest accessible alt text from title or filename.
      *
      * @param int $attachment_id Attachment ID.
@@ -623,18 +832,344 @@ class TSOIMMA_Image_Manager {
      */
     public static function suggest_alt_text( $attachment_id ) {
         $attachment_id = absint( $attachment_id );
-        $title         = trim( (string) get_the_title( $attachment_id ) );
-
-        if ( '' !== $title && ! preg_match( '/^(IMG[-_]?|DSC[-_]?|Auto Draft)/i', $title ) ) {
-            return $title;
+        if ( $attachment_id <= 0 ) {
+            return '';
         }
 
+        $candidates = array();
+
         $file_path = get_attached_file( $attachment_id );
-        $base      = $file_path ? pathinfo( basename( $file_path ), PATHINFO_FILENAME ) : '';
+        $file_base = $file_path ? pathinfo( basename( $file_path ), PATHINFO_FILENAME ) : '';
+
+        $current_alt = trim( (string) get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ) );
+        if ( '' !== $current_alt && self::is_useful_alt_source( $current_alt ) && '' !== $file_base && function_exists( 'remove_accents' ) ) {
+            $fold_alt  = self::normalize_filename_token( remove_accents( $current_alt ) );
+            $fold_base = self::normalize_filename_token( remove_accents( $file_base ) );
+            if ( $fold_alt === $fold_base && remove_accents( $current_alt ) !== $current_alt ) {
+                $candidates[] = self::normalize_alt_source_text( $current_alt );
+            }
+        }
+
+        $title = trim( (string) get_the_title( $attachment_id ) );
+        if ( self::is_useful_alt_source( $title )
+            && ! ( '' !== $file_base && self::is_title_just_filename_stem( $title, $file_base ) ) ) {
+            $candidates[] = self::normalize_alt_source_text( $title );
+        }
+
+        $post = get_post( $attachment_id );
+        if ( $post ) {
+            $caption = trim( (string) $post->post_excerpt );
+            if ( self::is_useful_alt_source( $caption ) ) {
+                $candidates[] = $caption;
+            }
+
+            $description = trim( wp_strip_all_tags( (string) $post->post_content ) );
+            if ( self::is_useful_alt_source( $description ) ) {
+                $candidates[] = self::truncate_alt_phrase( $description );
+            }
+        }
+
+        if ( $file_path && file_exists( $file_path ) ) {
+            $exif_hint = self::get_attachment_exif_hint( $file_path );
+            if ( self::is_useful_alt_source( $exif_hint ) ) {
+                $candidates[] = $exif_hint;
+            }
+        }
+
+        if ( '' !== $file_base ) {
+            $humanized = self::humanize_filename_for_alt( $file_base );
+            if ( self::is_useful_alt_source( $humanized ) ) {
+                $candidates[] = $humanized;
+            }
+        }
+
+        $suggested = ! empty( $candidates ) ? (string) $candidates[0] : '';
+
+        /**
+         * Filter suggested alt text (e.g. vision/AI plugins may replace or enrich it).
+         *
+         * @param string $suggested     Current suggestion (may be empty).
+         * @param int    $attachment_id Attachment ID.
+         */
+        return apply_filters( 'tsoimma_suggest_alt_text', $suggested, $attachment_id );
+    }
+
+    /**
+     * Whether the attachment title is only the filename stem (not a real editorial title).
+     *
+     * @param string $title Attachment title.
+     * @param string $base  Filename without extension.
+     * @return bool
+     */
+    public static function is_title_just_filename_stem( $title, $base ) {
+        $title = trim( (string) $title );
+        $base  = trim( (string) $base );
+        if ( '' === $title || '' === $base ) {
+            return false;
+        }
+
+        // Multi-word titles are editorial text, not the raw upload stem.
+        if ( false !== strpos( $title, ' ' ) ) {
+            return false;
+        }
+
+        if ( self::normalize_filename_token( $title ) === self::normalize_filename_token( $base ) ) {
+            return true;
+        }
+
+        // Same stem without accents (espanol vs español): prefer the titled spelling.
+        if ( function_exists( 'remove_accents' ) ) {
+            $fold_title = self::normalize_filename_token( remove_accents( $title ) );
+            $fold_base  = self::normalize_filename_token( remove_accents( $base ) );
+            if ( $fold_title === $fold_base && '' !== $fold_title ) {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Normalize filename/title tokens for comparison.
+     *
+     * @param string $text Raw text.
+     * @return string
+     */
+    private static function normalize_filename_token( $text ) {
+        $text = strtolower( rawurldecode( (string) $text ) );
+        return (string) preg_replace( '/[\s\-_\.]+/', '', $text );
+    }
+
+    /**
+     * Whether a text string is useful as alt text (not generic camera/name noise).
+     *
+     * @param string $text Candidate text.
+     * @return bool
+     */
+    private static function is_useful_alt_source( $text ) {
+        $text = trim( preg_replace( '/\s+/u', ' ', (string) $text ) );
+        if ( '' === $text || strlen( $text ) < 2 ) {
+            return false;
+        }
+
+        if ( preg_match( '/^(IMG[-_]?|DSC[-_]?|DSCN|PICT|PHOTO|PANO|Auto Draft)/i', $text ) ) {
+            return false;
+        }
+
+        if ( preg_match( '/^\d+$/', $text ) ) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Build readable alt text from a filename stem (no extension).
+     *
+     * @param string $base Filename without extension.
+     * @return string
+     */
+    private static function humanize_filename_for_alt( $base ) {
+        $base = trim( rawurldecode( (string) $base ) );
         if ( '' === $base ) {
             return '';
         }
 
-        return ucwords( str_replace( array( '-', '_' ), ' ', $base ) );
+        $base = preg_replace( '/-\d+x\d+$/', '', $base );
+        $base = preg_replace( '/-scaled$/i', '', $base );
+
+        if ( preg_match( '/^\d+$/', $base ) ) {
+            return '';
+        }
+
+        if ( preg_match( '/^(IMG[-_]?|DSC[-_]?|DSCN|PICT|PHOTO|PANO)[-_]?\d+$/i', $base ) ) {
+            return '';
+        }
+
+        $base = preg_replace( '/([a-z\d])([A-Z])/', '$1 $2', $base );
+        $base = preg_replace( '/([A-Z]+)([A-Z][a-z])/', '$1 $2', $base );
+        $base = str_replace( array( '-', '_', '.' ), ' ', $base );
+        $base = preg_replace( '/\s+\d{1,3}$/', '', $base );
+        $base = preg_replace( '/(?<=[a-zA-Z])(\d{1,3})$/', '', $base );
+        $base = preg_replace( '/\s+/u', ' ', trim( $base ) );
+
+        if ( '' === $base || preg_match( '/^\d+$/', $base ) ) {
+            return '';
+        }
+
+        if ( false === strpos( $base, ' ' ) ) {
+            $base = self::split_concatenated_filename_token( $base );
+        }
+
+        return self::finalize_alt_phrase( $base );
+    }
+
+    /**
+     * Normalize attachment title/caption-like sources for alt text.
+     *
+     * @param string $text Source text.
+     * @return string
+     */
+    private static function normalize_alt_source_text( $text ) {
+        $text = trim( preg_replace( '/\s+/u', ' ', (string) $text ) );
+        if ( '' === $text ) {
+            return '';
+        }
+
+        if ( preg_match( '/[-_.]/', $text ) ) {
+            $text = str_replace( array( '-', '_', '.' ), ' ', $text );
+            $text = preg_replace( '/\s+/u', ' ', trim( $text ) );
+        }
+
+        return self::finalize_alt_phrase( $text );
+    }
+
+    /**
+     * Capitalize and restore common Spanish accents lost in filenames.
+     *
+     * @param string $text Humanized phrase.
+     * @return string
+     */
+    private static function finalize_alt_phrase( $text ) {
+        return self::apply_common_spanish_accents( self::format_alt_phrase( $text ) );
+    }
+
+    /**
+     * @param string $text Humanized phrase.
+     * @return string
+     */
+    private static function apply_common_spanish_accents( $text ) {
+        $text = (string) $text;
+        if ( '' === trim( $text ) ) {
+            return '';
+        }
+
+        $map = array(
+            'espanol'   => 'español',
+            'espanola'  => 'española',
+            'espanoles' => 'españoles',
+            'nino'      => 'niño',
+            'nina'      => 'niña',
+            'munoz'     => 'muñoz',
+            'garcia'    => 'garcía',
+            'perez'     => 'pérez',
+            'martin'    => 'martín',
+            'angel'     => 'ángel',
+        );
+
+        foreach ( $map as $plain => $accented ) {
+            $text = preg_replace(
+                '/\b' . preg_quote( $plain, '/' ) . '\b/iu',
+                $accented,
+                $text
+            );
+        }
+
+        return $text;
+    }
+
+    /**
+     * Split glued lowercase tokens only when a known prefix is present.
+     *
+     * @param string $token Single-word filename stem.
+     * @return string
+     */
+    private static function split_concatenated_filename_token( $token ) {
+        $lower = strtolower( (string) $token );
+        if ( '' === $lower ) {
+            return '';
+        }
+
+        $prefixes = array(
+            'anti', 'auto', 'pre', 'pro', 'mini', 'mega', 'super', 'ultra',
+            'photo', 'image', 'logo', 'icon', 'banner', 'header', 'footer',
+            'background', 'bg', 'cover', 'hero', 'thumb', 'mobile', 'desktop',
+        );
+
+        foreach ( $prefixes as $prefix ) {
+            $prefix_len = strlen( $prefix );
+            if ( strlen( $lower ) <= $prefix_len + 2 ) {
+                continue;
+            }
+            if ( 0 === strpos( $lower, $prefix ) ) {
+                $rest = substr( $lower, $prefix_len );
+                if ( preg_match( '/^[a-z]{2,}$/', $rest ) ) {
+                    return $prefix . ' ' . $rest;
+                }
+            }
+        }
+
+        return $lower;
+    }
+
+    /**
+     * @param string $text Long description/caption.
+     * @param int    $max  Max characters.
+     * @return string
+     */
+    private static function truncate_alt_phrase( $text, $max = 125 ) {
+        $text = trim( preg_replace( '/\s+/u', ' ', (string) $text ) );
+        if ( '' === $text ) {
+            return '';
+        }
+
+        if ( function_exists( 'mb_strlen' ) && function_exists( 'mb_substr' ) ) {
+            if ( mb_strlen( $text ) <= $max ) {
+                return $text;
+            }
+            return rtrim( mb_substr( $text, 0, $max - 1 ) ) . '…';
+        }
+
+        if ( strlen( $text ) <= $max ) {
+            return $text;
+        }
+
+        return rtrim( substr( $text, 0, $max - 1 ) ) . '…';
+    }
+
+    /**
+     * @param string $file_path Absolute image path.
+     * @return string
+     */
+    private static function get_attachment_exif_hint( $file_path ) {
+        if ( ! function_exists( 'wp_read_image_metadata' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/media.php';
+        }
+
+        $meta = wp_read_image_metadata( $file_path );
+        if ( ! is_array( $meta ) ) {
+            return '';
+        }
+
+        foreach ( array( 'caption', 'title' ) as $key ) {
+            if ( empty( $meta[ $key ] ) ) {
+                continue;
+            }
+            $hint = trim( (string) $meta[ $key ] );
+            if ( self::is_useful_alt_source( $hint ) ) {
+                return $hint;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param string $text Humanized phrase.
+     * @return string
+     */
+    private static function format_alt_phrase( $text ) {
+        $text = trim( preg_replace( '/\s+/u', ' ', (string) $text ) );
+        if ( '' === $text ) {
+            return '';
+        }
+
+        if ( function_exists( 'mb_strtolower' ) && function_exists( 'mb_substr' ) && function_exists( 'mb_strtoupper' ) ) {
+            $lower = mb_strtolower( $text );
+            return mb_strtoupper( mb_substr( $lower, 0, 1 ) ) . mb_substr( $lower, 1 );
+        }
+
+        $lower = strtolower( $text );
+        return ucfirst( $lower );
     }
 }

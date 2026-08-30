@@ -17,6 +17,22 @@ class TSOIMMA_URL_Fixer {
         return $base;
     }
 
+    private static function uploads_url_prefixes() {
+        $base     = self::uploads_base();
+        $prefixes = array(
+            untrailingslashit( $base['url'] ),
+            untrailingslashit( rawurldecode( $base['url'] ) ),
+        );
+
+        foreach ( array( 'http', 'https' ) as $scheme ) {
+            $scheme_url = set_url_scheme( $base['url'], $scheme );
+            $prefixes[] = untrailingslashit( $scheme_url );
+            $prefixes[] = untrailingslashit( rawurldecode( $scheme_url ) );
+        }
+
+        return array_values( array_unique( array_filter( $prefixes ) ) );
+    }
+
     /**
      * Whether a URL points to the site uploads directory (encoded or decoded).
      *
@@ -30,10 +46,7 @@ class TSOIMMA_URL_Fixer {
         }
 
         $base     = self::uploads_base();
-        $prefixes = array(
-            untrailingslashit( $base['url'] ),
-            untrailingslashit( rawurldecode( $base['url'] ) ),
-        );
+        $prefixes = self::uploads_url_prefixes();
 
         foreach ( array_unique( array( $url, rawurldecode( $url ) ) ) as $candidate ) {
             foreach ( $prefixes as $prefix ) {
@@ -44,6 +57,32 @@ class TSOIMMA_URL_Fixer {
         }
 
         return false;
+    }
+
+    /**
+     * Strip uploads base URL prefix (http/https, encoded/decoded) and return relative path.
+     *
+     * @param string $url Media URL under uploads.
+     * @return string|null Relative path inside uploads, or null when invalid.
+     */
+    private static function uploads_rel_path_from_url( $url ) {
+        $url = (string) $url;
+        if ( '' === $url || ! self::is_uploads_media_url( $url ) ) {
+            return null;
+        }
+
+        foreach ( array_unique( array( $url, rawurldecode( $url ) ) ) as $candidate ) {
+            foreach ( self::uploads_url_prefixes() as $prefix ) {
+                if ( $candidate === $prefix ) {
+                    return '';
+                }
+                if ( 0 === strpos( $candidate, $prefix . '/' ) ) {
+                    return rawurldecode( ltrim( substr( $candidate, strlen( $prefix ) + 1 ), '/' ) );
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -59,8 +98,8 @@ class TSOIMMA_URL_Fixer {
         }
 
         $base = self::uploads_base();
-        $rel  = rawurldecode( ltrim( str_replace( $base['url'], '', $url ), '/' ) );
-        if ( '' === $rel || false !== strpos( $rel, '..' ) ) {
+        $rel  = self::uploads_rel_path_from_url( $url );
+        if ( null === $rel || false !== strpos( $rel, '..' ) ) {
             return null;
         }
 
@@ -215,7 +254,9 @@ class TSOIMMA_URL_Fixer {
             }
 
             foreach ( array_keys( $urls ) as $url ) {
-                if ( strpos( $url, $base['url'] ) === false ) continue;
+                if ( ! self::is_uploads_media_url( $url ) ) {
+                    continue;
+                }
 
                 $new_url = null;
                 $reason  = '';
@@ -231,7 +272,10 @@ class TSOIMMA_URL_Fixer {
                 // TIPUS B: fitxer absent
                 if ( ! $type ) {
                     // Important: content URLs can be percent-encoded (%C3%B1) while filesystem paths are not.
-                    $rel_path  = rawurldecode( str_replace( $base['url'], '', $url ) );
+                    $rel_path = self::uploads_rel_path_from_url( $url );
+                    if ( null === $rel_path ) {
+                        continue;
+                    }
                     $full_path = wp_normalize_path( $base['dir'] . ltrim( $rel_path, '/' ) );
                     if ( ! file_exists( $full_path ) ) {
                         $pi = pathinfo( $full_path );

@@ -8,12 +8,22 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class TSOIMMA_Queue {
 
-	const OPTION_KEY   = 'tsoimma_job_queue';
-	const CRON_HOOK    = 'tsoimma_process_queue';
-	const LOCK_OPTION  = 'tsoimma_queue_lock';
-	const BATCH_SIZE   = 5;
-	const LOCK_TTL     = 180;
-	const STUCK_SECONDS = 300;
+	const OPTION_KEY      = 'tsoimma_job_queue';
+	const CRON_HOOK       = 'tsoimma_process_queue';
+	const LOCK_OPTION     = 'tsoimma_queue_lock';
+	const ENQUEUE_LOCK_OPTION = 'tsoimma_queue_enqueue_lock';
+	const ENQUEUE_LOCK_TTL    = 30;
+	const BATCH_SIZE      = 5;
+	const THUMBS_BATCH    = 2;
+	const LOCK_TTL        = 900;
+	const STUCK_SECONDS   = 900;
+
+	/**
+	 * Token held by the current batch worker (refreshed while jobs run).
+	 *
+	 * @var string
+	 */
+	private static $lock_token = '';
 
 	/**
 	 * @return void
@@ -32,45 +42,57 @@ class TSOIMMA_Queue {
 	 * @return array<string, mixed>
 	 */
 	public static function enqueue_optimize( $attachment_ids, $format, $quality, $replace = true ) {
-		$format  = sanitize_key( $format );
-		$quality = min( 100, max( 50, absint( $quality ) ) );
-		$queue   = self::get_queue();
-		self::prune_finished_jobs( $queue );
-
-		$busy = array();
-		foreach ( $queue['jobs'] as $job ) {
-			if ( ! isset( $job['status'], $job['attachment_id'] ) ) {
-				continue;
-			}
-			if ( in_array( $job['status'], array( 'pending', 'processing' ), true ) ) {
-				$busy[ absint( $job['attachment_id'] ) ] = true;
+		if ( ! self::acquire_enqueue_lock() ) {
+			usleep( 100000 );
+			if ( ! self::acquire_enqueue_lock() ) {
+				return self::get_status();
 			}
 		}
 
-		foreach ( array_map( 'absint', (array) $attachment_ids ) as $attachment_id ) {
-			if ( $attachment_id <= 0 || isset( $busy[ $attachment_id ] ) ) {
-				continue;
+		try {
+			$format  = sanitize_key( $format );
+			$quality = min( 100, max( 50, absint( $quality ) ) );
+			$queue   = self::get_queue();
+			self::prune_finished_jobs( $queue );
+
+			$busy = array();
+			foreach ( $queue['jobs'] as $job ) {
+				if ( ! isset( $job['status'], $job['attachment_id'] ) ) {
+					continue;
+				}
+				if ( self::is_active_status( (string) $job['status'] ) ) {
+					$busy[ absint( $job['attachment_id'] ) ] = true;
+				}
 			}
-			$queue['jobs'][] = array(
-				'id'            => uniqid( 'job_', true ),
-				'type'          => 'optimize',
-				'attachment_id' => $attachment_id,
-				'format'        => $format,
-				'quality'       => $quality,
-				'replace'       => (bool) $replace,
-				'status'        => 'pending',
-				'error'         => '',
-				'added'         => time(),
-				'started'       => 0,
-			);
-			$busy[ $attachment_id ] = true;
+
+			foreach ( array_map( 'absint', (array) $attachment_ids ) as $attachment_id ) {
+				if ( $attachment_id <= 0 || isset( $busy[ $attachment_id ] ) ) {
+					continue;
+				}
+				$queue['jobs'][] = array(
+					'id'            => uniqid( 'job_', true ),
+					'type'          => 'optimize',
+					'attachment_id' => $attachment_id,
+					'format'        => $format,
+					'quality'       => $quality,
+					'replace'       => (bool) $replace,
+					'status'        => 'pending',
+					'phase'         => 'convert',
+					'error'         => '',
+					'added'         => time(),
+					'started'       => 0,
+				);
+				$busy[ $attachment_id ] = true;
+			}
+
+			$queue['updated'] = time();
+			update_option( self::OPTION_KEY, $queue, false );
+			self::schedule();
+
+			return self::get_status();
+		} finally {
+			self::release_enqueue_lock();
 		}
-
-		$queue['updated'] = time();
-		update_option( self::OPTION_KEY, $queue, false );
-		self::schedule();
-
-		return self::get_status();
 	}
 
 	/**
@@ -80,11 +102,12 @@ class TSOIMMA_Queue {
 		$queue = self::get_queue();
 		$jobs  = isset( $queue['jobs'] ) && is_array( $queue['jobs'] ) ? $queue['jobs'] : array();
 
-		$pending    = 0;
-		$processing = 0;
-		$done       = 0;
-		$errors     = 0;
-		$total      = 0;
+		$pending         = 0;
+		$processing      = 0;
+		$thumbs_pending  = 0;
+		$done            = 0;
+		$errors          = 0;
+		$total           = 0;
 		foreach ( $jobs as $job ) {
 			$status = isset( $job['status'] ) ? (string) $job['status'] : 'pending';
 			if ( 'cancelled' === $status ) {
@@ -95,6 +118,8 @@ class TSOIMMA_Queue {
 				++$pending;
 			} elseif ( 'processing' === $status ) {
 				++$processing;
+			} elseif ( 'thumbs_pending' === $status ) {
+				++$thumbs_pending;
 			} elseif ( 'error' === $status ) {
 				++$errors;
 			} else {
@@ -103,13 +128,14 @@ class TSOIMMA_Queue {
 		}
 
 		return array(
-			'total'      => $total,
-			'pending'    => $pending + $processing,
-			'processing' => $processing,
-			'done'       => $done,
-			'errors'     => $errors,
-			'running'    => ( $pending + $processing ) > 0,
-			'updated'    => isset( $queue['updated'] ) ? (int) $queue['updated'] : 0,
+			'total'          => $total,
+			'pending'        => $pending,
+			'processing'     => $processing,
+			'thumbs_pending' => $thumbs_pending,
+			'done'           => $done,
+			'errors'         => $errors,
+			'running'        => ( $pending + $processing + $thumbs_pending ) > 0,
+			'updated'        => isset( $queue['updated'] ) ? (int) $queue['updated'] : 0,
 		);
 	}
 
@@ -128,8 +154,11 @@ class TSOIMMA_Queue {
 		}
 
 		try {
-			$claimed_ids = self::claim_next_batch();
-			if ( empty( $claimed_ids ) ) {
+			// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
+			@set_time_limit( 300 );
+
+			$claimed_jobs = self::claim_next_batch();
+			if ( empty( $claimed_jobs ) ) {
 				$queue = self::get_queue();
 				if ( self::count_active( $queue['jobs'] ) > 0 ) {
 					self::schedule( true );
@@ -141,38 +170,23 @@ class TSOIMMA_Queue {
 				return;
 			}
 
-			foreach ( $claimed_ids as $job_id ) {
-				$job = self::find_job( $job_id );
+			foreach ( $claimed_jobs as $claimed ) {
+				self::refresh_lock();
+
+				$job_id = isset( $claimed['id'] ) ? (string) $claimed['id'] : '';
+				$phase  = isset( $claimed['phase'] ) ? (string) $claimed['phase'] : 'convert';
+				$job    = self::find_job( $job_id );
+
 				if ( ! $job || 'processing' !== $job['status'] ) {
 					continue;
 				}
 
-				$result = TSOIMMA_Optimizer::run_optimize_pipeline(
-					absint( $job['attachment_id'] ),
-					sanitize_key( $job['format'] ?? 'webp' ),
-					absint( $job['quality'] ?? 82 ),
-					! empty( $job['replace'] )
-				);
-
-				if ( is_wp_error( $result ) ) {
-					self::update_job(
-						$job_id,
-						array(
-							'status'  => 'error',
-							'error'   => $result->get_error_message(),
-							'started' => 0,
-						)
-					);
-				} else {
-					self::update_job(
-						$job_id,
-						array(
-							'status'  => 'done',
-							'error'   => '',
-							'started' => 0,
-						)
-					);
+				if ( 'thumbs' === $phase ) {
+					self::process_job_thumbnails( $job_id, $job );
+					continue;
 				}
+
+				self::process_job_convert( $job_id, $job );
 			}
 
 			$queue = self::get_queue();
@@ -185,6 +199,96 @@ class TSOIMMA_Queue {
 			}
 		} finally {
 			self::release_lock();
+		}
+	}
+
+	/**
+	 * Run convert + metadata for one queue job.
+	 *
+	 * @param string               $job_id Job ID.
+	 * @param array<string, mixed> $job    Job payload.
+	 * @return void
+	 */
+	private static function process_job_convert( $job_id, $job ) {
+		$result = TSOIMMA_Optimizer::run_optimize_pipeline(
+			absint( $job['attachment_id'] ),
+			sanitize_key( $job['format'] ?? 'webp' ),
+			absint( $job['quality'] ?? 82 ),
+			! empty( $job['replace'] ),
+			true
+		);
+
+		if ( is_wp_error( $result ) ) {
+			self::update_job(
+				$job_id,
+				array(
+					'status'  => 'error',
+					'error'   => $result->get_error_message(),
+					'started' => 0,
+					'phase'   => 'convert',
+				)
+			);
+			return;
+		}
+
+		if ( ! empty( $result['thumbnails_pending'] ) ) {
+			self::update_job(
+				$job_id,
+				array(
+					'status'  => 'thumbs_pending',
+					'error'   => '',
+					'started' => 0,
+					'phase'   => 'thumbs',
+				)
+			);
+			return;
+		}
+
+		self::update_job(
+			$job_id,
+			array(
+				'status'  => 'done',
+				'error'   => '',
+				'started' => 0,
+				'phase'   => 'convert',
+			)
+		);
+	}
+
+	/**
+	 * Run thumbnail regeneration for one queue job.
+	 *
+	 * @param string               $job_id Job ID.
+	 * @param array<string, mixed> $job    Job payload.
+	 * @return void
+	 */
+	private static function process_job_thumbnails( $job_id, $job ) {
+		$attachment_id = absint( $job['attachment_id'] );
+		$format        = sanitize_key( $job['format'] ?? 'webp' );
+		$quality       = absint( $job['quality'] ?? 82 );
+
+		try {
+			TSOIMMA_Optimizer::run_optimize_thumbnails_phase( $attachment_id, $format, $quality );
+			TSOIMMA_Cache_Helper::purge_after_change( $attachment_id );
+			self::update_job(
+				$job_id,
+				array(
+					'status'  => 'done',
+					'error'   => '',
+					'started' => 0,
+					'phase'   => 'thumbs',
+				)
+			);
+		} catch ( \Throwable $ex ) {
+			self::update_job(
+				$job_id,
+				array(
+					'status'  => 'error',
+					'error'   => 'Thumbnails: ' . $ex->getMessage(),
+					'started' => 0,
+					'phase'   => 'thumbs',
+				)
+			);
 		}
 	}
 
@@ -252,12 +356,20 @@ class TSOIMMA_Queue {
 				$jobs,
 				function ( $job ) {
 					$status = isset( $job['status'] ) ? (string) $job['status'] : '';
-					return in_array( $status, array( 'pending', 'processing' ), true );
+					return self::is_active_status( $status );
 				}
 			)
 		);
 		$queue['jobs']    = $jobs;
 		$queue['updated'] = time();
+	}
+
+	/**
+	 * @param string $status Job status.
+	 * @return bool
+	 */
+	private static function is_active_status( $status ) {
+		return in_array( $status, array( 'pending', 'processing', 'thumbs_pending' ), true );
 	}
 
 	/**
@@ -302,7 +414,7 @@ class TSOIMMA_Queue {
 			if ( ! isset( $job['status'] ) ) {
 				continue;
 			}
-			if ( in_array( $job['status'], array( 'pending', 'processing' ), true ) ) {
+			if ( self::is_active_status( (string) $job['status'] ) ) {
 				++$count;
 			}
 		}
@@ -312,12 +424,13 @@ class TSOIMMA_Queue {
 	/**
 	 * Reclaim stuck jobs and mark the next batch as processing.
 	 *
-	 * @return string[] Claimed job IDs.
+	 * @return array<int, array<string, string>> Claimed jobs with id + phase.
 	 */
 	private static function claim_next_batch() {
-		$now          = time();
-		$queue        = self::get_queue();
-		$candidate_ids = array();
+		$now           = time();
+		$queue         = self::get_queue();
+		$convert_ids   = array();
+		$thumb_ids     = array();
 
 		foreach ( $queue['jobs'] as $index => $job ) {
 			if ( ! isset( $job['status'], $job['id'] ) ) {
@@ -326,63 +439,87 @@ class TSOIMMA_Queue {
 			if ( 'processing' === $job['status'] ) {
 				$started = isset( $job['started'] ) ? (int) $job['started'] : 0;
 				if ( $started <= 0 || ( $now - $started ) >= self::STUCK_SECONDS ) {
-					$queue['jobs'][ $index ]['status']  = 'pending';
+					$reset_status = ( isset( $job['phase'] ) && 'thumbs' === $job['phase'] ) ? 'thumbs_pending' : 'pending';
+					$queue['jobs'][ $index ]['status']  = $reset_status;
 					$queue['jobs'][ $index ]['started'] = 0;
 					$queue['jobs'][ $index ]['error']   = '';
 				}
 			}
 		}
+		$queue['updated'] = $now;
+		update_option( self::OPTION_KEY, $queue, false );
 
 		foreach ( $queue['jobs'] as $job ) {
-			if ( count( $candidate_ids ) >= self::BATCH_SIZE ) {
-				break;
+			if ( ! isset( $job['status'], $job['id'] ) ) {
+				continue;
 			}
-			if ( isset( $job['status'], $job['id'] ) && 'pending' === $job['status'] ) {
-				$candidate_ids[] = (string) $job['id'];
+			if ( 'thumbs_pending' === $job['status'] && count( $thumb_ids ) < self::THUMBS_BATCH ) {
+				$thumb_ids[] = (string) $job['id'];
 			}
 		}
 
-		if ( empty( $candidate_ids ) ) {
+		foreach ( $queue['jobs'] as $job ) {
+			if ( count( $convert_ids ) + count( $thumb_ids ) >= self::BATCH_SIZE ) {
+				break;
+			}
+			if ( ! isset( $job['status'], $job['id'] ) || 'pending' !== $job['status'] ) {
+				continue;
+			}
+			$convert_ids[] = (string) $job['id'];
+		}
+
+		if ( empty( $convert_ids ) && empty( $thumb_ids ) ) {
 			$queue['updated'] = $now;
 			update_option( self::OPTION_KEY, $queue, false );
 			return array();
 		}
 
-		// Re-read so concurrent enqueue() is not wiped, then claim by job id.
-		$fresh       = self::get_queue();
-		$claimed_ids = array();
+		$fresh        = self::get_queue();
+		$claimed_jobs = array();
+
+		foreach ( $fresh['jobs'] as $index => $job ) {
+			if ( ! isset( $job['id'], $job['status'] ) || 'processing' !== $job['status'] ) {
+				continue;
+			}
+			$started = isset( $job['started'] ) ? (int) $job['started'] : 0;
+			if ( $started <= 0 || ( $now - $started ) >= self::STUCK_SECONDS ) {
+				$reset_status = ( isset( $job['phase'] ) && 'thumbs' === $job['phase'] ) ? 'thumbs_pending' : 'pending';
+				$fresh['jobs'][ $index ]['status']  = $reset_status;
+				$fresh['jobs'][ $index ]['started'] = 0;
+			}
+		}
+
 		foreach ( $fresh['jobs'] as $index => $job ) {
 			if ( ! isset( $job['id'], $job['status'] ) ) {
 				continue;
 			}
 			$job_id = (string) $job['id'];
-			if ( 'processing' === $job['status'] ) {
-				$started = isset( $job['started'] ) ? (int) $job['started'] : 0;
-				if ( $started <= 0 || ( $now - $started ) >= self::STUCK_SECONDS ) {
-					$fresh['jobs'][ $index ]['status']  = 'pending';
-					$fresh['jobs'][ $index ]['started'] = 0;
-				}
-			}
-		}
-		foreach ( $fresh['jobs'] as $index => $job ) {
-			if ( count( $claimed_ids ) >= self::BATCH_SIZE ) {
-				break;
-			}
-			if ( ! isset( $job['id'], $job['status'] ) || 'pending' !== $job['status'] ) {
+
+			if ( 'thumbs_pending' === $job['status'] && in_array( $job_id, $thumb_ids, true ) ) {
+				$fresh['jobs'][ $index ]['status']  = 'processing';
+				$fresh['jobs'][ $index ]['started'] = $now;
+				$fresh['jobs'][ $index ]['phase']   = 'thumbs';
+				$claimed_jobs[]                     = array(
+					'id'    => $job_id,
+					'phase' => 'thumbs',
+				);
 				continue;
 			}
-			$job_id = (string) $job['id'];
-			if ( ! in_array( $job_id, $candidate_ids, true ) ) {
-				continue;
+
+			if ( 'pending' === $job['status'] && in_array( $job_id, $convert_ids, true ) ) {
+				$fresh['jobs'][ $index ]['status']  = 'processing';
+				$fresh['jobs'][ $index ]['started'] = $now;
+				$fresh['jobs'][ $index ]['phase']   = 'convert';
+				$claimed_jobs[]                     = array(
+					'id'    => $job_id,
+					'phase' => 'convert',
+				);
 			}
-			$fresh['jobs'][ $index ]['status']  = 'processing';
-			$fresh['jobs'][ $index ]['started'] = $now;
-			$claimed_ids[]                      = $job_id;
 		}
 
 		$fresh['updated'] = $now;
 		update_option( self::OPTION_KEY, $fresh, false );
-		return $claimed_ids;
+		return $claimed_jobs;
 	}
 
 	/**
@@ -397,6 +534,7 @@ class TSOIMMA_Queue {
 		);
 
 		if ( add_option( self::LOCK_OPTION, $payload, '', 'no' ) ) {
+			self::$lock_token = $token;
 			return true;
 		}
 
@@ -407,14 +545,73 @@ class TSOIMMA_Queue {
 
 		update_option( self::LOCK_OPTION, $payload, false );
 		$check = get_option( self::LOCK_OPTION );
-		return is_array( $check ) && isset( $check['token'] ) && $check['token'] === $token;
+		if ( is_array( $check ) && isset( $check['token'] ) && $check['token'] === $token ) {
+			self::$lock_token = $token;
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Extend lock TTL while a batch is still running.
+	 *
+	 * @return void
+	 */
+	private static function refresh_lock() {
+		if ( '' === self::$lock_token ) {
+			return;
+		}
+
+		$lock = get_option( self::LOCK_OPTION );
+		if ( ! is_array( $lock ) || ! isset( $lock['token'] ) || $lock['token'] !== self::$lock_token ) {
+			return;
+		}
+
+		$lock['until'] = time() + self::LOCK_TTL;
+		update_option( self::LOCK_OPTION, $lock, false );
 	}
 
 	/**
 	 * @return void
 	 */
 	private static function release_lock() {
+		self::$lock_token = '';
 		delete_option( self::LOCK_OPTION );
+	}
+
+	/**
+	 * Short-lived mutex for enqueue read-modify-write.
+	 *
+	 * @return bool
+	 */
+	private static function acquire_enqueue_lock() {
+		$now     = time();
+		$token   = wp_generate_password( 12, false, false );
+		$payload = array(
+			'token' => $token,
+			'until' => $now + self::ENQUEUE_LOCK_TTL,
+		);
+
+		if ( add_option( self::ENQUEUE_LOCK_OPTION, $payload, '', 'no' ) ) {
+			return true;
+		}
+
+		$lock = get_option( self::ENQUEUE_LOCK_OPTION );
+		if ( is_array( $lock ) && isset( $lock['until'] ) && (int) $lock['until'] > $now ) {
+			return false;
+		}
+
+		update_option( self::ENQUEUE_LOCK_OPTION, $payload, false );
+		$check = get_option( self::ENQUEUE_LOCK_OPTION );
+		return is_array( $check ) && isset( $check['token'] ) && $check['token'] === $token;
+	}
+
+	/**
+	 * @return void
+	 */
+	private static function release_enqueue_lock() {
+		delete_option( self::ENQUEUE_LOCK_OPTION );
 	}
 
 	/**

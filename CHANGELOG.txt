@@ -1,6 +1,37 @@
 === Changelog ===
 
-All notable changes to TSO Image Master are documented in this file. Recent releases (1.9.x) are also summarized in readme.txt for WordPress.org.
+Full release history for TSO Image Master. Recent releases (1.9.5+) are also summarized in readme.txt for WordPress.org.
+
+Versions 1.0.0 through 1.9.3 were moved out of readme.txt to keep the WordPress.org listing shorter.
+
+= 1.9.8 =
+
+* Improved: WordPress.org compliance — canonical `tsoimma_` AJAX/storage layer, prefixed history table, attachment meta migration, sanitized AJAX inputs.
+* Improved: Overview alt list — manual edit for numeric/camera filenames, accurate missing-alt counter, used-in column, SEO tab weak-alt detection.
+* Improved: Dashboard layout — background queue and backup retention side by side; backup stats cache; queue enqueue mutex.
+* Improved: Bulk optimize limits (25 sync / 100 queued); bulk alt fill no longer overwrites good alts.
+* Fixed: Weak alt detection with spaces; thumbnail AJAX errors surfaced; Requires at least WordPress 6.1.
+
+= 1.9.7 =
+* Improved: Alt humanization (Spanish accents, fewer bad filename splits); missing-alt counter after bulk fill; dashboard overview cached until data changes.
+* Improved: Search clear (×) buttons; duplicate finder link styling; post editor deep-link highlights attachment in Gutenberg galleries.
+* Improved: Optimize modal collapses the resize section after a successful optimization.
+* Fixed: Alt save button contrast and spacing; hover preview stuck after bulk alt fill; save blocked when browser autocomplete was open.
+
+= 1.9.6 =
+
+* Improved: Smarter suggested alt text (humanized filenames, EXIF/caption, skips pure numbers and camera noise).
+* Improved: Overview alt list shows only images with a fillable suggestion; bulk fill skips unusable names.
+* Improved: URL Fixer matches uploads URLs with http/https and encoded paths; safer path resolution.
+* Improved: Background queue shows pending vs processing separately; Cancel only affects pending jobs.
+* Improved: MIME mismatch and ghost attachment scans paginate in batches (large libraries).
+* Improved: Rogue file delete allowlist UX (24h scan note and rescan hint).
+* Fixed: Auto-optimize rollback, queue lock TTL/refresh, ghost delete on valid images, history default dates.
+* Fixed: Optimize modal thumbnail status (no fake delay; sync fallback without double cron).
+* Fixed: Duplicate scan covers full library; backup meta purge without basename collisions.
+* Fixed: History logs optimize only when replaced; revert action translated in history table.
+* Fixed: Plugin Check LIKE placeholder warnings in maintenance AJAX queries.
+* Added: Filter `tsoimma_suggest_alt_text` for custom/AI alt enrichment.
 
 = 1.9.5 =
 

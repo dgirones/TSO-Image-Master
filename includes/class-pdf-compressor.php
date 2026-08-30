@@ -28,7 +28,7 @@ class TSOIMMA_PDF_Compressor {
         if ( self::is_pdf_encrypted( $file_path ) ) {
             return new WP_Error( 'pdf_protected', 'Aquest PDF està protegit/encriptat i no es pot comprimir automàticament.' );
         }
-        if ( get_post_meta( $attachment_id, '_tso_im_pdf_compressed', true ) ) {
+        if ( tsoimma_get_attachment_meta( $attachment_id, 'pdf_compressed' ) ) {
             return new WP_Error( 'already_compressed', 'Aquest PDF ja consta com a comprimit. Evitem recomprimir per no perdre qualitat.' );
         }
 
@@ -123,7 +123,7 @@ class TSOIMMA_PDF_Compressor {
         foreach ( $query->posts as $post ) {
             $file  = get_attached_file( $post->ID );
             $size  = ( $file && file_exists( $file ) ) ? filesize( $file ) : 0;
-            $non_compressible = get_post_meta( $post->ID, '_tso_im_pdf_non_compressible', true );
+            $non_compressible = tsoimma_get_attachment_meta( $post->ID, 'pdf_non_compressible' );
             if ( ! is_array( $non_compressible ) ) {
                 $non_compressible = array();
             }
@@ -135,7 +135,7 @@ class TSOIMMA_PDF_Compressor {
                 'filesize'    => $size > 0 ? size_format( $size ) : '—',
                 'filesize_raw'=> $size,
                 'date'        => get_the_date( 'd/m/Y', $post->ID ),
-                'compressed'  => (bool) get_post_meta( $post->ID, '_tso_im_pdf_compressed', true ),
+                'compressed'  => (bool) tsoimma_get_attachment_meta( $post->ID, 'pdf_compressed' ),
                 'non_compressible' => ! empty( $non_compressible ),
                 'non_compressible_reason' => isset( $non_compressible['message'] ) ? (string) $non_compressible['message'] : '',
                 'non_compressible_at' => isset( $non_compressible['timestamp'] ) ? (int) $non_compressible['timestamp'] : 0,
@@ -273,7 +273,7 @@ class TSOIMMA_PDF_Compressor {
         if ( self::is_pdf_encrypted( $file_path ) ) {
             return new WP_Error( 'pdf_protected', 'Aquest PDF està protegit/encriptat i no es pot comprimir automàticament.' );
         }
-        if ( get_post_meta( $attachment_id, '_tso_im_pdf_compressed', true ) ) {
+        if ( tsoimma_get_attachment_meta( $attachment_id, 'pdf_compressed' ) ) {
             return new WP_Error( 'already_compressed', 'Aquest PDF ja consta com a comprimit. Evitem recomprimir per no perdre qualitat.' );
         }
         if ( ! self::ghostscript_available() ) {
@@ -289,14 +289,14 @@ class TSOIMMA_PDF_Compressor {
         }
 
         // Guardar info per al polling
-        update_post_meta( $attachment_id, '_tso_im_pdf_bg_temp',     $temp_path );
-        update_post_meta( $attachment_id, '_tso_im_pdf_bg_original', $file_path );
-        update_post_meta( $attachment_id, '_tso_im_pdf_bg_size',     filesize( $file_path ) );
-        update_post_meta( $attachment_id, '_tso_im_pdf_bg_quality',  $quality );
-        update_post_meta( $attachment_id, '_tso_im_pdf_bg_settings', '/ebook' );
-        update_post_meta( $attachment_id, '_tso_im_pdf_bg_started',  time() );
-        update_post_meta( $attachment_id, '_tso_im_pdf_bg_fallback_tried', 0 );
-        update_post_meta( $attachment_id, '_tso_im_pdf_status',      'processing' );
+        tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_temp',     $temp_path );
+        tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_original', $file_path );
+        tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_size',     filesize( $file_path ) );
+        tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_quality',  $quality );
+        tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_settings', '/ebook' );
+        tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_started',  time() );
+        tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_fallback_tried', 0 );
+        tsoimma_update_attachment_meta( $attachment_id, 'pdf_status',      'processing' );
 
         // Llançar GhostScript en background amb configuració /ebook (màxima compressió)
         self::try_ghostscript( $file_path, $temp_path, $quality, true, '/ebook' );
@@ -313,19 +313,19 @@ class TSOIMMA_PDF_Compressor {
      */
     public static function poll_status( $attachment_id, $replace = true ) {
         $attachment_id = absint( $attachment_id );
-        $status        = get_post_meta( $attachment_id, '_tso_im_pdf_status', true );
+        $status        = tsoimma_get_attachment_meta( $attachment_id, 'pdf_status' );
 
         if ( $status !== 'processing' ) {
             return array( 'status' => $status ?: 'idle' );
         }
 
-        $temp_path     = get_post_meta( $attachment_id, '_tso_im_pdf_bg_temp',     true );
-        $original_path = get_post_meta( $attachment_id, '_tso_im_pdf_bg_original', true );
-        $original_size = (int) get_post_meta( $attachment_id, '_tso_im_pdf_bg_size',    true );
-        $quality       = (int) get_post_meta( $attachment_id, '_tso_im_pdf_bg_quality', true );
-        $started_at    = (int) get_post_meta( $attachment_id, '_tso_im_pdf_bg_started', true );
-        $fallback_tried = (int) get_post_meta( $attachment_id, '_tso_im_pdf_bg_fallback_tried', true );
-        $gs_settings    = (string) get_post_meta( $attachment_id, '_tso_im_pdf_bg_settings', true );
+        $temp_path     = tsoimma_get_attachment_meta( $attachment_id, 'pdf_bg_temp' );
+        $original_path = tsoimma_get_attachment_meta( $attachment_id, 'pdf_bg_original' );
+        $original_size = (int) tsoimma_get_attachment_meta( $attachment_id, 'pdf_bg_size' );
+        $quality       = (int) tsoimma_get_attachment_meta( $attachment_id, 'pdf_bg_quality' );
+        $started_at    = (int) tsoimma_get_attachment_meta( $attachment_id, 'pdf_bg_started' );
+        $fallback_tried = (int) tsoimma_get_attachment_meta( $attachment_id, 'pdf_bg_fallback_tried' );
+        $gs_settings    = (string) tsoimma_get_attachment_meta( $attachment_id, 'pdf_bg_settings' );
 
         // Fitxer temp no existeix encara
         if ( ! $temp_path || ! file_exists( $temp_path ) ) {
@@ -339,18 +339,18 @@ class TSOIMMA_PDF_Compressor {
                 && ! $fallback_tried
                 && class_exists( 'Imagick' )
             ) {
-                update_post_meta( $attachment_id, '_tso_im_pdf_bg_fallback_tried', 1 );
+                tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_fallback_tried', 1 );
                 $fallback = self::try_imagick( $original_path, $temp_path, $quality );
                 if ( is_wp_error( $fallback ) ) {
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_bg_temp' );
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_bg_original' );
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_bg_size' );
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_bg_quality' );
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_bg_prev_size' );
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_bg_settings' );
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_bg_started' );
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_bg_fallback_tried' );
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_status' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_temp' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_original' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_size' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_quality' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_prev_size' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_settings' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_started' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_fallback_tried' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_status' );
                     return $fallback;
                 }
                 // Deixar que el flux normal validi/apliqui el fitxer al següent bloc.
@@ -360,15 +360,15 @@ class TSOIMMA_PDF_Compressor {
             if ( ! file_exists( $temp_path ) ) {
                 // Tall net: no deixem polling infinit. Als 2 minuts retornem error explícit.
                 if ( $elapsed >= 120 ) {
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_bg_temp' );
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_bg_original' );
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_bg_size' );
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_bg_quality' );
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_bg_prev_size' );
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_bg_settings' );
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_bg_started' );
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_bg_fallback_tried' );
-                    delete_post_meta( $attachment_id, '_tso_im_pdf_status' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_temp' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_original' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_size' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_quality' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_prev_size' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_settings' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_started' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_fallback_tried' );
+                    tsoimma_delete_attachment_meta( $attachment_id, 'pdf_status' );
                     $timeout_msg = 'La compressió ha superat el temps límit (120s). Revisa GhostScript al servidor.';
                     if ( class_exists( 'Imagick' ) ) {
                         $timeout_msg .= $fallback_tried
@@ -395,8 +395,8 @@ class TSOIMMA_PDF_Compressor {
             return array( 'status' => 'processing' );
         }
 
-        $prev_size = (int) get_post_meta( $attachment_id, '_tso_im_pdf_bg_prev_size', true );
-        update_post_meta( $attachment_id, '_tso_im_pdf_bg_prev_size', $current_size );
+        $prev_size = (int) tsoimma_get_attachment_meta( $attachment_id, 'pdf_bg_prev_size' );
+        tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_prev_size', $current_size );
 
         if ( $current_size !== $prev_size ) {
             return array( 'status' => 'processing' );
@@ -406,15 +406,15 @@ class TSOIMMA_PDF_Compressor {
         $new_size = $current_size;
 
         // Netejar meta de background
-        delete_post_meta( $attachment_id, '_tso_im_pdf_bg_temp' );
-        delete_post_meta( $attachment_id, '_tso_im_pdf_bg_original' );
-        delete_post_meta( $attachment_id, '_tso_im_pdf_bg_size' );
-        delete_post_meta( $attachment_id, '_tso_im_pdf_bg_quality' );
-        delete_post_meta( $attachment_id, '_tso_im_pdf_bg_prev_size' );
-        delete_post_meta( $attachment_id, '_tso_im_pdf_bg_settings' );
-        delete_post_meta( $attachment_id, '_tso_im_pdf_bg_started' );
-        delete_post_meta( $attachment_id, '_tso_im_pdf_bg_fallback_tried' );
-        delete_post_meta( $attachment_id, '_tso_im_pdf_status' );
+        tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_temp' );
+        tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_original' );
+        tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_size' );
+        tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_quality' );
+        tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_prev_size' );
+        tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_settings' );
+        tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_started' );
+        tsoimma_delete_attachment_meta( $attachment_id, 'pdf_bg_fallback_tried' );
+        tsoimma_delete_attachment_meta( $attachment_id, 'pdf_status' );
 
         if ( $new_size >= $original_size ) {
             wp_delete_file( $temp_path );
@@ -462,9 +462,9 @@ class TSOIMMA_PDF_Compressor {
 
                 // ── Retry automàtic amb /default si el primer intent (/ebook) falla
                 if ( '/ebook' === $gs_settings || '' === $gs_settings ) {
-                    update_post_meta( $attachment_id, '_tso_im_pdf_bg_settings', '/default' );
-                    update_post_meta( $attachment_id, '_tso_im_pdf_bg_prev_size', 0 );
-                    update_post_meta( $attachment_id, '_tso_im_pdf_status', 'processing' );
+                    tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_settings', '/default' );
+                    tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_prev_size', 0 );
+                    tsoimma_update_attachment_meta( $attachment_id, 'pdf_status', 'processing' );
                     self::try_ghostscript( $original_path, $temp_path, $quality, true, '/default' );
                     return array( 'status' => 'processing' );
                 }
@@ -578,7 +578,7 @@ class TSOIMMA_PDF_Compressor {
      * Stores non-compressible status so we can avoid repeating expensive attempts.
      */
     public static function mark_non_compressible( $attachment_id, $code, $message ) {
-        update_post_meta( $attachment_id, '_tso_im_pdf_non_compressible', array(
+        tsoimma_update_attachment_meta( $attachment_id, 'pdf_non_compressible', array(
             'code'      => sanitize_key( (string) $code ),
             'message'   => sanitize_text_field( (string) $message ),
             'timestamp' => time(),
@@ -589,6 +589,6 @@ class TSOIMMA_PDF_Compressor {
      * Clears previous non-compressible status after successful compression.
      */
     public static function clear_non_compressible( $attachment_id ) {
-        delete_post_meta( $attachment_id, '_tso_im_pdf_non_compressible' );
+        tsoimma_delete_attachment_meta( $attachment_id, 'pdf_non_compressible' );
     }
 }

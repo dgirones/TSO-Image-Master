@@ -54,6 +54,7 @@ if ( is_dir( $tsoimma_backup_base ) ) {
 // ── Remove options ─────────────────────────────────────────────────
 delete_option( 'tsoimma_auto_optimize_settings' );
 delete_option( 'tsoimma_db_version' );
+delete_option( 'tsoimma_history_legacy_merged' );
 delete_option( 'tsoimma_history_retention_days' );
 delete_option( 'tsoimma_history_purge_interval' );
 delete_option( 'tsoimma_version' );
@@ -67,36 +68,41 @@ wp_clear_scheduled_hook( 'tsoimma_process_thumbnails' );
 wp_clear_scheduled_hook( 'tsoimma_process_queue' );
 wp_clear_scheduled_hook( 'tsoimma_backup_purge' );
 
-// ── Drop custom history table ─────────────────────────────────────
+// ── Drop custom history tables ────────────────────────────────────
 global $wpdb;
 
+$tsoimma_storage = __DIR__ . '/includes/tsoimma-storage.php';
+if ( file_exists( $tsoimma_storage ) ) {
+	require_once $tsoimma_storage;
+}
+
 // Prefixed variable names required by WordPress coding standards (PrefixAllGlobals).
-$tsoimma_table = $wpdb->prefix . 'tso_im_history';
-// phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-$wpdb->query( "DROP TABLE IF EXISTS `{$tsoimma_table}`" ); // phpcs:ignore
+$tsoimma_history_tables = array(
+	$wpdb->prefix . 'tsoimma_history',
+	$wpdb->prefix . 'tso_im_history',
+);
+foreach ( $tsoimma_history_tables as $tsoimma_table ) {
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	$wpdb->query( "DROP TABLE IF EXISTS `{$tsoimma_table}`" ); // phpcs:ignore
+}
 
 // ── Remove all plugin postmeta ─────────────────────────────────────
-// Each key uses the tso_im_ prefix — these are exclusively plugin-owned meta keys.
-// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- meta_key is plugin-prefixed, no risk of cross-plugin collision.
-$tsoimma_meta_keys = array(
-    '_tso_im_backup_file',
-    '_tso_im_backup_mime',
-    '_tso_im_backup_size',
-    '_tso_im_backup_attached_file',
-    '_tso_im_backup_current_name',
-    '_tso_im_auto_optimized',
-    '_tso_im_pdf_compressed',
-    '_tso_im_pdf_bg_temp',
-    '_tso_im_pdf_bg_original',
-    '_tso_im_pdf_bg_size',
-    '_tso_im_pdf_bg_quality',
-    '_tso_im_pdf_status',
-    '_tso_im_pdf_bg_prev_size',
-    '_tso_im_pdf_bg_settings',
-);
+// Canonical and legacy keys from tsoimma_attachment_meta_key_map().
+$tsoimma_meta_keys = array();
+if ( function_exists( 'tsoimma_attachment_meta_key_map' ) ) {
+	foreach ( tsoimma_attachment_meta_key_map() as $tsoimma_meta_pair ) {
+		if ( ! empty( $tsoimma_meta_pair[0] ) ) {
+			$tsoimma_meta_keys[] = $tsoimma_meta_pair[0];
+		}
+		if ( ! empty( $tsoimma_meta_pair[1] ) ) {
+			$tsoimma_meta_keys[] = $tsoimma_meta_pair[1];
+		}
+	}
+}
+$tsoimma_meta_keys = array_values( array_unique( $tsoimma_meta_keys ) );
 foreach ( $tsoimma_meta_keys as $tsoimma_meta_key ) {
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.SlowDBQuery.slow_db_query_meta_key
-    $wpdb->delete( $wpdb->postmeta, array( 'meta_key' => $tsoimma_meta_key ), array( '%s' ) );
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+	$wpdb->delete( $wpdb->postmeta, array( 'meta_key' => $tsoimma_meta_key ), array( '%s' ) );
 }
 
 // ── Delete any remaining upload transients ────────────────────────

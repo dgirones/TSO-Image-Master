@@ -1,0 +1,46 @@
+#tsoimma-highlight-banner {
+    position: fixed;
+    top: 36px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-12px);
+    z-index: 100001;
+    background: #1d2327;
+    color: #fff;
+    border: 1px solid #06d6a0;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    border-radius: 999px;
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none;
+}
+
+#tsoimma-highlight-banner.is-visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.tsoimma-highlight-target {
+    outline: 2px solid #06d6a0 !important;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(6, 214, 160, 0.18);
+}
+
+.tsoimma-highlight-block {
+    outline: 3px solid #06d6a0 !important;
+    outline-offset: 4px;
+    box-shadow: 0 0 0 8px rgba(6, 214, 160, 0.28) !important;
+    border-radius: 4px;
+    position: relative;
+    z-index: 2;
+}
+
+.tsoimma-highlight-media {
+    outline: 4px solid #ffd166 !important;
+    outline-offset: 4px;
+    box-shadow: 0 0 0 10px rgba(255, 209, 102, 0.45) !important;
+    position: relative;
+    z-index: 3;
+}

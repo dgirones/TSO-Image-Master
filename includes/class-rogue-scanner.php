@@ -242,9 +242,13 @@ class TSOIMMA_Rogue_Scanner {
 
         // Backups TSO (els excloem del "no registrat" perquè ja els classifiquem per patró)
         $backups = $wpdb->get_col(  // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-            "SELECT meta_value FROM {$wpdb->postmeta}
-             WHERE meta_key = '_tso_im_backup_file'
-             AND meta_value != ''"
+            $wpdb->prepare(
+                "SELECT meta_value FROM {$wpdb->postmeta}
+                 WHERE meta_key IN (%s, %s)
+                 AND meta_value != ''",
+                tsoimma_get_attachment_meta_key( 'backup_file' ),
+                tsoimma_get_attachment_meta_key_legacy( 'backup_file' )
+            )
         );
         foreach ( (array) $backups as $path ) {
             if ( $path && file_exists( $path ) ) {
@@ -320,5 +324,136 @@ class TSOIMMA_Rogue_Scanner {
             // Directori no accessible
         }
         return $files;
+    }
+
+    /**
+     * Transient TTL for rogue delete allowlist (per admin user).
+     */
+    const DELETE_ALLOWLIST_TTL = DAY_IN_SECONDS;
+
+    /**
+     * @param int $user_id User ID.
+     * @return string
+     */
+    private static function delete_allowlist_transient_key( $user_id = 0 ) {
+        $user_id = $user_id ? absint( $user_id ) : get_current_user_id();
+        return 'tsoimma_rogue_del_' . $user_id;
+    }
+
+    /**
+     * @return array{expires:int,count:int}
+     */
+    public static function get_delete_allowlist_info( $user_id = 0 ) {
+        $user_id = $user_id ? absint( $user_id ) : get_current_user_id();
+        if ( ! $user_id ) {
+            return array(
+                'expires' => 0,
+                'count'   => 0,
+            );
+        }
+
+        $key     = self::delete_allowlist_transient_key( $user_id );
+        $allowed = get_transient( $key );
+        $timeout = (int) get_option( '_transient_timeout_' . $key, 0 );
+
+        return array(
+            'expires' => $timeout,
+            'count'   => is_array( $allowed ) ? count( $allowed ) : 0,
+        );
+    }
+
+    /**
+     * Remember absolute paths from the latest scan so delete AJAX cannot target arbitrary uploads files.
+     *
+     * @param array<string, mixed> $scan_result Result from scan().
+     * @return void
+     */
+    public static function store_delete_allowlist_from_scan( $scan_result ) {
+        $user_id = get_current_user_id();
+        if ( ! $user_id || ! is_array( $scan_result ) ) {
+            return;
+        }
+
+        $allowed = array();
+        foreach ( (array) ( $scan_result['files'] ?? array() ) as $file ) {
+            if ( empty( $file['path_b64'] ) ) {
+                continue;
+            }
+            $norm = self::normalize_uploads_file_path_from_b64( (string) $file['path_b64'] );
+            if ( '' !== $norm ) {
+                $allowed[ $norm ] = true;
+            }
+        }
+
+        set_transient(
+            self::delete_allowlist_transient_key( $user_id ),
+            $allowed,
+            self::DELETE_ALLOWLIST_TTL
+        );
+    }
+
+    /**
+     * @param string $resolved_real_path Absolute path after realpath() inside uploads.
+     * @return bool
+     */
+    public static function is_resolved_path_in_delete_allowlist( $resolved_real_path ) {
+        $user_id = get_current_user_id();
+        if ( ! $user_id || '' === (string) $resolved_real_path ) {
+            return false;
+        }
+
+        $allowed = get_transient( self::delete_allowlist_transient_key( $user_id ) );
+        if ( ! is_array( $allowed ) ) {
+            return false;
+        }
+
+        $norm = wp_normalize_path( (string) $resolved_real_path );
+        return ! empty( $allowed[ $norm ] );
+    }
+
+    /**
+     * @param string $path_b64 Base64-encoded absolute filesystem path from scan().
+     * @return string Normalized real path, or empty when invalid.
+     */
+    private static function normalize_uploads_file_path_from_b64( $path_b64 ) {
+        $abs_path = base64_decode( sanitize_text_field( (string) $path_b64 ), true );
+        if ( false === $abs_path ) {
+            return '';
+        }
+
+        return self::normalize_uploads_file_path( $abs_path );
+    }
+
+    /**
+     * Resolve a candidate uploads file path (same rules as rogue delete AJAX).
+     *
+     * @param string $abs_path Candidate absolute path.
+     * @return string Normalized real path, or empty when not allowed.
+     */
+    public static function normalize_uploads_file_path( $abs_path ) {
+        $abs_path = (string) $abs_path;
+        if ( '' === $abs_path ) {
+            return '';
+        }
+
+        $upload_dir = wp_upload_dir();
+        $base_path  = trailingslashit( $upload_dir['basedir'] );
+        $real_base  = realpath( $base_path );
+        if ( false === $real_base ) {
+            return '';
+        }
+
+        $real_path = realpath( $abs_path );
+        if ( false === $real_path || ! is_file( $real_path ) ) {
+            return '';
+        }
+
+        $norm_base = wp_normalize_path( $real_base ) . '/';
+        $norm_file = wp_normalize_path( $real_path );
+        if ( 0 !== strpos( $norm_file, $norm_base ) ) {
+            return '';
+        }
+
+        return $norm_file;
     }
 }

@@ -148,7 +148,7 @@ class TSOIMMA_Media_Library {
 			return;
 		}
 
-		$optimized = get_post_meta( $post->ID, '_tso_im_auto_optimized', true );
+		$optimized = tsoimma_get_attachment_meta( $post->ID, 'auto_optimized' );
 		$backup    = TSOIMMA_Optimizer::get_backup_status( $post->ID );
 		if ( ! $optimized && empty( $backup['has_backup'] ) ) {
 			return;

@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       TSO Image Master
  * Description:       Complete image optimization suite for WordPress: convert to WebP/JPG, resize, compress PDFs, find orphaned images, scan rogue files, fix broken image URLs, and manage SEO fields. Requires PHP GD library.
- * Version:           1.9.5
- * Requires at least: 5.9
+ * Version:           1.9.8
+ * Requires at least: 6.1
  * Requires PHP:      7.4
  * Tested up to:      7.1
  * Author:            Tu Soporte Online
@@ -19,9 +19,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // ── Constants ────────────────────────────────────────────────────────
-define( 'TSOIMMA_VERSION',    '1.9.5' );
+define( 'TSOIMMA_VERSION',    '1.9.8' );
+define( 'TSOIMMA_FILE',       __FILE__ );
 define( 'TSOIMMA_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'TSOIMMA_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+define( 'TSOIMMA_PATH',       TSOIMMA_PLUGIN_DIR );
+define( 'TSOIMMA_URL',        TSOIMMA_PLUGIN_URL );
+
+require_once TSOIMMA_PLUGIN_DIR . 'includes/tsoimma-storage.php';
 
 // ── Load all classes ──────────────────────────────────────────────────
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-history.php';
@@ -37,6 +42,7 @@ require_once TSOIMMA_PLUGIN_DIR . 'includes/class-dashboard.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-queue.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-backup-manager.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-duplicate-finder.php';
+require_once TSOIMMA_PLUGIN_DIR . 'includes/class-post-editor-highlight.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-media-library.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-ajax-handler.php';
 require_once TSOIMMA_PLUGIN_DIR . 'admin/class-admin-page.php';
@@ -52,6 +58,7 @@ function tsoimma_init() {
     TSOIMMA_Queue::init();
     TSOIMMA_Backup_Manager::init();
     TSOIMMA_Media_Library::init();
+    TSOIMMA_Post_Editor_Highlight::init();
 
     // WP-Cron: thumbnail processing in background after optimize
     add_action(
@@ -162,6 +169,20 @@ function tsoimma_maybe_upgrade() {
     update_option( 'tsoimma_version', TSOIMMA_VERSION );
 }
 add_action( 'plugins_loaded', 'tsoimma_maybe_upgrade', 20 );
+
+/**
+ * Run DB migrations on admin requests (merge legacy history tables, etc.).
+ *
+ * @return void
+ */
+function tsoimma_admin_db_upgrade() {
+    if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+
+    TSOIMMA_History::maybe_install();
+}
+add_action( 'admin_init', 'tsoimma_admin_db_upgrade', 5 );
 
 /**
  * Deactivation: remove scheduled events (data is preserved).

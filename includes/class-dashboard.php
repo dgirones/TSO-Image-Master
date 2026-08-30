@@ -9,6 +9,90 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TSOIMMA_Dashboard {
 
 	/**
+	 * Per-request cache for alt audit helpers (avoids recomputing suggestions thousands of times).
+	 *
+	 * @var array<int, array<string, string>>
+	 */
+	private static $alt_audit_cache = array();
+
+	/**
+	 * In-request cache for fillable ID lists.
+	 *
+	 * @var array<string, array<int>>
+	 */
+	private static $fillable_ids_request = array();
+
+	/**
+	 * Clear cached fillable-alt lists (after alt writes).
+	 *
+	 * @return void
+	 */
+	public static function flush_fillable_alt_cache() {
+		delete_transient( 'tsoimma_fillable_alt_all' );
+		delete_transient( 'tsoimma_fillable_alt_used' );
+		self::$fillable_ids_request = array();
+		self::$alt_audit_cache     = array();
+	}
+
+	/**
+	 * Clear cached backup storage stats (after backup purge/delete).
+	 *
+	 * @return void
+	 */
+	public static function flush_backup_stats_cache() {
+		delete_transient( 'tsoimma_backup_storage_stats' );
+	}
+
+	/**
+	 * @param bool $used_only Used-only filter flag.
+	 * @return string
+	 */
+	private static function fillable_cache_key( $used_only ) {
+		return $used_only ? 'tsoimma_fillable_alt_used' : 'tsoimma_fillable_alt_all';
+	}
+
+	/**
+	 * Cached filename/title/suggestion context for one attachment.
+	 *
+	 * @param int $attachment_id Attachment ID.
+	 * @return array{base: string, title: string, humanized: string, suggested: string}
+	 */
+	private static function get_alt_audit_context( $attachment_id ) {
+		$attachment_id = absint( $attachment_id );
+		if ( $attachment_id <= 0 ) {
+			return array(
+				'base'       => '',
+				'title'      => '',
+				'humanized'  => '',
+				'suggested'  => '',
+			);
+		}
+
+		if ( ! isset( self::$alt_audit_cache[ $attachment_id ] ) ) {
+			$file_path = get_attached_file( $attachment_id );
+			$base      = '';
+			if ( $file_path ) {
+				$base = (string) pathinfo( basename( $file_path ), PATHINFO_FILENAME );
+			}
+
+			self::$alt_audit_cache[ $attachment_id ] = array(
+				'base'      => $base,
+				'title'     => trim( (string) get_the_title( $attachment_id ) ),
+				'humanized' => trim( TSOIMMA_Image_Manager::suggest_alt_from_filename( $attachment_id ) ),
+				'suggested' => '',
+			);
+		}
+
+		if ( '' === self::$alt_audit_cache[ $attachment_id ]['suggested'] ) {
+			self::$alt_audit_cache[ $attachment_id ]['suggested'] = trim(
+				TSOIMMA_Image_Manager::suggest_alt_text( $attachment_id )
+			);
+		}
+
+		return self::$alt_audit_cache[ $attachment_id ];
+	}
+
+	/**
 	 * Return dashboard overview metrics (fast queries only).
 	 *
 	 * @return array<string, mixed>
@@ -18,10 +102,13 @@ class TSOIMMA_Dashboard {
 		$auto    = TSOIMMA_Auto_Optimizer::get_settings();
 		$backup  = self::get_backup_storage_stats();
 
+		$cached_fillable = get_transient( self::fillable_cache_key( false ) );
+
 		return array(
-			'total_images'       => self::count_total_images(),
-			'missing_alt'        => self::count_missing_alt(),
-			'backup_count'       => (int) $backup['count'],
+			'total_images'          => self::count_total_images(),
+			'missing_alt'           => is_array( $cached_fillable ) ? count( $cached_fillable ) : null,
+			'missing_alt_pending'   => ! is_array( $cached_fillable ),
+			'backup_count'          => (int) $backup['count'],
 			'backup_bytes'       => (int) $backup['bytes'],
 			'backup_bytes_h'     => (string) $backup['bytes_h'],
 			'total_saved_bytes'  => (int) $history['total_saved_bytes'],
@@ -46,15 +133,7 @@ class TSOIMMA_Dashboard {
 		$page     = max( 1, absint( $page ) );
 		$per_page = min( 100, max( 1, absint( $per_page ) ) );
 
-		$ids = self::query_missing_alt_ids();
-		if ( $used_only ) {
-			$ids = array_values(
-				array_filter(
-					$ids,
-					array( 'TSOIMMA_Image_Manager', 'is_attachment_referenced' )
-				)
-			);
-		}
+		$ids = self::query_fillable_missing_alt_ids( $used_only );
 
 		$total       = count( $ids );
 		$total_pages = $per_page > 0 ? (int) ceil( $total / $per_page ) : 1;
@@ -66,15 +145,21 @@ class TSOIMMA_Dashboard {
 			$attachment_id = absint( $attachment_id );
 			$file_path     = get_attached_file( $attachment_id );
 			$current_alt   = (string) get_post_meta( $attachment_id, '_wp_attachment_image_alt', true );
+			$suggested_alt = self::resolve_dashboard_suggested_alt( $attachment_id );
+
+			$is_used = TSOIMMA_Image_Manager::is_attachment_referenced_cached( $attachment_id );
 
 			$items[] = array(
 				'id'             => $attachment_id,
 				'title'          => get_the_title( $attachment_id ),
 				'alt'            => $current_alt,
-				'suggested_alt'  => TSOIMMA_Image_Manager::suggest_alt_text( $attachment_id ),
+				'suggested_alt'  => $suggested_alt,
+				'needs_manual_alt' => '' === trim( $suggested_alt ),
 				'filename'       => $file_path ? basename( $file_path ) : '',
 				'thumb'          => wp_get_attachment_image_url( $attachment_id, 'thumbnail' ),
-				'used_in_count'  => count( TSOIMMA_Image_Manager::get_used_in_posts( $attachment_id ) ),
+				'url'            => wp_get_attachment_image_url( $attachment_id, 'full' ) ?: wp_get_attachment_url( $attachment_id ),
+				'is_used'        => $is_used,
+				'used_in_count'  => $is_used ? 1 : 0,
 			);
 		}
 
@@ -91,10 +176,13 @@ class TSOIMMA_Dashboard {
 	 *
 	 * @param int[]  $attachment_ids Attachment IDs.
 	 * @param string $source         filename|title|suggested.
+	 * @param array  $custom_alts    Optional map attachment ID => alt text from the dashboard editor.
+	 * @param bool   $recount        Whether to recompute missing-alt count (expensive on large libraries).
 	 * @return array<string, mixed>
 	 */
-	public static function bulk_fill_alt( $attachment_ids, $source = 'suggested' ) {
-		$source = sanitize_key( $source );
+	public static function bulk_fill_alt( $attachment_ids, $source = 'suggested', $custom_alts = array(), $recount = false ) {
+		$source      = sanitize_key( $source );
+		$custom_alts = self::sanitize_custom_alt_map( $custom_alts );
 		if ( ! in_array( $source, array( 'filename', 'title', 'suggested' ), true ) ) {
 			$source = 'suggested';
 		}
@@ -108,21 +196,24 @@ class TSOIMMA_Dashboard {
 				continue;
 			}
 
-			$current_alt = trim( (string) get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ) );
-			if ( '' !== $current_alt && ! self::is_weak_alt( $current_alt, $attachment_id ) ) {
+			$using_custom = array_key_exists( $attachment_id, $custom_alts );
+			$current_alt  = trim( (string) get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ) );
+			if ( ! $using_custom && '' !== $current_alt && ! self::is_weak_alt( $current_alt, $attachment_id ) ) {
 				++$skipped;
 				continue;
 			}
 
-			$new_alt = '';
-			if ( 'title' === $source ) {
-				$new_alt = sanitize_text_field( get_the_title( $attachment_id ) );
-			} elseif ( 'filename' === $source ) {
-				$file_path = get_attached_file( $attachment_id );
-				$base      = $file_path ? pathinfo( basename( $file_path ), PATHINFO_FILENAME ) : '';
-				$new_alt   = sanitize_text_field( ucwords( str_replace( array( '-', '_' ), ' ', $base ) ) );
+			if ( $using_custom ) {
+				if ( '' !== $current_alt && ! self::is_weak_alt( $current_alt, $attachment_id ) ) {
+					++$skipped;
+					continue;
+				}
+				$new_alt = $custom_alts[ $attachment_id ];
 			} else {
-				$new_alt = sanitize_text_field( TSOIMMA_Image_Manager::suggest_alt_text( $attachment_id ) );
+				$new_alt = self::pick_alt_fill_value( $attachment_id, $source );
+				if ( '' === $new_alt && 'suggested' === $source ) {
+					$new_alt = self::resolve_dashboard_suggested_alt( $attachment_id );
+				}
 			}
 
 			if ( '' === $new_alt ) {
@@ -151,11 +242,76 @@ class TSOIMMA_Dashboard {
 			++$updated;
 		}
 
+		if ( $updated > 0 ) {
+			self::flush_fillable_alt_cache();
+		}
+
 		return array(
-			'updated' => $updated,
-			'skipped' => $skipped,
-			'errors'  => $errors,
+			'updated'     => $updated,
+			'skipped'     => $skipped,
+			'errors'      => $errors,
+			'missing_alt' => $recount ? self::count_missing_alt() : null,
 		);
+	}
+
+	/**
+	 * Pick the first alt candidate that is non-empty and not weak/generic.
+	 *
+	 * @param int    $attachment_id Attachment ID.
+	 * @param string $source        filename|title|suggested.
+	 * @return string
+	 */
+	public static function pick_alt_fill_value( $attachment_id, $source = 'suggested' ) {
+		$options = array();
+
+		if ( 'title' === $source ) {
+			$options[] = sanitize_text_field( get_the_title( $attachment_id ) );
+		} elseif ( 'filename' === $source ) {
+			$options[] = sanitize_text_field( TSOIMMA_Image_Manager::suggest_alt_from_filename( $attachment_id ) );
+		} else {
+			$resolved = sanitize_text_field( self::resolve_dashboard_suggested_alt( $attachment_id ) );
+			if ( '' !== $resolved && ! self::is_weak_alt( $resolved, $attachment_id ) ) {
+				return $resolved;
+			}
+			$options[] = sanitize_text_field( TSOIMMA_Image_Manager::suggest_alt_from_filename( $attachment_id ) );
+			$options[] = sanitize_text_field( TSOIMMA_Image_Manager::suggest_alt_text( $attachment_id ) );
+		}
+
+		foreach ( $options as $candidate ) {
+			$candidate = trim( (string) $candidate );
+			if ( '' === $candidate ) {
+				continue;
+			}
+			if ( ! self::is_weak_alt( $candidate, $attachment_id ) ) {
+				return $candidate;
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Sanitize attachment ID => alt map from AJAX/dashboard input.
+	 *
+	 * @param mixed $raw Raw map.
+	 * @return array<int, string>
+	 */
+	public static function sanitize_custom_alt_map( $raw ) {
+		if ( ! is_array( $raw ) ) {
+			return array();
+		}
+
+		$clean = array();
+		foreach ( $raw as $attachment_id => $alt ) {
+			$attachment_id = absint( $attachment_id );
+			$alt           = sanitize_text_field( wp_unslash( (string) $alt ) );
+			if ( $attachment_id <= 0 || '' === $alt ) {
+				continue;
+			}
+			$clean[ $attachment_id ] = $alt;
+		}
+
+		return $clean;
 	}
 
 	/**
@@ -169,20 +325,51 @@ class TSOIMMA_Dashboard {
 	 * @return int
 	 */
 	public static function count_missing_alt() {
-		global $wpdb;
+		return count( self::query_fillable_missing_alt_ids( false ) );
+	}
 
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		return (int) $wpdb->get_var(
-			"SELECT COUNT(DISTINCT p.ID)
-			 FROM {$wpdb->posts} p
-			 LEFT JOIN {$wpdb->postmeta} pm
-			   ON pm.post_id = p.ID AND pm.meta_key = '_wp_attachment_image_alt'
-			 WHERE p.post_type = 'attachment'
-			   AND p.post_status = 'inherit'
-			   AND p.post_mime_type LIKE 'image/%'
-			   AND ( pm.meta_value IS NULL OR pm.meta_value = '' )"
-		);
-		// phpcs:enable
+	/**
+	 * Attachment IDs with missing/weak alt (dashboard list; includes numeric/camera names for manual edit).
+	 *
+	 * @param bool $used_only Only images referenced in content/meta.
+	 * @return array<int>
+	 */
+	private static function query_fillable_missing_alt_ids( $used_only = false ) {
+		$req_key = $used_only ? 'used' : 'all';
+		if ( isset( self::$fillable_ids_request[ $req_key ] ) ) {
+			return self::$fillable_ids_request[ $req_key ];
+		}
+
+		$transient_key = self::fillable_cache_key( $used_only );
+		$cached        = get_transient( $transient_key );
+		if ( is_array( $cached ) ) {
+			self::$fillable_ids_request[ $req_key ] = $cached;
+			return $cached;
+		}
+
+		$ids = self::query_missing_alt_ids();
+		if ( $used_only ) {
+			$ids = array_values(
+				array_filter(
+					$ids,
+					array( 'TSOIMMA_Image_Manager', 'is_attachment_referenced' )
+				)
+			);
+		}
+
+		$fillable = array();
+		foreach ( $ids as $attachment_id ) {
+			$attachment_id = absint( $attachment_id );
+			if ( $attachment_id <= 0 ) {
+				continue;
+			}
+			$fillable[] = $attachment_id;
+		}
+
+		set_transient( $transient_key, $fillable, 2 * MINUTE_IN_SECONDS );
+		self::$fillable_ids_request[ $req_key ] = $fillable;
+
+		return $fillable;
 	}
 
 	/**
@@ -223,7 +410,8 @@ class TSOIMMA_Dashboard {
 
 		foreach ( (array) $candidates as $row ) {
 			$attachment_id = absint( $row->ID );
-			if ( self::is_weak_alt( (string) $row->alt_text, $attachment_id ) ) {
+			$alt_text      = (string) $row->alt_text;
+			if ( self::is_weak_alt( $alt_text, $attachment_id ) ) {
 				$weak[] = $attachment_id;
 			}
 		}
@@ -246,11 +434,42 @@ class TSOIMMA_Dashboard {
 			return true;
 		}
 
-		$file_path = get_attached_file( $attachment_id );
-		if ( $file_path ) {
-			$base = pathinfo( basename( $file_path ), PATHINFO_FILENAME );
-			// Raw basename only (e.g. "foto-vacances") — humanized fills must not stay "weak".
-			if ( strcasecmp( $alt, $base ) === 0 ) {
+		if ( preg_match( '/^\d+$/', $alt ) ) {
+			return true;
+		}
+
+		// Multi-word alts are almost always intentional (skip expensive filename checks).
+		if ( preg_match( '/\s/u', $alt ) ) {
+			return false;
+		}
+
+		$context = self::get_alt_audit_context( $attachment_id );
+		$base    = $context['base'];
+		$suggested = $context['suggested'];
+
+		if ( '' !== $suggested && strcasecmp( $alt, $suggested ) === 0 ) {
+			return false;
+		}
+
+		if ( self::alt_matches_resolved_suggestion( $alt, $attachment_id, $context ) ) {
+			return false;
+		}
+
+		if ( '' !== $base || '' !== $context['humanized'] ) {
+			$humanized = $context['humanized'];
+
+			if ( '' !== $humanized && strcasecmp( $alt, $humanized ) === 0 ) {
+				return false;
+			}
+
+			if ( self::is_raw_filename_stem_alt( $alt, $base ) ) {
+				return true;
+			}
+
+			$title = $context['title'];
+			if ( '' !== $title && strcasecmp( $alt, $title ) === 0
+				&& TSOIMMA_Image_Manager::is_title_just_filename_stem( $title, $base )
+				&& self::is_raw_filename_stem_alt( $alt, $base ) ) {
 				return true;
 			}
 		}
@@ -259,9 +478,105 @@ class TSOIMMA_Dashboard {
 	}
 
 	/**
+	 * Best alt suggestion for the dashboard (prefer humanized filename over raw stem).
+	 *
+	 * @param int $attachment_id Attachment ID.
+	 * @return string
+	 */
+	public static function resolve_dashboard_suggested_alt( $attachment_id ) {
+		$context   = self::get_alt_audit_context( $attachment_id );
+		$humanized = $context['humanized'];
+		$from_full = $context['suggested'];
+
+		if ( '' !== $humanized && ! self::is_raw_filename_stem_alt( $humanized, $context['base'] ) ) {
+			return $humanized;
+		}
+		if ( '' !== $from_full && ! self::is_raw_filename_stem_alt( $from_full, $context['base'] ) ) {
+			return $from_full;
+		}
+		if ( '' !== $humanized ) {
+			return $humanized;
+		}
+
+		return $from_full;
+	}
+
+	/**
+	 * Whether alt text is just the raw upload filename stem (not an accepted suggestion).
+	 *
+	 * @param string $alt  Alt text.
+	 * @param string $base Filename stem.
+	 * @return bool
+	 */
+	private static function is_raw_filename_stem_alt( $alt, $base ) {
+		$alt  = trim( (string) $alt );
+		$base = trim( (string) $base );
+		if ( '' === $alt || '' === $base ) {
+			return false;
+		}
+		if ( 0 !== strcasecmp( $alt, $base ) ) {
+			return false;
+		}
+
+		return ( $alt === $base || $alt === strtolower( $base ) );
+	}
+
+	/**
+	 * Compare alt keys for suggestion matching (ignore case, spaces, punctuation).
+	 *
+	 * @param string $text Alt or suggestion text.
+	 * @return string
+	 */
+	private static function alt_compare_key( $text ) {
+		$text = trim( (string) $text );
+		if ( '' === $text ) {
+			return '';
+		}
+		if ( function_exists( 'remove_accents' ) ) {
+			$text = remove_accents( $text );
+		}
+		$text = strtolower( $text );
+		$text = preg_replace( '/[^a-z0-9]+/', '', $text );
+
+		return (string) $text;
+	}
+
+	/**
+	 * Whether saved alt matches the dashboard suggestion the user likely accepted.
+	 *
+	 * @param string               $alt            Alt text.
+	 * @param int                  $attachment_id  Attachment ID.
+	 * @param array<string,string> $context        Optional audit context.
+	 * @return bool
+	 */
+	private static function alt_matches_resolved_suggestion( $alt, $attachment_id, $context = null ) {
+		if ( null === $context ) {
+			$context = self::get_alt_audit_context( $attachment_id );
+		}
+		if ( self::is_raw_filename_stem_alt( $alt, $context['base'] ) ) {
+			return false;
+		}
+
+		$resolved = self::resolve_dashboard_suggested_alt( $attachment_id );
+		if ( '' === $resolved ) {
+			return false;
+		}
+		if ( 0 === strcasecmp( $alt, $resolved ) ) {
+			return true;
+		}
+
+		return self::alt_compare_key( $alt ) === self::alt_compare_key( $resolved );
+	}
+
+	/**
 	 * @return array<string, mixed>
 	 */
 	private static function get_backup_storage_stats() {
+		$cached = get_transient( 'tsoimma_backup_storage_stats' );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+
 		$upload_dir = wp_upload_dir();
 		$base_dir   = trailingslashit( $upload_dir['basedir'] ) . 'tso-image-master';
 
@@ -272,6 +587,7 @@ class TSOIMMA_Dashboard {
 		);
 
 		if ( ! is_dir( $base_dir ) ) {
+			set_transient( 'tsoimma_backup_storage_stats', $stats, 5 * MINUTE_IN_SECONDS );
 			return $stats;
 		}
 
@@ -295,6 +611,7 @@ class TSOIMMA_Dashboard {
 		}
 
 		$stats['bytes_h'] = size_format( $stats['bytes'] );
+		set_transient( 'tsoimma_backup_storage_stats', $stats, 5 * MINUTE_IN_SECONDS );
 		return $stats;
 	}
 

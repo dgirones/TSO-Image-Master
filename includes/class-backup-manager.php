@@ -128,11 +128,24 @@ class TSOIMMA_Backup_Manager {
 			}
 		}
 
+		if ( $deleted > 0 ) {
+			self::flush_dashboard_backup_stats_cache();
+		}
+
 		return array(
 			'deleted'  => $deleted,
 			'freed'    => $freed,
 			'freed_h'  => size_format( $freed ),
 		);
+	}
+
+	/**
+	 * @return void
+	 */
+	private static function flush_dashboard_backup_stats_cache() {
+		if ( class_exists( 'TSOIMMA_Dashboard' ) ) {
+			TSOIMMA_Dashboard::flush_backup_stats_cache();
+		}
 	}
 
 	/**
@@ -220,7 +233,9 @@ class TSOIMMA_Backup_Manager {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 			$found = $wpdb->get_col(
 				$wpdb->prepare(
-					"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_tso_im_backup_file' AND meta_value = %s",
+					"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key IN (%s, %s) AND meta_value = %s",
+					tsoimma_get_attachment_meta_key( 'backup_file' ),
+					tsoimma_get_attachment_meta_key_legacy( 'backup_file' ),
 					$candidate
 				)
 			);
@@ -229,22 +244,8 @@ class TSOIMMA_Backup_Manager {
 			}
 		}
 
-		$basename = basename( (string) $resolved_path );
-		if ( '' !== $basename ) {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-			$found = $wpdb->get_col(
-				$wpdb->prepare(
-					"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_tso_im_backup_file' AND meta_value LIKE %s",
-					'%' . $wpdb->esc_like( $basename )
-				)
-			);
-			foreach ( (array) $found as $post_id ) {
-				$ids[] = absint( $post_id );
-			}
-		}
-
 		foreach ( array_unique( array_filter( $ids ) ) as $attachment_id ) {
-			$stored = (string) get_post_meta( $attachment_id, '_tso_im_backup_file', true );
+			$stored = (string) tsoimma_get_attachment_meta( $attachment_id, 'backup_file' );
 			if ( '' === $stored ) {
 				continue;
 			}
@@ -255,9 +256,6 @@ class TSOIMMA_Backup_Manager {
 					$match = true;
 					break;
 				}
-			}
-			if ( ! $match && $basename && false !== strpos( $stored_norm, $basename ) ) {
-				$match = true;
 			}
 			if ( $match ) {
 				TSOIMMA_Optimizer::clear_backup_meta( $attachment_id );

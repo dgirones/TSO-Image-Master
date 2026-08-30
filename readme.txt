@@ -2,10 +2,10 @@
 Contributors: deadko
 Donate link: https://ko-fi.com/deadko_cat
 Tags: image optimization, webp, avif, media library, pdf compression
-Requires at least: 5.9
+Requires at least: 6.1
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.9.5
+Stable tag: 1.9.8
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -40,7 +40,7 @@ TSO Image Master is a complete media management and image optimization plugin fo
 = Requirements =
 
 * PHP 7.4 or higher (tested up to 8.3)
-* WordPress 5.9 or higher (tested up to 7.1)
+* WordPress 6.1 or higher (tested up to 7.1)
 * PHP GD library with JPEG, PNG, GIF, and WebP support (AVIF output needs GD with `imageavif()` / `imagecreatefromavif()`)
 * GhostScript (optional, required for best PDF compression)
 * Imagick PHP extension (optional, fallback for PDF compression)
@@ -82,7 +82,7 @@ Yes. On the Overview tab you can set backup retention by maximum age (days) and/
 
 Uninstalling the plugin removes the following data:
 
-* **Database:** plugin options, the custom history table (`wp_tso_im_history`), all plugin postmeta keys, and scheduled cron events.
+* **Database:** plugin options, the custom history table (`wp_*tsoimma_history`), all plugin postmeta keys, and scheduled cron events.
 * **Backup folder:** the `wp-content/uploads/tso-image-master/` folder and all backup copies inside it are deleted.
 * **Original images:** your actual image files in the uploads folder are **never** deleted. Only the plugin-created backup copies are removed.
 
@@ -132,7 +132,35 @@ On Overview, **Scan duplicates** groups Media Library files with the same MD5 ha
 
 == Changelog ==
 
-For the full release history, see CHANGELOG.txt in the plugin folder.
+For release history from 1.0.0 through 1.9.3, see CHANGELOG.txt in the plugin folder.
+
+= 1.9.8 =
+* Improved: WordPress.org compliance — canonical `tsoimma_` AJAX/storage layer, prefixed history table, attachment meta migration, sanitized AJAX inputs.
+* Improved: Overview alt list — manual edit for numeric/camera filenames, accurate missing-alt counter, used-in column, SEO tab weak-alt detection.
+* Improved: Dashboard layout — background queue and backup retention side by side; backup stats cache; queue enqueue mutex.
+* Improved: Bulk optimize limits (25 sync / 100 queued); bulk alt fill no longer overwrites good alts.
+* Fixed: Weak alt detection with spaces; thumbnail AJAX errors surfaced; Requires at least WordPress 6.1.
+
+= 1.9.7 =
+* Improved: Overview alt list — inline edit (save/cancel), one-click accept (✓) for suggested alt, thumbnail hover preview, row removal without reloading the whole dashboard.
+* Improved: Alt humanization (Spanish accents, fewer bad filename splits); missing-alt counter after bulk fill; dashboard overview cached until data changes.
+* Improved: Search clear (×) buttons; duplicate finder link styling; post editor deep-link highlights attachment in Gutenberg galleries.
+* Improved: Optimize modal collapses the resize section after a successful optimization.
+* Fixed: Alt save button contrast and spacing; hover preview stuck after bulk alt fill; save blocked when browser autocomplete was open.
+
+= 1.9.6 =
+* Improved: Smarter suggested alt text (humanized filenames, EXIF/caption, skips pure numbers and camera noise).
+* Improved: Overview alt list shows only images with a fillable suggestion; bulk fill skips unusable names.
+* Improved: URL Fixer matches uploads URLs with http/https and encoded paths; safer path resolution.
+* Improved: Background queue shows pending vs processing separately; Cancel only affects pending jobs.
+* Improved: MIME mismatch and ghost attachment scans paginate in batches (large libraries).
+* Improved: Rogue file delete allowlist UX (24h scan note and rescan hint).
+* Fixed: Auto-optimize rollback, queue lock TTL/refresh, ghost delete on valid images, history default dates.
+* Fixed: Optimize modal thumbnail status (no fake delay; sync fallback without double cron).
+* Fixed: Duplicate scan covers full library; backup meta purge without basename collisions.
+* Fixed: History logs optimize only when replaced; revert action translated in history table.
+* Fixed: Plugin Check LIKE placeholder warnings in maintenance AJAX queries.
+* Added: Filter `tsoimma_suggest_alt_text` for custom/AI alt enrichment.
 
 = 1.9.5 =
 * Added: Background job queue for bulk optimize (WP-Cron, 5 images per batch).
@@ -159,44 +187,16 @@ For the full release history, see CHANGELOG.txt in the plugin folder.
 * Fixed: History no longer shows attachment title as SEO title on alt-only updates.
 * Fixed: PNG compression level clamped to 0–9; invalid output formats normalized.
 
-= 1.9.3 =
-* Added: Overview dashboard tab with site health metrics (images, missing alt, backups, space saved, engines).
-* Added: Missing/generic alt audit with bulk fill from suggested title or filename.
-
-= 1.9.2 =
-* Improved: WordPress 7.1 compatibility (readme and tested declaration).
-* Docs: older changelog entries moved to CHANGELOG.txt.
-
-= 1.9.1 =
-* Improved: empty folders under `uploads/tso-image-master/` are removed automatically after a backup is deleted (manual delete, revert, attachment delete, rogue scanner).
-* Fixed: orphan empty backup directories when backup creation failed or the file was already gone from disk.
-* Fixed: delete-backup and attachment delete now validate backup paths before removal.
-
-= 1.9.0 =
-* Added: URL Fixer — manually remove broken image references from content when no automatic fix is available (img tags, Gutenberg blocks, widgets).
-* Improved: history auto-cleanup — separate retention days and check frequency (daily/weekly/monthly); save feedback fixed.
-* Improved: clearer revert error when backup no longer matches after a file rename.
-* Fixed: image/PDF search matches filename prefix only (e.g. "ar" finds "arbre", not "mar").
-* Added: PDF preview modal in the PDFs tab (iframe + open in new tab fallback).
-* Improved: Rogue Scanner UI renamed to “extra upload files”; TSO backups shown as informational (not “problematic”).
-* Fixed: image rename failed with fatal error (private URL replace method now callable from Image Manager).
-* Fixed: history filename search uses prefix match (consistent with image/PDF search).
-* Fixed: history retention accepts 1–3650 days (0 = disabled).
-* Added: index.php in plugin subdirectories; upgrade hook reschedules history cron on version bump.
-
 == Upgrade Notice ==
+
+= 1.9.8 =
+Overview alt manual edit, WordPress.org prefix/storage hardening, dashboard UX, and queue/backup layout improvements.
+
+= 1.9.7 =
+Overview alt editor UX, hover preview, humanization tweaks, dashboard cache, and optimize modal polish.
+
+= 1.9.6 =
+Smarter alt suggestions, stability fixes (queue, rollback, URL fixer, ghost scan), and maintenance scan improvements.
 
 = 1.9.5 =
 Queue, backup retention, AVIF/PNG output, duplicate scanner, Media Library integration, history SEO details, and related bug fixes.
-
-= 1.9.3 =
-New Overview tab: health metrics plus bulk alt-text fill for images missing accessible alt.
-
-= 1.9.2 =
-Compatibility update: tested with WordPress 7.1 (no code changes required).
-
-= 1.9.1 =
-Cleans up empty backup folders under uploads/tso-image-master after backup deletion; safer backup path validation.
-
-= 1.9.0 =
-Major stability release: reliable image conversion, accurate backup detection, URL repair across posts and widgets, and safer rename/revert flows.

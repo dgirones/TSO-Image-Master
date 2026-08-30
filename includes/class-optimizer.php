@@ -232,11 +232,11 @@ class TSOIMMA_Optimizer {
 
         // Desar metes del backup
         if ( $backup_path && file_exists( $backup_path ) ) {
-            update_post_meta( $attachment_id, '_tso_im_backup_file', $backup_path );
-            update_post_meta( $attachment_id, '_tso_im_backup_mime', self::ext_to_mime( $old_ext ) );
-            update_post_meta( $attachment_id, '_tso_im_backup_size', filesize( $backup_path ) );
-            update_post_meta( $attachment_id, '_tso_im_backup_attached_file', self::normalize_attached_file_meta_value( get_post_meta( $attachment_id, '_wp_attached_file', true ) ) );
-            update_post_meta( $attachment_id, '_tso_im_backup_current_name', pathinfo( (string) $new_path, PATHINFO_FILENAME ) );
+            tsoimma_update_attachment_meta( $attachment_id, 'backup_file', $backup_path );
+            tsoimma_update_attachment_meta( $attachment_id, 'backup_mime', self::ext_to_mime( $old_ext ) );
+            tsoimma_update_attachment_meta( $attachment_id, 'backup_size', filesize( $backup_path ) );
+            tsoimma_update_attachment_meta( $attachment_id, 'backup_attached_file', self::normalize_attached_file_meta_value( get_post_meta( $attachment_id, '_wp_attached_file', true ) ) );
+            tsoimma_update_attachment_meta( $attachment_id, 'backup_current_name', pathinfo( (string) $new_path, PATHINFO_FILENAME ) );
         }
 
         // Actualitzar fitxer principal a WP
@@ -1267,9 +1267,9 @@ class TSOIMMA_Optimizer {
         if ( ! function_exists( 'wp_generate_attachment_metadata' ) ) {
             require_once ABSPATH . 'wp-admin/includes/image.php';
         }
-        $backup_path   = get_post_meta( $attachment_id, '_tso_im_backup_file', true );
-        $backup_mime   = get_post_meta( $attachment_id, '_tso_im_backup_mime', true );
-        $backup_attached_file = self::normalize_attached_file_meta_value( get_post_meta( $attachment_id, '_tso_im_backup_attached_file', true ) );
+        $backup_path   = tsoimma_get_attachment_meta( $attachment_id, 'backup_file' );
+        $backup_mime   = tsoimma_get_attachment_meta( $attachment_id, 'backup_mime' );
+        $backup_attached_file = self::normalize_attached_file_meta_value( tsoimma_get_attachment_meta( $attachment_id, 'backup_attached_file' ) );
         $current_attached_file = self::normalize_attached_file_meta_value( get_post_meta( $attachment_id, '_wp_attached_file', true ) );
 
         $backup_status = self::get_backup_status( $attachment_id, true );
@@ -1387,11 +1387,12 @@ class TSOIMMA_Optimizer {
      *
      * @param int    $attachment_id Attachment ID.
      * @param string $format        Output format.
-     * @param int    $quality       Quality.
-     * @param bool   $replace       Replace original.
+     * @param int    $quality          Quality.
+     * @param bool   $replace          Replace original.
+     * @param bool   $defer_thumbnails When true, skip thumbnail regeneration (caller runs it later).
      * @return array<string, mixed>|WP_Error
      */
-    public static function run_optimize_pipeline( $attachment_id, $format, $quality, $replace = true ) {
+    public static function run_optimize_pipeline( $attachment_id, $format, $quality, $replace = true, $defer_thumbnails = false ) {
         $attachment_id = absint( $attachment_id );
         $format        = sanitize_key( $format );
         $quality       = min( 100, max( 50, absint( $quality ) ) );
@@ -1409,32 +1410,47 @@ class TSOIMMA_Optimizer {
                 return new WP_Error( 'metadata_failed', 'FASE 2: ' . $ex->getMessage() );
             }
 
-            $ext_changed = ! empty( $res['old_ext'] ) && ! empty( $res['new_ext'] )
-                && ! self::extensions_match( $res['old_ext'], $res['new_ext'] );
-
-            if ( $ext_changed ) {
-                self::process_thumbnails_background( $attachment_id, $format, $quality );
+            if ( $defer_thumbnails ) {
+                $res['thumbnails_pending'] = true;
             } else {
-                self::optimize_thumbnails( $attachment_id, $format, $quality );
-                self::repair_content_urls_for_attachment( $attachment_id );
+                self::run_optimize_thumbnails_phase( $attachment_id, $format, $quality, $res );
             }
         }
 
         $bulk_file = get_attached_file( $attachment_id );
-        TSOIMMA_History::log(
-            $attachment_id,
-            'optimize',
-            array(
-                'filename'      => $bulk_file ? basename( $bulk_file ) : '',
-                'format'        => $format,
-                'quality'       => $quality,
-                'savings_bytes' => $res['savings_bytes'] ?? 0,
-                'savings_pct'   => $res['savings_pct'] ?? 0,
-            )
-        );
+        if ( ! empty( $res['replaced'] ) ) {
+            TSOIMMA_History::log(
+                $attachment_id,
+                'optimize',
+                array(
+                    'filename'      => $bulk_file ? basename( $bulk_file ) : '',
+                    'format'        => $format,
+                    'quality'       => $quality,
+                    'savings_bytes' => $res['savings_bytes'] ?? 0,
+                    'savings_pct'   => $res['savings_pct'] ?? 0,
+                )
+            );
+        }
 
         TSOIMMA_Cache_Helper::purge_after_change( $attachment_id );
         return $res;
+    }
+
+    /**
+     * FASE 3 — Regenerate and optimize thumbnails for one attachment.
+     *
+     * @param int                  $attachment_id Attachment ID.
+     * @param string               $format        Output format.
+     * @param int                  $quality       Quality.
+     * @param array<string, mixed> $convert_result Result from optimize() when available.
+     * @return void
+     */
+    public static function run_optimize_thumbnails_phase( $attachment_id, $format, $quality, $convert_result = array() ) {
+        $attachment_id = absint( $attachment_id );
+        $format        = sanitize_key( $format );
+        $quality       = min( 100, max( 50, absint( $quality ) ) );
+
+        self::process_thumbnails_background( $attachment_id, $format, $quality );
     }
 
     /**
@@ -1473,11 +1489,11 @@ class TSOIMMA_Optimizer {
      */
     public static function clear_backup_meta( $attachment_id ) {
         $attachment_id = absint( $attachment_id );
-        delete_post_meta( $attachment_id, '_tso_im_backup_file' );
-        delete_post_meta( $attachment_id, '_tso_im_backup_mime' );
-        delete_post_meta( $attachment_id, '_tso_im_backup_size' );
-        delete_post_meta( $attachment_id, '_tso_im_backup_attached_file' );
-        delete_post_meta( $attachment_id, '_tso_im_backup_current_name' );
+        tsoimma_delete_attachment_meta( $attachment_id, 'backup_file' );
+        tsoimma_delete_attachment_meta( $attachment_id, 'backup_mime' );
+        tsoimma_delete_attachment_meta( $attachment_id, 'backup_size' );
+        tsoimma_delete_attachment_meta( $attachment_id, 'backup_attached_file' );
+        tsoimma_delete_attachment_meta( $attachment_id, 'backup_current_name' );
     }
 
     /**
@@ -1594,7 +1610,7 @@ class TSOIMMA_Optimizer {
             'backup_path'  => '',
         );
 
-        $stored_path = get_post_meta( $attachment_id, '_tso_im_backup_file', true );
+        $stored_path = tsoimma_get_attachment_meta( $attachment_id, 'backup_file' );
         if ( ! $stored_path ) {
             return $empty;
         }
@@ -1603,8 +1619,8 @@ class TSOIMMA_Optimizer {
         if ( ! $resolved || ! self::is_valid_image_file( $resolved ) ) {
             $resolved = self::locate_backup_file_for_attachment( $attachment_id );
             if ( $resolved ) {
-                update_post_meta( $attachment_id, '_tso_im_backup_file', $resolved );
-                update_post_meta( $attachment_id, '_tso_im_backup_size', filesize( $resolved ) );
+                tsoimma_update_attachment_meta( $attachment_id, 'backup_file', $resolved );
+                tsoimma_update_attachment_meta( $attachment_id, 'backup_size', filesize( $resolved ) );
             }
         }
 
@@ -1633,9 +1649,9 @@ class TSOIMMA_Optimizer {
      * @return string|false Absolute path when found.
      */
     private static function locate_backup_file_for_attachment( $attachment_id ) {
-        $backup_mime     = (string) get_post_meta( $attachment_id, '_tso_im_backup_mime', true );
+        $backup_mime     = (string) tsoimma_get_attachment_meta( $attachment_id, 'backup_mime' );
         $backup_attached = self::normalize_attached_file_meta_value(
-            get_post_meta( $attachment_id, '_tso_im_backup_attached_file', true )
+            tsoimma_get_attachment_meta( $attachment_id, 'backup_attached_file' )
         );
         $upload_dir      = wp_upload_dir();
         $basedir_norm    = wp_normalize_path( trailingslashit( $upload_dir['basedir'] ) );
@@ -1648,7 +1664,7 @@ class TSOIMMA_Optimizer {
         );
         $ext = isset( $mime_ext_map[ $backup_mime ] ) ? $mime_ext_map[ $backup_mime ] : '';
         if ( '' === $ext ) {
-            $stored = (string) get_post_meta( $attachment_id, '_tso_im_backup_file', true );
+            $stored = (string) tsoimma_get_attachment_meta( $attachment_id, 'backup_file' );
             $ext    = strtolower( pathinfo( $stored, PATHINFO_EXTENSION ) );
         }
         if ( '' === $ext ) {

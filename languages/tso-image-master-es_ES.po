@@ -4,7 +4,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: TSO Image Master 1.9.5\n"
+"Project-Id-Version: TSO Image Master 1.9.8\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/tso-image-master\n"
 "POT-Creation-Date: 2026-04-17 21:10+0000\n"
 "PO-Revision-Date: 2026-05-22 12:00+0000\n"
@@ -466,6 +466,9 @@ msgstr "Reparar URLs"
 
 msgid "All images have useful alt text."
 msgstr "Todas las imágenes tienen un alt útil."
+
+msgid "Write alt text…"
+msgstr "Escribe texto alt…"
 
 msgid "Background queue"
 msgstr "Cola en segundo plano"

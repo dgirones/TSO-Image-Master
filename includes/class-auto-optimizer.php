@@ -121,66 +121,72 @@ class TSOIMMA_Auto_Optimizer {
 
         if ( ! is_wp_error( $result ) && ! empty( $result['replaced'] ) ) {
 
-            // ── FASE 2: Actualitzar metadata principal a la BD ────────────
-            // Ho fem ABANS de generar thumbnails perquè update_wp_metadata_only
-            // escriu el nou path .webp i el nou mime type.
-            TSOIMMA_Optimizer::update_wp_metadata_only( $attachment_id, $result, $format );
+            try {
+                // ── FASE 2: Actualitzar metadata principal a la BD ────────────
+                // Ho fem ABANS de generar thumbnails perquè update_wp_metadata_only
+                // escriu el nou path .webp i el nou mime type.
+                TSOIMMA_Optimizer::update_wp_metadata_only( $attachment_id, $result, $format );
 
-            // ── FASE 3: Eliminar thumbnails originals (PNG/JPG) ───────────
-            // CRÍTIC: eliminar ABANS de wp_generate_attachment_metadata.
-            // Si els thumbnails WebP ja existeixen quan WP els vol crear,
-            // wp_unique_filename() genera noms amb sufix "-1.webp", "-2.webp"...
-            // que trenquen les URLs i fan que la biblioteca no mostri previsualtizació.
-            $current_meta = wp_get_attachment_metadata( $attachment_id );
-            if ( ! empty( $current_meta['sizes'] ) ) {
-                $thumb_dir = trailingslashit( dirname( get_attached_file( $attachment_id ) ) );
-                foreach ( $current_meta['sizes'] as $size_data ) {
-                    if ( empty( $size_data['file'] ) ) continue;
-                    // Eliminar qualsevol variant d'extensió (jpg, png, webp...) per nom base
-                    $pi = pathinfo( $size_data['file'] );
-                    foreach ( array( 'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif' ) as $ext ) {
-                        $candidate = $thumb_dir . $pi['filename'] . '.' . $ext;
-                        if ( file_exists( $candidate ) ) {
-                            wp_delete_file( $candidate );
+                // ── FASE 3: Eliminar thumbnails originals (PNG/JPG) ───────────
+                // CRÍTIC: eliminar ABANS de wp_generate_attachment_metadata.
+                // Si els thumbnails WebP ja existeixen quan WP els vol crear,
+                // wp_unique_filename() genera noms amb sufix "-1.webp", "-2.webp"...
+                // que trenquen les URLs i fan que la biblioteca no mostri previsualtizació.
+                $current_meta = wp_get_attachment_metadata( $attachment_id );
+                if ( ! empty( $current_meta['sizes'] ) ) {
+                    $thumb_dir = trailingslashit( dirname( get_attached_file( $attachment_id ) ) );
+                    foreach ( $current_meta['sizes'] as $size_data ) {
+                        if ( empty( $size_data['file'] ) ) {
+                            continue;
+                        }
+                        // Eliminar qualsevol variant d'extensió (jpg, png, webp...) per nom base
+                        $pi = pathinfo( $size_data['file'] );
+                        foreach ( array( 'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif' ) as $ext ) {
+                            $candidate = $thumb_dir . $pi['filename'] . '.' . $ext;
+                            if ( file_exists( $candidate ) ) {
+                                wp_delete_file( $candidate );
+                            }
                         }
                     }
                 }
-            }
 
-            // ── FASE 4: Regenerar thumbnails des del fitxer WebP ─────────
-            // Ara que no hi ha thumbnails al disc, WP els crea amb noms nets.
-            // WP 6.1+ genera thumbnails en el mateix format que la font (WebP→WebP).
-            // WP < 6.1 genera JPEG; els convertim a WebP a la Fase 5.
-            $new_file = get_attached_file( $attachment_id );
-            if ( $new_file && file_exists( $new_file ) ) {
-                if ( ! function_exists( 'wp_generate_attachment_metadata' ) ) {
-                    require_once ABSPATH . 'wp-admin/includes/image.php';
+                // ── FASE 4: Regenerar thumbnails des del fitxer WebP ─────────
+                // Ara que no hi ha thumbnails al disc, WP els crea amb noms nets.
+                // WP 6.1+ genera thumbnails en el mateix format que la font (WebP→WebP).
+                // WP < 6.1 genera JPEG; els convertim a WebP a la Fase 5.
+                $new_file = get_attached_file( $attachment_id );
+                if ( $new_file && file_exists( $new_file ) ) {
+                    if ( ! function_exists( 'wp_generate_attachment_metadata' ) ) {
+                        require_once ABSPATH . 'wp-admin/includes/image.php';
+                    }
+                    $new_meta = wp_generate_attachment_metadata( $attachment_id, $new_file );
+                    if ( $new_meta && ! is_wp_error( $new_meta ) ) {
+                        wp_update_attachment_metadata( $attachment_id, $new_meta );
+                    }
                 }
-                $new_meta = wp_generate_attachment_metadata( $attachment_id, $new_file );
-                if ( $new_meta && ! is_wp_error( $new_meta ) ) {
-                    wp_update_attachment_metadata( $attachment_id, $new_meta );
-                }
+
+                // ── FASE 5: Convertir thumbnails al format triat ──────────────
+                // Necessari per a WP < 6.1 (genera JPEG) o si el format triat no és WebP.
+                // En WP 6.1+ amb font WebP és un no-op (thumbnails ja són WebP).
+                TSOIMMA_Optimizer::optimize_thumbnails( $attachment_id, $format, $quality );
+                TSOIMMA_Optimizer::repair_content_urls_for_attachment( $attachment_id, $current_meta );
+
+                // ── Registrar al historial ────────────────────────────────────
+                $log_file = isset( $result['new_path'] ) ? $result['new_path'] : get_attached_file( $attachment_id );
+                TSOIMMA_History::log( $attachment_id, 'auto_optimize', array(
+                    'filename'      => $log_file ? basename( $log_file ) : '',
+                    'format'        => $format,
+                    'quality'       => $quality,
+                    'original_size' => isset( $result['original_size'] ) ? $result['original_size'] : 0,
+                    'new_size'      => isset( $result['new_size'] )      ? $result['new_size']      : 0,
+                    'savings_bytes' => isset( $result['savings_bytes'] ) ? $result['savings_bytes'] : 0,
+                    'savings_pct'   => isset( $result['savings_pct'] )   ? $result['savings_pct']   : 0,
+                ) );
+
+                tsoimma_update_attachment_meta( $attachment_id, 'auto_optimized', time() );
+            } catch ( \Throwable $ex ) {
+                TSOIMMA_Optimizer::rollback_optimize_files( $result );
             }
-
-            // ── FASE 5: Convertir thumbnails al format triat ──────────────
-            // Necessari per a WP < 6.1 (genera JPEG) o si el format triat no és WebP.
-            // En WP 6.1+ amb font WebP és un no-op (thumbnails ja són WebP).
-            TSOIMMA_Optimizer::optimize_thumbnails( $attachment_id, $format, $quality );
-            TSOIMMA_Optimizer::repair_content_urls_for_attachment( $attachment_id, $current_meta );
-
-            // ── Registrar al historial ────────────────────────────────────
-            $log_file = isset( $result['new_path'] ) ? $result['new_path'] : get_attached_file( $attachment_id );
-            TSOIMMA_History::log( $attachment_id, 'auto_optimize', array(
-                'filename'      => $log_file ? basename( $log_file ) : '',
-                'format'        => $format,
-                'quality'       => $quality,
-                'original_size' => isset( $result['original_size'] ) ? $result['original_size'] : 0,
-                'new_size'      => isset( $result['new_size'] )      ? $result['new_size']      : 0,
-                'savings_bytes' => isset( $result['savings_bytes'] ) ? $result['savings_bytes'] : 0,
-                'savings_pct'   => isset( $result['savings_pct'] )   ? $result['savings_pct']   : 0,
-            ) );
-
-            update_post_meta( $attachment_id, '_tso_im_auto_optimized', time() );
         }
 
         self::maybe_fill_alt_on_upload( $attachment_id, $settings );
@@ -288,7 +294,7 @@ class TSOIMMA_Auto_Optimizer {
             return;
         }
 
-        $suggested = TSOIMMA_Image_Manager::suggest_alt_text( $attachment_id );
+        $suggested = TSOIMMA_Dashboard::pick_alt_fill_value( $attachment_id, 'suggested' );
         if ( '' === $suggested ) {
             return;
         }
