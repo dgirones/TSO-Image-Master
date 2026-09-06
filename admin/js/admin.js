@@ -15,28 +15,98 @@
     // ================================================================
     // State
     // ================================================================
+    var PER_PAGE_ALLOWED = [21, 35, 49, 70, 105];
+    var PER_PAGE_STORAGE_KEY = 'tsoimma_images_per_page';
+
+    function readStoredPerPage() {
+        try {
+            var stored = parseInt(window.localStorage.getItem(PER_PAGE_STORAGE_KEY), 10);
+            if (PER_PAGE_ALLOWED.indexOf(stored) !== -1) {
+                return stored;
+            }
+        } catch (e) {}
+        return 35;
+    }
+
+    function writeStoredPerPage(value) {
+        try {
+            window.localStorage.setItem(PER_PAGE_STORAGE_KEY, String(value));
+        } catch (e) {}
+    }
+
+    function setSelectValue($select, value) {
+        if (!$select.length) return;
+        $select.val(String(value));
+        var api = $select.closest('.imp-csel').data('impCselApi');
+        if (api && typeof api.sync === 'function') {
+            api.sync();
+        } else {
+            var $label = $select.closest('.imp-csel').find('.imp-csel-label');
+            var text = $select.find('option:selected').first().text();
+            if ($label.length && text) {
+                $label.text(text);
+            }
+        }
+    }
+
+    function applyPerPage(value, reload) {
+        var n = parseInt(value, 10);
+        if (PER_PAGE_ALLOWED.indexOf(n) === -1) {
+            n = 35;
+        }
+        state.opt.perPage = n;
+        state.seo.perPage = n;
+        writeStoredPerPage(n);
+        setSelectValue($('#imp-opt-per-page'), n);
+        setSelectValue($('#imp-seo-per-page'), n);
+        if (reload) {
+            state.opt.page = 1;
+            state.seo.page = 1;
+            state.opt.selected.clear();
+            updateSelectedCount();
+            loadOptImages();
+            loadSeoImages();
+        }
+    }
+
     var state = {
         opt: {
-            page: 1, perPage: 35, search: '', totalPages: 1,
+            page: 1, perPage: readStoredPerPage(), search: '', totalPages: 1,
             selected: new Set()
         },
         seo: {
-            page: 1, perPage: 35, search: '', totalPages: 1
+            page: 1, perPage: readStoredPerPage(), search: '', totalPages: 1
         },
         orphans: { found: [] },
         orphanSelected: new Set(),
+        dashboard: { altPage: 1, altSelected: new Set(), altDraftById: {}, engines: {}, overviewLoaded: false, altListLoaded: false, altListCacheKey: '', dirty: false, xhrOverview: null, xhrAlt: null },
         currentModalId: null,
         imgCacheTs: {}
     };
     var refreshUrlFixerUi = null;
+    var hoverPreviewLoadId = 0;
+
+    function hideImgHoverPreview() {
+        hoverPreviewLoadId += 1;
+        var $preview = $('#imp-img-hover-preview');
+        if (!$preview.length) {
+            return;
+        }
+        $preview.removeClass('visible').hide();
+        $preview.find('img').attr('src', '');
+    }
 
     // ================================================================
     // Init
     // ================================================================
     $(function() {
-        initImpCustomSelects();
         initLanguageSwitcher();
+        initImpCustomSelects();
+        applyPerPage(readStoredPerPage(), false);
         initTabs();
+        initDashboard();
+        initHelpTips();
+        initEngineInfo();
         initQualitySliders();
         initSearch();
         initOptimizeTab();
@@ -52,6 +122,11 @@
         loadOptImages();
         loadSeoImages();
         loadAutoSettings();
+        var deepId = parseInt(new URLSearchParams(window.location.search).get('tsoimma_id') || '0', 10);
+        if (deepId > 0) {
+            $('.imp-tab[data-tab="optimize"]').trigger('click');
+            setTimeout(function() { openModal(deepId, 'optimize'); }, 400);
+        }
     });
 
     // ================================================================
@@ -99,6 +174,7 @@
             action_seo_update: 'SEO actualitzat',
             action_delete: 'Eliminada',
             action_pdf_compress: 'PDF comprimit',
+            action_revert: 'Revertida',
             donate_support: '☕ Dona suport al plugin',
             auto_source_formats_label: 'Formats d\'origen per auto-convertir',
             auto_src_jpg: 'JPG/JPEG',
@@ -119,6 +195,8 @@
             rogue_reason_tso_pdf_compressed: 'PDF comprimit TSO',
             rogue_reason_generic_backup: 'Backup genèric (.bk)',
             rogue_reason_unregistered_wp_db: 'Fitxer no registrat a la BD de WordPress',
+            rogue_delete_allowlist_note: 'Pots eliminar fitxers escanejats durant 24 h (només l\'admin que ha escanejat). Torna a escanejar si l\'eliminació falla.',
+            rogue_rescan_required: 'Alguns fitxers s\'han omès: torna a escanejar abans d\'eliminar (la llista caduca al cap de 24 h).',
             auto_clean_title: '🕐 Neteja automàtica de l\'historial',
             retention_days_label: 'Conservar:',
             retention_days_unit: 'dies',
@@ -128,7 +206,113 @@
             interval_monthly: 'Cada mes',
             retention_zero_hint: '0 dies = desactivat',
             retention_saved: 'Desat!',
-            retention_invalid: 'Valor invàlid. Usa 0 per desactivar, o entre 1 i 3650 dies.'
+            retention_invalid: 'Valor invàlid. Usa 0 per desactivar, o entre 1 i 3650 dies.',
+            tab_dashboard: 'Resum',
+            dash_title: 'Resum del lloc',
+            dash_desc: 'Visió ràpida de la salut de les imatges, motors disponibles i accions pendents.',
+            dash_total_images: 'Imatges a la biblioteca',
+            dash_missing_alt: 'Alt text absent',
+            dash_backups: 'Còpies de seguretat TSO',
+            dash_saved: 'Espai estalviat',
+            dash_operations: 'operacions del plugin',
+            dash_auto_on: 'Auto-optimitzar ACTIVAT',
+            dash_auto_off: 'Auto-optimitzar DESACTIVAT',
+            dash_auto_label: 'Auto-optimitzar',
+            dash_auto_status_on: 'ACTIVAT',
+            dash_auto_status_off: 'DESACTIVAT',
+            dash_auto_format_sub: 'Format de sortida: %s',
+            dash_auto_disabled_hint: 'Desactivat — activa a la pestanya Auto',
+            dash_alt_title: 'Imatges sense alt (o alt genèric)',
+            dash_alt_desc: 'Suggereix alt des del títol o nom de fitxer. Clica ✎ per editar una fila; Desar (verd) guarda l\'alt. «Omplir alt seleccionades» usa el text editat.',
+            dash_alt_save: 'Desar',
+            dash_alt_edit: 'Editar alt',
+            dash_alt_accept: 'Acceptar alt suggerit',
+            dash_alt_cancel: 'Cancel·lar',
+            dash_alt_used_only: 'Només usades en contingut',
+            dash_alt_used_only_tip: 'Mostra només imatges referenciades en entrades, pàgines, imatges destacades, widgets o camps personalitzats. Oculta pujades no usades de la biblioteca.',
+            dash_alt_fill: 'Omplir alt seleccionades',
+            dash_alt_fill_tip: 'Escriu l\'alt suggerit (títol si és útil, sinó nom de fitxer humanitzat) a cada imatge seleccionada. Omet les que ja tenen un alt útil.',
+            dash_alt_suggested: 'Alt suggerit',
+            dash_alt_file_col: 'Fitxer',
+            dash_alt_used_in: 'Usada a',
+            dash_alt_updated: 'texts alt actualitzats.',
+            dash_alt_skipped: 'omeses (ja tenien alt).',
+            dash_alt_manual_hint: 'Escriu text alt…',
+            dash_engine_gd: 'GD WebP',
+            dash_engine_avif: 'GD AVIF',
+            dash_engine_gs: 'GhostScript',
+            dash_engine_imagick: 'Imagick',
+            dash_engine_info_title: 'Motors del servidor',
+            dash_engine_gd_desc: 'PHP GD amb lectura/escriptura WebP. Necessari per convertir a WebP i la majoria d\'optimitzacions.',
+            dash_engine_avif_desc: 'PHP GD amb lectura/escriptura AVIF. Només cal si tries AVIF com a format de sortida.',
+            dash_engine_gs_desc: 'Eina de línia de comandes per comprimir PDFs a la pestanya PDFs.',
+            dash_engine_imagick_desc: 'Extensió PHP ImageMagick. Reserva per comprimir PDFs i algunes tasques d\'imatge.',
+            dash_engine_available: 'Disponible en aquest servidor.',
+            dash_engine_unavailable: 'No disponible en aquest servidor.',
+            dash_engine_why_fail: 'Per què no funciona',
+            dash_engine_close: 'Tancar',
+            dash_go_orphans: 'Trobar òrfenes',
+            dash_go_urls: 'Reparar URLs',
+            dash_alt_all_ok: 'Totes les imatges tenen un alt útil.',
+            dash_queue_title: 'Cua en segon pla',
+            dash_queue_desc: 'Les optimitzacions massives s\'executen en segon pla via WP-Cron (5 imatges per lot).',
+            dash_queue_cancel: 'Cancel·lar jobs pendents',
+            dash_queue_empty: 'La cua és buida.',
+            dash_queue_done: 'fetes',
+            dash_queue_pending: 'pendents',
+            dash_queue_processing: 'processant',
+            dash_queue_thumbs: 'miniatures pendents',
+            dash_queue_errors: 'errors',
+            dash_queue_queued: 'En cua per processar en segon pla...',
+            dash_queue_queued_n: 'imatges en cua.',
+            dash_backup_title: 'Retenció de còpies de seguretat',
+            dash_backup_desc: 'Elimina automàticament les còpies TSO a uploads/tso-image-master/ (0 = desactivat).',
+            dash_backup_days: 'Conservar còpies (dies)',
+            dash_backup_max: 'Mida màxima total (MB, 0 = il·limitat)',
+            dash_backup_purge: 'Purga ara',
+            dash_backup_purge_noop: 'La retenció està desactivada (0 dies i 0 MB). Res a netejar.',
+            dash_dup_title: 'Imatges duplicades',
+            dash_dup_scan: 'Escanejar duplicats',
+            dash_dup_none: 'No s\'han trobat grups de duplicats.',
+            dash_dup_groups: 'grups de duplicats',
+            dash_dup_wasted: 'Espai malgastat',
+            dash_dup_explain: 'Cada grup són fitxers idèntics (mateix MD5) registrats més d\'una vegada a la Mediateca. Conserva una entrada i elimina la resta des de la Mediateca de WordPress.',
+            dash_dup_group_label: 'Fitxer idèntic',
+            dash_dup_entries: 'entrades',
+            dash_dup_wasted_in_group: 'malgastats en aquest grup',
+            dash_dup_same_name: 'Mateix nom de fitxer però IDs de Mediateca diferents.',
+            dash_dup_media_id: 'ID Mediateca',
+            dash_dup_upload_path: 'Ubicació',
+            dash_dup_uploaded: 'Pujada',
+            dash_dup_dimensions: 'Mida',
+            dash_dup_refs: 'Referenciada a',
+            dash_dup_refs_none: 'No referenciada al contingut (pot ser orfe)',
+            dash_dup_refs_more: 'més',
+            dash_dup_open_im: 'Obrir a Image Master',
+            dash_dup_open_wp: 'Mediateca WP',
+            dash_dup_item_title: 'Títol',
+            dash_scanned: 'escanejades',
+            dash_dup_keep: 'Conserva aquesta (usada al contingut)',
+            dash_dup_delete_ok: 'Es pot eliminar (duplicat no usat)',
+            dash_dup_used_direct: 'Usada al contingut',
+            dash_dup_used_indirect: 'Només coincidència de nom (aquest ID no és al codi)',
+            dash_dup_active_id: 'ID actiu al post',
+            dash_dup_open_post: 'Obrir entrada',
+            dash_heavy_btn: 'Imatges més pesades',
+            auto_skip_kb_label: 'Ometre auto-optimitzar si WebP/AVIF ≤ (KB, 0 = off)',
+            auto_fill_alt_label: 'Omplir alt absent en pujar',
+            fmt_avif: 'AVIF',
+            fmt_png: 'PNG',
+            fmt_webp: 'WebP (recomanat)',
+            fmt_keep: 'Mantenir format original',
+            fmt_keep_current: 'Mantenir format actual',
+            per_page_21: '📄 21 / pàgina',
+            per_page_35: '📄 35 / pàgina',
+            per_page_49: '📄 49 / pàgina',
+            per_page_70: '📄 70 / pàgina',
+            per_page_105: '📄 105 / pàgina',
+            hist_seo_bulk: 'Omplerta en bloc',
+            hist_seo_auto: 'En pujar'
         },
         es: {
             tab_optimize: 'Optimizar',
@@ -215,7 +399,6 @@
             search_file: 'Buscar archivo',
             search_file_ph: 'nombre del archivo...',
             history_load: '🔄 Cargar / filtrar',
-            history_clear_dates: '📅 Todas las fechas',
             clear_30: '🗑️ Limpiar >30 días',
             clear_all: '🗑️ Limpiar todo',
             auto_clean_title: '🕐 Limpieza automática del historial',
@@ -263,6 +446,7 @@
             action_seo_update: 'SEO actualizado',
             action_delete: 'Eliminada',
             action_pdf_compress: 'PDF comprimido',
+            action_revert: 'Revertida',
             selected_of: 'seleccionados de',
             fixable_label: 'reparables',
             appears_in: 'Aparece en',
@@ -305,6 +489,111 @@
             ,rogue_reason_tso_pdf_compressed: 'PDF comprimido TSO'
             ,rogue_reason_generic_backup: 'Backup genérico (.bk)'
             ,rogue_reason_unregistered_wp_db: 'Archivo no registrado en la BD de WordPress'
+            ,rogue_delete_allowlist_note: 'Puedes borrar archivos escaneados durante 24 h (solo el admin que escaneó). Vuelve a escanear si falla el borrado.'
+            ,rogue_rescan_required: 'Algunos archivos se omitieron: vuelve a escanear antes de borrar (la lista caduca a las 24 h).'
+            ,tab_dashboard: 'Resumen'
+            ,dash_title: 'Resumen del sitio'
+            ,dash_desc: 'Vista rápida de la salud de las imágenes, motores disponibles y acciones pendientes.'
+            ,dash_total_images: 'Imágenes en la biblioteca'
+            ,dash_missing_alt: 'Texto alt ausente'
+            ,dash_backups: 'Copias de seguridad TSO'
+            ,dash_saved: 'Espacio ahorrado'
+            ,dash_operations: 'operaciones del plugin'
+            ,dash_auto_on: 'Auto-optimizar ACTIVADO'
+            ,dash_auto_off: 'Auto-optimizar DESACTIVADO'
+            ,dash_auto_label: 'Auto-optimizar'
+            ,dash_auto_status_on: 'ACTIVADO'
+            ,dash_auto_status_off: 'DESACTIVADO'
+            ,dash_auto_format_sub: 'Formato de salida: %s'
+            ,dash_auto_disabled_hint: 'Desactivado — activa en la pestaña Auto'
+            ,dash_alt_title: 'Imágenes sin alt (o alt genérico)'
+            ,dash_alt_desc: 'Sugiere alt desde el título o nombre de archivo. Puedes editar el texto en «Alt sugerido» y guardarlo con Enter o ✓. «Rellenar alt seleccionadas» usa el texto editado.'
+            ,dash_alt_save: 'Guardar'
+            ,dash_alt_edit: 'Editar alt'
+            ,dash_alt_accept: 'Aceptar alt sugerido'
+            ,dash_alt_cancel: 'Cancelar'
+            ,dash_alt_used_only: 'Solo usadas en contenido'
+            ,dash_alt_used_only_tip: 'Muestra solo imágenes referenciadas en entradas, páginas, imágenes destacadas, widgets o campos personalizados. Oculta subidas no usadas de la biblioteca.'
+            ,dash_alt_fill: 'Rellenar alt seleccionadas'
+            ,dash_alt_fill_tip: 'Escribe el alt sugerido (título si es útil, si no nombre de archivo humanizado) en cada imagen seleccionada. Omite las que ya tienen un alt útil.'
+            ,dash_alt_suggested: 'Alt sugerido'
+            ,dash_alt_file_col: 'Archivo'
+            ,dash_alt_used_in: 'Usada en'
+            ,dash_alt_updated: 'textos alt actualizados.'
+            ,dash_alt_skipped: 'omitidas (ya tenían alt).'
+            ,dash_alt_manual_hint: 'Escribe texto alt…'
+            ,dash_engine_gd: 'GD WebP'
+            ,dash_engine_avif: 'GD AVIF'
+            ,dash_engine_gs: 'GhostScript'
+            ,dash_engine_imagick: 'Imagick'
+            ,dash_engine_info_title: 'Motores del servidor'
+            ,dash_engine_gd_desc: 'PHP GD con lectura/escritura WebP. Necesario para convertir a WebP y la mayoría de optimizaciones.'
+            ,dash_engine_avif_desc: 'PHP GD con lectura/escritura AVIF. Solo hace falta si eliges AVIF como formato de salida.'
+            ,dash_engine_gs_desc: 'Herramienta de línea de comandos para comprimir PDFs en la pestaña PDFs.'
+            ,dash_engine_imagick_desc: 'Extensión PHP ImageMagick. Respaldo para comprimir PDFs y algunas tareas de imagen.'
+            ,dash_engine_available: 'Disponible en este servidor.'
+            ,dash_engine_unavailable: 'No disponible en este servidor.'
+            ,dash_engine_why_fail: 'Por qué no funciona'
+            ,dash_engine_close: 'Cerrar'
+            ,dash_go_orphans: 'Buscar huérfanas'
+            ,dash_go_urls: 'Reparar URLs'
+            ,dash_alt_all_ok: 'Todas las imágenes tienen un alt útil.'
+            ,dash_queue_title: 'Cola en segundo plano'
+            ,dash_queue_desc: 'Las optimizaciones masivas se ejecutan en segundo plano vía WP-Cron (5 imágenes por lote).'
+            ,dash_queue_cancel: 'Cancelar trabajos pendientes'
+            ,dash_queue_empty: 'La cola está vacía.'
+            ,dash_queue_done: 'hechas'
+            ,dash_queue_pending: 'pendientes'
+            ,dash_queue_processing: 'procesando'
+            ,dash_queue_thumbs: 'miniaturas pendientes'
+            ,dash_queue_errors: 'errores'
+            ,dash_queue_queued: 'En cola para procesar en segundo plano...'
+            ,dash_queue_queued_n: 'imágenes en cola.'
+            ,dash_backup_title: 'Retención de copias de seguridad'
+            ,dash_backup_desc: 'Elimina automáticamente las copias TSO en uploads/tso-image-master/ (0 = desactivado).'
+            ,dash_backup_days: 'Conservar copias (días)'
+            ,dash_backup_max: 'Tamaño máximo total (MB, 0 = ilimitado)'
+            ,dash_backup_purge: 'Purgar ahora'
+            ,dash_backup_purge_noop: 'La retención está desactivada (0 días y 0 MB). Nada que purgar.'
+            ,dash_dup_title: 'Imágenes duplicadas'
+            ,dash_dup_scan: 'Escanear duplicados'
+            ,dash_dup_none: 'No se han encontrado grupos de duplicados.'
+            ,dash_dup_groups: 'grupos de duplicados'
+            ,dash_dup_wasted: 'Espacio desperdiciado'
+            ,dash_dup_explain: 'Cada grupo son archivos idénticos (mismo MD5) registrados más de una vez en la Biblioteca de medios. Conserva una entrada y elimina el resto desde Medios de WordPress.'
+            ,dash_dup_group_label: 'Archivo idéntico'
+            ,dash_dup_entries: 'entradas'
+            ,dash_dup_wasted_in_group: 'desperdiciados en este grupo'
+            ,dash_dup_same_name: 'Mismo nombre de archivo pero IDs de medios diferentes.'
+            ,dash_dup_media_id: 'ID Medios'
+            ,dash_dup_upload_path: 'Ubicación'
+            ,dash_dup_uploaded: 'Subida'
+            ,dash_dup_dimensions: 'Tamaño'
+            ,dash_dup_refs: 'Referenciada en'
+            ,dash_dup_refs_none: 'No referenciada en el contenido (puede ser huérfana)'
+            ,dash_dup_refs_more: 'más'
+            ,dash_dup_open_im: 'Abrir en Image Master'
+            ,dash_dup_open_wp: 'Medios WP'
+            ,dash_dup_item_title: 'Título'
+            ,dash_scanned: 'escaneadas'
+            ,dash_dup_keep: 'Conserva esta (usada en el contenido)'
+            ,dash_dup_delete_ok: 'Se puede eliminar (duplicado no usado)'
+            ,dash_dup_used_direct: 'Usada en el contenido'
+            ,dash_dup_used_indirect: 'Solo coincidencia de nombre (este ID no está en el código)'
+            ,dash_dup_active_id: 'ID activo en la entrada'
+            ,dash_dup_open_post: 'Abrir entrada'
+            ,dash_heavy_btn: 'Imágenes más pesadas'
+            ,auto_skip_kb_label: 'Omitir auto-optimizar si WebP/AVIF ≤ (KB, 0 = off)'
+            ,auto_fill_alt_label: 'Rellenar alt ausente al subir'
+            ,fmt_avif: 'AVIF'
+            ,fmt_png: 'PNG'
+            ,per_page_21: '📄 21 / página'
+            ,per_page_35: '📄 35 / página'
+            ,per_page_49: '📄 49 / página'
+            ,per_page_70: '📄 70 / página'
+            ,per_page_105: '📄 105 / página'
+            ,hist_seo_bulk: 'Rellenado masivo'
+            ,hist_seo_auto: 'Al subir'
         },
         en: {
             tab_optimize: 'Optimize',
@@ -391,7 +680,6 @@
             search_file: 'Search file',
             search_file_ph: 'filename...',
             history_load: '🔄 Load / filter',
-            history_clear_dates: '📅 All dates',
             clear_30: '🗑️ Clean >30 days',
             clear_all: '🗑️ Clean all',
             auto_clean_title: '🕐 Automatic history cleanup',
@@ -439,6 +727,7 @@
             action_seo_update: 'SEO updated',
             action_delete: 'Deleted',
             action_pdf_compress: 'PDF compressed',
+            action_revert: 'Reverted',
             selected_of: 'selected of',
             fixable_label: 'fixable',
             appears_in: 'Appears in',
@@ -481,6 +770,111 @@
             ,rogue_reason_tso_pdf_compressed: 'TSO compressed PDF'
             ,rogue_reason_generic_backup: 'Generic backup (.bk)'
             ,rogue_reason_unregistered_wp_db: 'File not registered in WordPress DB'
+            ,rogue_delete_allowlist_note: 'You can delete scanned files for 24 hours (current admin only). Rescan if delete fails.'
+            ,rogue_rescan_required: 'Some files were skipped: run Scan again before deleting (allowlist expires after 24 hours).'
+            ,tab_dashboard: 'Overview'
+            ,dash_title: 'Site overview'
+            ,dash_desc: 'Quick view of image health, available engines, and pending actions.'
+            ,dash_total_images: 'Images in library'
+            ,dash_missing_alt: 'Missing alt text'
+            ,dash_backups: 'TSO backups'
+            ,dash_saved: 'Space saved'
+            ,dash_operations: 'operations'
+            ,dash_auto_on: 'Auto-optimize ON'
+            ,dash_auto_off: 'Auto-optimize OFF'
+            ,dash_auto_label: 'Auto-optimize'
+            ,dash_auto_status_on: 'ON'
+            ,dash_auto_status_off: 'OFF'
+            ,dash_auto_format_sub: 'Output format: %s'
+            ,dash_auto_disabled_hint: 'Disabled — enable in Auto tab'
+            ,dash_alt_title: 'Images without alt (or generic alt)'
+            ,dash_alt_desc: 'Suggests alt from title or filename. Edit the «Suggested alt» field and save with Enter or ✓. «Fill alt for selected» uses your edited text.'
+            ,dash_alt_save: 'Save'
+            ,dash_alt_edit: 'Edit alt'
+            ,dash_alt_accept: 'Accept suggested alt'
+            ,dash_alt_cancel: 'Cancel'
+            ,dash_alt_used_only: 'Only used in content'
+            ,dash_alt_used_only_tip: 'Shows only images referenced in posts, pages, featured images, widgets, or custom fields. Hides unused library uploads.'
+            ,dash_alt_fill: 'Fill alt for selected'
+            ,dash_alt_fill_tip: 'Writes the suggested alt (title if useful, otherwise humanized filename) into each selected image. Skips images that already have useful alt text.'
+            ,dash_alt_suggested: 'Suggested alt'
+            ,dash_alt_file_col: 'File'
+            ,dash_alt_used_in: 'Used in'
+            ,dash_alt_updated: 'alt texts updated.'
+            ,dash_alt_skipped: 'skipped (already had alt).'
+            ,dash_alt_manual_hint: 'Write alt text…'
+            ,dash_engine_gd: 'GD WebP'
+            ,dash_engine_avif: 'GD AVIF'
+            ,dash_engine_gs: 'GhostScript'
+            ,dash_engine_imagick: 'Imagick'
+            ,dash_engine_info_title: 'Server engines'
+            ,dash_engine_gd_desc: 'PHP GD with WebP read/write. Required for WebP conversion and most image optimization.'
+            ,dash_engine_avif_desc: 'PHP GD with AVIF read/write. Needed only when you choose AVIF as output format.'
+            ,dash_engine_gs_desc: 'Command-line tool used to compress PDF files in the PDFs tab.'
+            ,dash_engine_imagick_desc: 'ImageMagick PHP extension. Fallback for PDF compression and some image tasks.'
+            ,dash_engine_available: 'Available on this server.'
+            ,dash_engine_unavailable: 'Not available on this server.'
+            ,dash_engine_why_fail: 'Why it is not working'
+            ,dash_engine_close: 'Close'
+            ,dash_go_orphans: 'Find orphans'
+            ,dash_go_urls: 'Fix URLs'
+            ,dash_alt_all_ok: 'All images have useful alt text.'
+            ,dash_queue_title: 'Background queue'
+            ,dash_queue_desc: 'Bulk optimize jobs run in the background via WP-Cron (5 images per batch).'
+            ,dash_queue_cancel: 'Cancel pending jobs'
+            ,dash_queue_empty: 'Queue is empty.'
+            ,dash_queue_done: 'done'
+            ,dash_queue_pending: 'pending'
+            ,dash_queue_processing: 'processing'
+            ,dash_queue_thumbs: 'thumbnails pending'
+            ,dash_queue_errors: 'errors'
+            ,dash_queue_queued: 'Queued for background processing...'
+            ,dash_queue_queued_n: 'images queued.'
+            ,dash_backup_title: 'Backup retention'
+            ,dash_backup_desc: 'Auto-delete TSO backups under uploads/tso-image-master/ (0 = disabled).'
+            ,dash_backup_days: 'Keep backups (days)'
+            ,dash_backup_max: 'Max total size (MB, 0 = unlimited)'
+            ,dash_backup_purge: 'Purge now'
+            ,dash_backup_purge_noop: 'Retention is disabled (0 days and 0 MB). Nothing to purge.'
+            ,dash_dup_title: 'Duplicate images'
+            ,dash_dup_scan: 'Scan duplicates'
+            ,dash_dup_none: 'No duplicate groups found.'
+            ,dash_dup_groups: 'duplicate groups'
+            ,dash_dup_wasted: 'Wasted space'
+            ,dash_dup_explain: 'Each group is identical file content (same MD5) registered more than once in the Media Library. Keep one entry and delete the rest from WordPress Media.'
+            ,dash_dup_group_label: 'Identical file'
+            ,dash_dup_entries: 'entries'
+            ,dash_dup_wasted_in_group: 'wasted in this group'
+            ,dash_dup_same_name: 'Same filename but different Media Library IDs.'
+            ,dash_dup_media_id: 'Media ID'
+            ,dash_dup_upload_path: 'Location'
+            ,dash_dup_uploaded: 'Uploaded'
+            ,dash_dup_dimensions: 'Dimensions'
+            ,dash_dup_refs: 'Referenced in'
+            ,dash_dup_refs_none: 'Not referenced in content (may be orphan)'
+            ,dash_dup_refs_more: 'more'
+            ,dash_dup_open_im: 'Open in Image Master'
+            ,dash_dup_open_wp: 'WP Media'
+            ,dash_dup_item_title: 'Title'
+            ,dash_scanned: 'scanned'
+            ,dash_dup_keep: 'Keep this one (used in content)'
+            ,dash_dup_delete_ok: 'Safe to delete (unused duplicate)'
+            ,dash_dup_used_direct: 'Used in content'
+            ,dash_dup_used_indirect: 'Filename match only (this ID is not in the code)'
+            ,dash_dup_active_id: 'Active ID in post'
+            ,dash_dup_open_post: 'Open post'
+            ,dash_heavy_btn: 'Largest images'
+            ,auto_skip_kb_label: 'Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)'
+            ,auto_fill_alt_label: 'Fill missing alt text on upload'
+            ,fmt_avif: 'AVIF'
+            ,fmt_png: 'PNG'
+            ,per_page_21: '📄 21 per page'
+            ,per_page_35: '📄 35 per page'
+            ,per_page_49: '📄 49 per page'
+            ,per_page_70: '📄 70 per page'
+            ,per_page_105: '📄 105 per page'
+            ,hist_seo_bulk: 'Bulk fill'
+            ,hist_seo_auto: 'On upload'
         }
     };
 
@@ -594,7 +988,87 @@
                 ghost_deleted_ok: 'eliminados correctamente.',
                 ghost_deleted_none: 'Ninguno eliminado.',
                 errors_label: 'Errores:',
-                pdf_engine_warn: '⚠ GhostScript no encontrado. Usando Imagick.'
+                pdf_engine_warn: '⚠ GhostScript no encontrado. Usando Imagick.',
+                tab_dashboard: 'Resumen',
+                dash_title: 'Resumen del sitio',
+                dash_desc: 'Vista rápida de la salud de las imágenes, motores disponibles y acciones pendientes.',
+                dash_total_images: 'Imágenes en la biblioteca',
+                dash_missing_alt: 'Texto alt ausente',
+                dash_backups: 'Copias de seguridad TSO',
+                dash_saved: 'Espacio ahorrado',
+                dash_operations: 'operaciones del plugin',
+                dash_auto_on: 'Auto-optimizar ACTIVADO',
+                dash_auto_off: 'Auto-optimizar DESACTIVADO',
+                dash_auto_label: 'Auto-optimizar',
+                dash_auto_status_on: 'ACTIVADO',
+                dash_auto_status_off: 'DESACTIVADO',
+                dash_auto_format_sub: 'Formato de salida: %s',
+                dash_auto_disabled_hint: 'Desactivado — activa en la pestaña Auto',
+                dash_alt_title: 'Imágenes sin alt (o alt genérico)',
+                dash_alt_desc: 'Sugiere alt desde el título o nombre de archivo. Puedes editar el texto en «Alt sugerido» y guardarlo con Enter o ✓. «Rellenar alt seleccionadas» usa el texto editado.',
+                dash_alt_save: 'Guardar',
+                dash_alt_edit: 'Editar alt',
+                dash_alt_accept: 'Aceptar alt sugerido',
+                dash_alt_cancel: 'Cancelar',
+                dash_alt_used_only: 'Solo usadas en contenido',
+                dash_alt_used_only_tip: 'Muestra solo imágenes referenciadas en entradas, páginas, imágenes destacadas, widgets o campos personalizados. Oculta subidas no usadas de la biblioteca.',
+                dash_alt_fill: 'Rellenar alt seleccionadas',
+                dash_alt_fill_tip: 'Escribe el alt sugerido (título si es útil, si no nombre de archivo humanizado) en cada imagen seleccionada. Omite las que ya tienen un alt útil.',
+                dash_alt_suggested: 'Alt sugerido',
+                dash_alt_file_col: 'Archivo',
+                dash_alt_used_in: 'Usada en',
+                dash_alt_updated: 'textos alt actualizados.',
+                dash_alt_skipped: 'omitidas (ya tenían alt).',
+                dash_alt_manual_hint: 'Escribe texto alt…',
+                dash_engine_gd: 'GD WebP',
+                dash_engine_avif: 'GD AVIF',
+                dash_engine_gs: 'GhostScript',
+                dash_engine_imagick: 'Imagick',
+                dash_engine_info_title: 'Motores del servidor',
+                dash_engine_gd_desc: 'PHP GD con lectura/escritura WebP. Necesario para convertir a WebP y la mayoría de optimizaciones.',
+                dash_engine_avif_desc: 'PHP GD con lectura/escritura AVIF. Solo hace falta si eliges AVIF como formato de salida.',
+                dash_engine_gs_desc: 'Herramienta de línea de comandos para comprimir PDFs en la pestaña PDFs.',
+                dash_engine_imagick_desc: 'Extensión PHP ImageMagick. Respaldo para comprimir PDFs y algunas tareas de imagen.',
+                dash_engine_available: 'Disponible en este servidor.',
+                dash_engine_unavailable: 'No disponible en este servidor.',
+                dash_engine_why_fail: 'Por qué no funciona',
+                dash_engine_close: 'Cerrar',
+                dash_go_orphans: 'Buscar huérfanas',
+                dash_go_urls: 'Reparar URLs',
+                dash_alt_all_ok: 'Todas las imágenes tienen un alt útil.',
+                dash_queue_title: 'Cola en segundo plano',
+                dash_queue_desc: 'Las optimizaciones masivas se ejecutan en segundo plano vía WP-Cron (5 imágenes por lote).',
+                dash_queue_cancel: 'Cancelar trabajos pendientes',
+                dash_queue_empty: 'La cola está vacía.',
+                dash_queue_done: 'hechas',
+                dash_queue_pending: 'pendientes',
+                dash_queue_processing: 'procesando',
+                dash_queue_errors: 'errores',
+                dash_queue_queued: 'En cola para procesar en segundo plano...',
+                dash_queue_queued_n: 'imágenes en cola.',
+                dash_backup_title: 'Retención de copias de seguridad',
+                dash_backup_desc: 'Elimina automáticamente las copias TSO en uploads/tso-image-master/ (0 = desactivado).',
+                dash_backup_days: 'Conservar copias (días)',
+                dash_backup_max: 'Tamaño máximo total (MB, 0 = ilimitado)',
+                dash_backup_purge: 'Purgar ahora',
+                dash_backup_purge_noop: 'La retención está desactivada (0 días y 0 MB). Nada que purgar.',
+                dash_dup_title: 'Imágenes duplicadas',
+                dash_dup_scan: 'Escanear duplicados',
+                dash_dup_none: 'No se han encontrado grupos de duplicados.',
+                dash_dup_groups: 'grupos de duplicados',
+                dash_dup_wasted: 'Espacio desperdiciado',
+                dash_heavy_btn: 'Imágenes más pesadas',
+                auto_skip_kb_label: 'Omitir auto-optimizar si WebP/AVIF ≤ (KB, 0 = off)',
+                auto_fill_alt_label: 'Rellenar alt ausente al subir',
+                fmt_avif: 'AVIF',
+                fmt_png: 'PNG',
+                per_page_21: '📄 21 / página',
+                per_page_35: '📄 35 / página',
+                per_page_49: '📄 49 / página',
+                per_page_70: '📄 70 / página',
+                per_page_105: '📄 105 / página',
+                hist_seo_bulk: 'Rellenado masivo',
+                hist_seo_auto: 'Al subir'
             },
             en: {
                 confirm_delete: 'Delete selected images? This cannot be undone.',
@@ -703,7 +1177,87 @@
                 ghost_deleted_ok: 'deleted successfully.',
                 ghost_deleted_none: 'None deleted.',
                 errors_label: 'Errors:',
-                pdf_engine_warn: '⚠ GhostScript not found. Using Imagick.'
+                pdf_engine_warn: '⚠ GhostScript not found. Using Imagick.',
+                tab_dashboard: 'Overview',
+                dash_title: 'Site overview',
+                dash_desc: 'Quick view of image health, available engines, and pending actions.',
+                dash_total_images: 'Images in library',
+                dash_missing_alt: 'Missing alt text',
+                dash_backups: 'TSO backups',
+                dash_saved: 'Space saved',
+                dash_operations: 'operations',
+                dash_auto_on: 'Auto-optimize ON',
+                dash_auto_off: 'Auto-optimize OFF',
+                dash_auto_label: 'Auto-optimize',
+                dash_auto_status_on: 'ON',
+                dash_auto_status_off: 'OFF',
+                dash_auto_format_sub: 'Output format: %s',
+                dash_auto_disabled_hint: 'Disabled — enable in Auto tab',
+                dash_alt_title: 'Images without alt (or generic alt)',
+                dash_alt_desc: 'Suggests alt from title or filename. Edit the «Suggested alt» field and save with Enter or ✓. «Fill alt for selected» uses your edited text.',
+                dash_alt_save: 'Save',
+                dash_alt_edit: 'Edit alt',
+                dash_alt_accept: 'Accept suggested alt',
+                dash_alt_cancel: 'Cancel',
+                dash_alt_used_only: 'Only used in content',
+                dash_alt_used_only_tip: 'Shows only images referenced in posts, pages, featured images, widgets, or custom fields. Hides unused library uploads.',
+                dash_alt_fill: 'Fill alt for selected',
+                dash_alt_fill_tip: 'Writes the suggested alt (title if useful, otherwise humanized filename) into each selected image. Skips images that already have useful alt text.',
+                dash_alt_suggested: 'Suggested alt',
+                dash_alt_file_col: 'File',
+                dash_alt_used_in: 'Used in',
+                dash_alt_updated: 'alt texts updated.',
+                dash_alt_skipped: 'skipped (already had alt).',
+                dash_alt_manual_hint: 'Write alt text…',
+                dash_engine_gd: 'GD WebP',
+                dash_engine_avif: 'GD AVIF',
+                dash_engine_gs: 'GhostScript',
+                dash_engine_imagick: 'Imagick',
+                dash_engine_info_title: 'Server engines',
+                dash_engine_gd_desc: 'PHP GD with WebP read/write. Required for WebP conversion and most image optimization.',
+                dash_engine_avif_desc: 'PHP GD with AVIF read/write. Needed only when you choose AVIF as output format.',
+                dash_engine_gs_desc: 'Command-line tool used to compress PDF files in the PDFs tab.',
+                dash_engine_imagick_desc: 'ImageMagick PHP extension. Fallback for PDF compression and some image tasks.',
+                dash_engine_available: 'Available on this server.',
+                dash_engine_unavailable: 'Not available on this server.',
+                dash_engine_why_fail: 'Why it is not working',
+                dash_engine_close: 'Close',
+                dash_go_orphans: 'Find orphans',
+                dash_go_urls: 'Fix URLs',
+                dash_alt_all_ok: 'All images have useful alt text.',
+                dash_queue_title: 'Background queue',
+                dash_queue_desc: 'Bulk optimize jobs run in the background via WP-Cron (5 images per batch).',
+                dash_queue_cancel: 'Cancel pending jobs',
+                dash_queue_empty: 'Queue is empty.',
+                dash_queue_done: 'done',
+                dash_queue_pending: 'pending',
+                dash_queue_processing: 'processing',
+                dash_queue_errors: 'errors',
+                dash_queue_queued: 'Queued for background processing...',
+                dash_queue_queued_n: 'images queued.',
+                dash_backup_title: 'Backup retention',
+                dash_backup_desc: 'Auto-delete TSO backups under uploads/tso-image-master/ (0 = disabled).',
+                dash_backup_days: 'Keep backups (days)',
+                dash_backup_max: 'Max total size (MB, 0 = unlimited)',
+                dash_backup_purge: 'Purge now',
+                dash_backup_purge_noop: 'Retention is disabled (0 days and 0 MB). Nothing to purge.',
+                dash_dup_title: 'Duplicate images',
+                dash_dup_scan: 'Scan duplicates',
+                dash_dup_none: 'No duplicate groups found.',
+                dash_dup_groups: 'duplicate groups',
+                dash_dup_wasted: 'Wasted space',
+                dash_heavy_btn: 'Largest images',
+                auto_skip_kb_label: 'Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)',
+                auto_fill_alt_label: 'Fill missing alt text on upload',
+                fmt_avif: 'AVIF',
+                fmt_png: 'PNG',
+                per_page_21: '📄 21 per page',
+                per_page_35: '📄 35 per page',
+                per_page_49: '📄 49 per page',
+                per_page_70: '📄 70 per page',
+                per_page_105: '📄 105 per page',
+                hist_seo_bulk: 'Bulk fill',
+                hist_seo_auto: 'On upload'
             },
             ca: {
                 confirm_delete: 'Eliminar les imatges seleccionades? Aquesta acció és irreversible.',
@@ -812,7 +1366,113 @@
                 ghost_deleted_ok: 'eliminats correctament.',
                 ghost_deleted_none: 'Cap eliminat.',
                 errors_label: 'Errades:',
-                pdf_engine_warn: '⚠ GhostScript no trobat. S\'està utilitzant Imagick.'
+                pdf_engine_warn: '⚠ GhostScript no trobat. S\'està utilitzant Imagick.',
+                tab_dashboard: 'Resum',
+                dash_title: 'Resum del lloc',
+                dash_desc: 'Visió ràpida de la salut de les imatges, motors disponibles i accions pendents.',
+                dash_total_images: 'Imatges a la biblioteca',
+                dash_missing_alt: 'Alt text absent',
+                dash_backups: 'Còpies de seguretat TSO',
+                dash_saved: 'Espai estalviat',
+                dash_operations: 'operacions del plugin',
+                dash_auto_on: 'Auto-optimitzar ACTIVAT',
+                dash_auto_off: 'Auto-optimitzar DESACTIVAT',
+                dash_auto_label: 'Auto-optimitzar',
+                dash_auto_status_on: 'ACTIVAT',
+                dash_auto_status_off: 'DESACTIVAT',
+                dash_auto_format_sub: 'Format de sortida: %s',
+                dash_auto_disabled_hint: 'Desactivat — activa a la pestanya Auto',
+                dash_alt_title: 'Imatges sense alt (o alt genèric)',
+                dash_alt_desc: 'Suggereix alt des del títol o nom de fitxer. Clica ✎ per editar una fila; Desar (verd) guarda l\'alt. «Omplir alt seleccionades» usa el text editat.',
+            dash_alt_save: 'Desar',
+            dash_alt_edit: 'Editar alt',
+            dash_alt_accept: 'Acceptar alt suggerit',
+            dash_alt_cancel: 'Cancel·lar',
+                dash_alt_used_only: 'Només usades en contingut',
+                dash_alt_used_only_tip: 'Mostra només imatges referenciades en entrades, pàgines, imatges destacades, widgets o camps personalitzats. Oculta pujades no usades de la biblioteca.',
+                dash_alt_fill: 'Omplir alt seleccionades',
+                dash_alt_fill_tip: 'Escriu l\'alt suggerit (títol si és útil, sinó nom de fitxer humanitzat) a cada imatge seleccionada. Omet les que ja tenen un alt útil.',
+                dash_alt_suggested: 'Alt suggerit',
+                dash_alt_file_col: 'Fitxer',
+                dash_alt_used_in: 'Usada a',
+                dash_alt_updated: 'texts alt actualitzats.',
+                dash_alt_skipped: 'omeses (ja tenien alt).',
+                dash_alt_manual_hint: 'Escriu text alt…',
+                dash_engine_gd: 'GD WebP',
+                dash_engine_avif: 'GD AVIF',
+                dash_engine_gs: 'GhostScript',
+                dash_engine_imagick: 'Imagick',
+                dash_engine_info_title: 'Motors del servidor',
+                dash_engine_gd_desc: 'PHP GD amb lectura/escriptura WebP. Necessari per convertir a WebP i la majoria d\'optimitzacions.',
+                dash_engine_avif_desc: 'PHP GD amb lectura/escriptura AVIF. Només cal si tries AVIF com a format de sortida.',
+                dash_engine_gs_desc: 'Eina de línia de comandes per comprimir PDFs a la pestanya PDFs.',
+                dash_engine_imagick_desc: 'Extensió PHP ImageMagick. Reserva per comprimir PDFs i algunes tasques d\'imatge.',
+                dash_engine_available: 'Disponible en aquest servidor.',
+                dash_engine_unavailable: 'No disponible en aquest servidor.',
+                dash_engine_why_fail: 'Per què no funciona',
+                dash_engine_close: 'Tancar',
+                dash_go_orphans: 'Trobar òrfenes',
+                dash_go_urls: 'Reparar URLs',
+                dash_alt_all_ok: 'Totes les imatges tenen un alt útil.',
+                dash_queue_title: 'Cua en segon pla',
+                dash_queue_desc: 'Les optimitzacions massives s\'executen en segon pla via WP-Cron (5 imatges per lot).',
+                dash_queue_cancel: 'Cancel·lar jobs pendents',
+                dash_queue_empty: 'La cua és buida.',
+                dash_queue_done: 'fetes',
+                dash_queue_pending: 'pendents',
+                dash_queue_processing: 'processant',
+            dash_queue_thumbs: 'miniatures pendents',
+                dash_queue_errors: 'errors',
+                dash_queue_queued: 'En cua per processar en segon pla...',
+                dash_queue_queued_n: 'imatges en cua.',
+                dash_backup_title: 'Retenció de còpies de seguretat',
+                dash_backup_desc: 'Elimina automàticament les còpies TSO a uploads/tso-image-master/ (0 = desactivat).',
+                dash_backup_days: 'Conservar còpies (dies)',
+                dash_backup_max: 'Mida màxima total (MB, 0 = il·limitat)',
+                dash_backup_purge: 'Purga ara',
+                dash_backup_purge_noop: 'La retenció està desactivada (0 dies i 0 MB). Res a netejar.',
+                dash_dup_title: 'Imatges duplicades',
+                dash_dup_scan: 'Escanejar duplicats',
+                dash_dup_none: 'No s\'han trobat grups de duplicats.',
+            dash_dup_groups: 'grups de duplicats',
+            dash_dup_wasted: 'Espai malgastat',
+            dash_dup_explain: 'Cada grup són fitxers idèntics (mateix MD5) registrats més d\'una vegada a la Mediateca. Conserva una entrada i elimina la resta des de la Mediateca de WordPress.',
+            dash_dup_group_label: 'Fitxer idèntic',
+            dash_dup_entries: 'entrades',
+            dash_dup_wasted_in_group: 'malgastats en aquest grup',
+            dash_dup_same_name: 'Mateix nom de fitxer però IDs de Mediateca diferents.',
+            dash_dup_media_id: 'ID Mediateca',
+            dash_dup_upload_path: 'Ubicació',
+            dash_dup_uploaded: 'Pujada',
+            dash_dup_dimensions: 'Mida',
+            dash_dup_refs: 'Referenciada a',
+            dash_dup_refs_none: 'No referenciada al contingut (pot ser orfe)',
+            dash_dup_refs_more: 'més',
+            dash_dup_open_im: 'Obrir a Image Master',
+            dash_dup_open_wp: 'Mediateca WP',
+            dash_dup_item_title: 'Títol',
+            dash_scanned: 'escanejades',
+            dash_dup_keep: 'Conserva aquesta (usada al contingut)',
+            dash_dup_delete_ok: 'Es pot eliminar (duplicat no usat)',
+            dash_dup_used_direct: 'Usada al contingut',
+            dash_dup_used_indirect: 'Només coincidència de nom (aquest ID no és al codi)',
+            dash_dup_active_id: 'ID actiu al post',
+            dash_dup_open_post: 'Obrir entrada',
+            dash_heavy_btn: 'Imatges més pesades',
+                auto_skip_kb_label: 'Ometre auto-optimitzar si WebP/AVIF ≤ (KB, 0 = off)',
+                auto_fill_alt_label: 'Omplir alt absent en pujar',
+                fmt_avif: 'AVIF',
+                fmt_png: 'PNG',
+                fmt_webp: 'WebP (recomanat)',
+                fmt_keep: 'Mantenir format original',
+                fmt_keep_current: 'Mantenir format actual',
+                per_page_21: '📄 21 / pàgina',
+                per_page_35: '📄 35 / pàgina',
+                per_page_49: '📄 49 / pàgina',
+                per_page_70: '📄 70 / pàgina',
+                per_page_105: '📄 105 / pàgina',
+                hist_seo_bulk: 'Omplerta en bloc',
+                hist_seo_auto: 'En pujar'
             }
         };
         [ 'ca', 'es', 'en' ].forEach(function(l) {
@@ -873,22 +1533,24 @@
         var dict = I18N_STATIC[lang] || {};
         $('[data-i18n]').each(function() {
             var key = $(this).data('i18n');
+            // Prefer I18N_STATIC over captured HTML so new keys translated in JS win
+            // even if PHP markup still has English fallbacks.
             var text = (lang === 'ca')
-                ? (CA_ORIGINAL.text[key] || dict[key] || L[key])
+                ? (dict[key] || CA_ORIGINAL.text[key] || L[key])
                 : (dict[key] || L[key]);
             if (text) $(this).html(text);
         });
         $('[data-i18n-placeholder]').each(function() {
             var key = $(this).data('i18n-placeholder');
             var ph = (lang === 'ca')
-                ? (CA_ORIGINAL.placeholder[key] || dict[key] || L[key])
+                ? (dict[key] || CA_ORIGINAL.placeholder[key] || L[key])
                 : (dict[key] || L[key]);
             if (ph) $(this).attr('placeholder', ph);
         });
         $('[data-i18n-html]').each(function() {
             var key = $(this).data('i18n-html');
             var html = (lang === 'ca')
-                ? (CA_ORIGINAL.html[key] || dict[key] || L[key])
+                ? (dict[key] || CA_ORIGINAL.html[key] || L[key])
                 : (dict[key] || L[key]);
             if (html) $(this).html(html);
         });
@@ -917,6 +1579,13 @@
         $('#imp-delete-ghosts').text('🗑 ' + uiText('delete_ghosts', 'Delete selected'));
         $('#imp-scan-rogue').text(uiText('scan_rogue', '🔍 Scan extra upload files'));
         $('#imp-save-rename').text(uiText('rename_btn', '✏️ Rename file'));
+        $('#imp-alt-grid .imp-alt-manual-hint').text(uiText('dash_alt_manual_hint', 'Write alt text…'));
+        $('#imp-alt-grid .imp-alt-suggest-input').each(function() {
+            var $row = $(this).closest('.imp-alt-row');
+            if ($row.hasClass('is-manual-alt') && !$.trim($(this).val())) {
+                $(this).attr('placeholder', uiText('dash_alt_manual_hint', 'Write alt text…'));
+            }
+        });
 
         // Re-render result messages if they are visible and previously stored.
         refreshStoredResult('#imp-fix-orphan-result');
@@ -963,43 +1632,14 @@
     // Hover Preview
     // ================================================================
     function initHoverPreview() {
-        var $preview = $('<div id="imp-img-hover-preview"><img src="" alt=""><div class="imp-hover-label"></div></div>');
-        $('body').append($preview);
+        if (!$('#imp-img-hover-preview').length) {
+            $('body').append('<div id="imp-img-hover-preview"><img src="" alt=""><div class="imp-hover-label"></div></div>');
+        }
+        var $preview = $('#imp-img-hover-preview');
         var $pImg  = $preview.find('img');
         var $label = $preview.find('.imp-hover-label');
         var MARGIN = 16;
-
-        $(document).on('mouseenter', '#imp-modal-img', function(e) {
-            var $modalImg = $(this);
-            var fullUrl   = $modalImg.attr('data-full-url') || $modalImg.attr('src') || '';
-            var fname     = $('#imp-modal-title-head .imp-modal-fname').text() || '';
-            if (!fullUrl) return;
-            var ts      = Date.now();
-            var sep     = fullUrl.indexOf('?') === -1 ? '?' : '&';
-            var noCache = fullUrl + sep + '_hov=' + ts;
-            $preview.removeClass('visible').hide();
-            $label.text(fname);
-            var tmpImg = new Image();
-            tmpImg.onload = function() {
-                $pImg.attr('src', noCache);
-                positionPreview(e);
-                $preview.show();
-                requestAnimationFrame(function() { $preview.addClass('visible'); });
-            };
-            tmpImg.src = noCache;
-        });
-
-        $(document).on('click', '.imp-modal-close, .imp-modal-overlay', function() {
-            $preview.removeClass('visible').hide();
-            $pImg.attr('src', '');
-        });
-        $(document).on('mouseleave', '#imp-modal-img', function() {
-            $preview.removeClass('visible');
-            setTimeout(function() { $preview.hide(); }, 150);
-        });
-        $(document).on('mousemove', '#imp-modal-img', function(e) {
-            if ($preview.is(':visible')) positionPreview(e);
-        });
+        var hoverSelector = '#imp-modal-img, .imp-alt-row-thumb';
 
         function positionPreview(e) {
             var pw = $preview.outerWidth()  || 300;
@@ -1013,6 +1653,57 @@
             if (y + ph > wh - MARGIN) y = wh - ph - MARGIN;
             $preview.css({ left: Math.max(0, x) + 'px', top: Math.max(0, y) + 'px' });
         }
+
+        function hidePreview() {
+            hideImgHoverPreview();
+        }
+
+        function showPreviewFromTarget($target, e) {
+            var fullUrl = $target.attr('data-full-url') || $target.attr('src') || '';
+            var fname   = $target.attr('data-filename') || '';
+            if (!fname) {
+                fname = $('#imp-modal-title-head .imp-modal-fname').text() || '';
+            }
+            if (!fullUrl) {
+                return;
+            }
+            var loadId = ++hoverPreviewLoadId;
+            var ts      = Date.now();
+            var sep     = fullUrl.indexOf('?') === -1 ? '?' : '&';
+            var noCache = fullUrl + sep + '_hov=' + ts;
+            $preview.removeClass('visible').hide();
+            $label.text(fname);
+            var tmpImg = new Image();
+            tmpImg.onload = function() {
+                if (loadId !== hoverPreviewLoadId) {
+                    return;
+                }
+                $pImg.attr('src', noCache);
+                positionPreview(e);
+                $preview.show();
+                requestAnimationFrame(function() { $preview.addClass('visible'); });
+            };
+            tmpImg.onerror = function() {
+                if (loadId !== hoverPreviewLoadId) {
+                    return;
+                }
+                hideImgHoverPreview();
+            };
+            tmpImg.src = noCache;
+        }
+
+        $(document).on('mouseenter', hoverSelector, function(e) {
+            showPreviewFromTarget($(this), e);
+        });
+
+        $(document).on('mouseleave', hoverSelector + ', #imp-alt-grid', function() {
+            hidePreview();
+        });
+        $(document).on('mousemove', hoverSelector, function(e) {
+            if ($preview.is(':visible')) {
+                positionPreview(e);
+            }
+        });
     }
 
     // ================================================================
@@ -1127,11 +1818,949 @@
     }
 
     // ================================================================
+    // Dashboard
+    // ================================================================
+    function dashboardAltCacheKey() {
+        return String(state.dashboard.altPage) + ':' + ($('#imp-alt-used-only').is(':checked') ? '1' : '0');
+    }
+
+    function markDashboardDirty() {
+        state.dashboard.dirty = true;
+    }
+
+    function abortDashboardRequests() {
+        if (state.dashboard.xhrOverview) {
+            state.dashboard.xhrOverview.abort();
+            state.dashboard.xhrOverview = null;
+        }
+        if (state.dashboard.xhrAlt) {
+            state.dashboard.xhrAlt.abort();
+            state.dashboard.xhrAlt = null;
+        }
+    }
+
+    function refreshDashboardTab(force) {
+        var needOverview = !!force || !state.dashboard.overviewLoaded || state.dashboard.dirty;
+        var altKey = dashboardAltCacheKey();
+        var needAlt = !!force || state.dashboard.dirty || !state.dashboard.altListLoaded || state.dashboard.altListCacheKey !== altKey;
+
+        if (!needOverview && !needAlt) {
+            return;
+        }
+
+        hideImgHoverPreview();
+        abortDashboardRequests();
+        state.dashboard.dirty = false;
+
+        if (needOverview) {
+            loadDashboardOverview(function() {
+                if (needAlt) {
+                    loadMissingAlt();
+                }
+            });
+            return;
+        }
+        if (needAlt) {
+            loadMissingAlt();
+        }
+    }
+
+    function invalidateDashboard() {
+        markDashboardDirty();
+        if ($('#tab-dashboard').hasClass('active')) {
+            refreshDashboardTab(false);
+        }
+    }
+
+    function initDashboard() {
+        setTimeout(function() {
+            if ($('#tab-dashboard').hasClass('active')) {
+                refreshDashboardTab(true);
+            }
+        }, 120);
+
+        $(document).on('click', '.imp-tab[data-tab="dashboard"]', function() {
+            refreshDashboardTab(false);
+        });
+
+        $('#imp-alt-used-only').on('change', function() {
+            state.dashboard.altPage = 1;
+            state.dashboard.altSelected.clear();
+            loadMissingAlt();
+        });
+
+        $('#imp-alt-select-all').on('click', function() {
+            $('#imp-alt-grid .imp-alt-check').prop('checked', true).each(function() {
+                var id = parseInt($(this).data('id'), 10);
+                if (!id) {
+                    return;
+                }
+                state.dashboard.altSelected.add(id);
+                rememberAltDraft(id, getAltDraftFromRow(id));
+            });
+        });
+
+        $('#imp-alt-deselect').on('click', function() {
+            $('#imp-alt-grid .imp-alt-check').prop('checked', false);
+            state.dashboard.altSelected.clear();
+        });
+
+        $(document).on('change', '.imp-alt-check', function() {
+            var id = parseInt($(this).data('id'), 10);
+            if ($(this).is(':checked')) state.dashboard.altSelected.add(id);
+            else state.dashboard.altSelected.delete(id);
+        });
+
+        initAltSuggestEditors();
+
+        function runBulkAltFillSelected(ids, alts, $btn, $res) {
+            var batchSize = 20;
+            var index = 0;
+            var totalUpdated = 0;
+            var totalSkipped = 0;
+            var errors = [];
+
+            function finish() {
+                $btn.prop('disabled', false).text(uiText('dash_alt_fill', 'Fill alt for selected'));
+                var msg = '\u2713 ' + totalUpdated + ' ' + uiText('dash_alt_updated', 'alt texts updated.');
+                if (totalSkipped) {
+                    msg += ' ' + totalSkipped + ' ' + uiText('dash_alt_skipped', 'skipped (already had alt).');
+                }
+                if (errors.length) {
+                    msg += ' \u00b7 ' + errors.slice(0, 2).join(' ');
+                }
+                $res.show().css('color', errors.length ? 'var(--imp-warn)' : 'var(--imp-success)').text(msg);
+                state.dashboard.altSelected.clear();
+                state.dashboard.altListLoaded = false;
+                state.dashboard.altListCacheKey = '';
+                state.dashboard.overviewLoaded = false;
+                state.dashboard.dirty = true;
+                if ($('#tab-dashboard').hasClass('active')) {
+                    refreshDashboardTab(false);
+                }
+            }
+
+            function nextBatch() {
+                if (index >= ids.length) {
+                    finish();
+                    return;
+                }
+                var chunk = ids.slice(index, index + batchSize);
+                index += batchSize;
+                var chunkAlts = {};
+                chunk.forEach(function(id) {
+                    chunkAlts[id] = alts[id] || '';
+                });
+                var isLast = index >= ids.length;
+                ajax('tsoimma_bulk_fill_alt', {
+                    ids: chunk,
+                    source: 'suggested',
+                    alts: chunkAlts,
+                    recount: isLast ? 1 : 0
+                }, function(data) {
+                    totalUpdated += data.updated || 0;
+                    totalSkipped += data.skipped || 0;
+                    if (data.errors && data.errors.length) {
+                        errors = errors.concat(data.errors);
+                    }
+                    if (isLast && typeof data.missing_alt === 'number') {
+                        setDashboardStatValue('missing_alt', data.missing_alt);
+                    }
+                    setTimeout(nextBatch, 30);
+                }, function(err) {
+                    $btn.prop('disabled', false).text(uiText('dash_alt_fill', 'Fill alt for selected'));
+                    $res.show().css('color', 'var(--imp-danger)').text(err);
+                });
+            }
+
+            nextBatch();
+        }
+
+        $('#imp-alt-bulk-fill').on('click', function() {
+            if (!state.dashboard.altSelected.size) {
+                alert(uiText('no_selection', 'Select at least one image.'));
+                return;
+            }
+            hideImgHoverPreview();
+            var $btn = $(this);
+            var $res = $('#imp-alt-bulk-result');
+            var ids = Array.from(state.dashboard.altSelected);
+            var alts = {};
+            ids.forEach(function(id) {
+                var draft = getAltDraftFromRow(id);
+                if (draft) {
+                    alts[id] = draft;
+                }
+            });
+            $btn.prop('disabled', true).text(uiText('processing', 'Processing...'));
+            runBulkAltFillSelected(ids, alts, $btn, $res);
+        });
+
+        $(document).on('click', '.imp-dash-jump', function(e) {
+            e.preventDefault();
+            var tab = $(this).data('jump-tab');
+            if (!tab) return;
+            $('.imp-tab[data-tab="' + tab + '"]').trigger('click');
+            if (tab === 'optimize') {
+                state.opt.page = 1;
+                state.opt.search = '';
+                loadOptImages();
+            }
+        });
+
+        $('#imp-queue-cancel').on('click', function() {
+            ajax('tsoimma_cancel_queue', {}, function(data) {
+                renderQueueStatus(data);
+            });
+        });
+
+        $('#imp-save-backup-retention').on('click', function() {
+            ajax('tsoimma_save_backup_retention', {
+                days: $('#imp-backup-days').val(),
+                max_mb: $('#imp-backup-max-mb').val()
+            }, function() {
+                $('#imp-backup-retention-msg').show().css('color', 'var(--imp-success)').text(uiText('save_ok', 'Saved!'));
+            });
+        });
+
+        $('#imp-purge-backups-now').on('click', function() {
+            ajax('tsoimma_purge_backups_now', {}, function(data) {
+                var msg;
+                if (data.noop) {
+                    msg = uiText('dash_backup_purge_noop', 'Retention is disabled (0 days and 0 MB). Nothing to purge.');
+                } else {
+                    msg = '✓ ' + (data.deleted || 0) + ' deleted, ' + (data.freed_h || '0 B') + ' freed.';
+                }
+                $('#imp-backup-retention-msg').show().css('color', 'var(--imp-success)').text(msg);
+                invalidateDashboard();
+            });
+        });
+
+        $('#imp-scan-duplicates').on('click', function() {
+            var $btn = $(this);
+            $btn.prop('disabled', true);
+            $('#imp-duplicates-list').empty();
+            scanDuplicatesBatch(0, true);
+        });
+
+        $(document).on('click', '.imp-dup-open-im', function(e) {
+            e.preventDefault();
+            var id = parseInt($(this).data('id'), 10);
+            if (!id) return;
+            openModal(id, 'optimize');
+        });
+
+        loadBackupRetention();
+    }
+
+    function scanDuplicatesBatch(afterId, reset) {
+        var $btn = $('#imp-scan-duplicates');
+        var scannedLabel = uiText('scanning_msg', 'Scanning...');
+        $('#imp-duplicates-result').html(
+            '<div class="imp-dup-scan-progress">' +
+            '<div class="imp-loading" id="imp-dup-scan-text">' + escHtml(scannedLabel) + '</div>' +
+            '<div class="imp-progress-bar" style="margin-top:10px;"><div class="imp-progress-fill" id="imp-dup-scan-fill" style="width:0%"></div></div>' +
+            '</div>'
+        );
+
+        ajax('tsoimma_scan_duplicates', {
+            after_id: afterId || 0,
+            batch: 100,
+            reset: reset ? 1 : 0
+        }, function(data) {
+            var total   = parseInt(data.total, 10) || 0;
+            var scanned = parseInt(data.scanned, 10) || 0;
+            var pct     = total > 0 ? Math.min(100, Math.round(scanned / total * 100)) : 0;
+
+            $('#imp-dup-scan-text').text(scannedLabel + ' ' + scanned + '/' + total + '...');
+            $('#imp-dup-scan-fill').css('width', pct + '%');
+
+            if (!data.done) {
+                setTimeout(function() {
+                    scanDuplicatesBatch(parseInt(data.after_id, 10) || afterId, false);
+                }, 50);
+                return;
+            }
+
+            $btn.prop('disabled', false);
+            if (!data.group_count) {
+                $('#imp-duplicates-result').html('<p style="color:var(--imp-success);">✓ ' + uiText('dash_dup_none', 'No duplicate groups found.') + '</p>');
+                return;
+            }
+            $('#imp-duplicates-result').html(
+                '<p><strong>' + data.group_count + ' ' + uiText('dash_dup_groups', 'duplicate groups') +
+                '</strong> · ' + uiText('dash_dup_wasted', 'Wasted space') + ': ' + escHtml(data.wasted_h || '0 B') +
+                ' · ' + escHtml(data.scanned || 0) + ' ' + uiText('dash_scanned', 'scanned') + '</p>' +
+                '<p class="imp-dup-intro">' + uiText('dash_dup_explain', 'Each group is identical file content registered more than once in the Media Library.') + '</p>'
+            );
+            renderDuplicateGroups(data.groups || []);
+        }, function(err) {
+            $btn.prop('disabled', false);
+            $('#imp-duplicates-result').html('<div class="imp-error">' + escHtml(err) + '</div>');
+        }, 180000);
+    }
+
+    function renderDuplicateUsedIn(item) {
+        var html = '';
+
+        if (item.keep_recommended) {
+            html += '<div class="imp-dup-badge imp-dup-badge-keep">' + escHtml(uiText('dash_dup_keep', 'Keep this one (used in content)')) + '</div>';
+        } else if (item.safe_to_delete) {
+            html += '<div class="imp-dup-badge imp-dup-badge-delete">' + escHtml(uiText('dash_dup_delete_ok', 'Safe to delete (unused duplicate)')) + '</div>';
+        }
+
+        var direct = item.used_in_direct || [];
+        if (direct.length) {
+            html += '<div class="imp-dup-refs imp-dup-refs-direct"><span class="imp-dup-refs-label">' +
+                escHtml(uiText('dash_dup_used_direct', 'Used in content')) + ':</span> ';
+            direct.forEach(function(ref) {
+                var editUrl = ref.edit_url || (TSOIMMA.site_url + '/wp-admin/post.php?post=' + ref.id + '&action=edit');
+                var detail  = ref.detail ? (' · ' + ref.detail + ' · #' + item.id) : (' · #' + item.id);
+                html += '<a href="' + escHtml(editUrl) + '" target="_blank" rel="noopener" class="imp-dup-ref-link imp-dup-ref-direct" title="' +
+                    escHtml(ref.title || '') + '">' + escHtml(ref.title || ('#' + ref.id)) + escHtml(detail) + '</a> ';
+            });
+            html += '</div>';
+        }
+
+        var indirect = item.used_in_indirect || [];
+        if (indirect.length) {
+            html += '<div class="imp-dup-refs imp-dup-refs-indirect"><span class="imp-dup-refs-label">' +
+                escHtml(uiText('dash_dup_used_indirect', 'Filename match only (this ID is not in the code)')) + ':</span><ul class="imp-dup-indirect-list">';
+            indirect.forEach(function(ref) {
+                html += '<li>';
+                if (ref.detail) {
+                    html += escHtml(ref.detail) + ' — ';
+                }
+                html += escHtml(ref.title || ('#' + ref.id));
+                if (ref.active_attachment_id) {
+                    html += ' · ' + escHtml(uiText('dash_dup_active_id', 'Active ID in post')) + ' #' + ref.active_attachment_id;
+                }
+                html += ' · <a href="' + escHtml(ref.edit_url || (TSOIMMA.site_url + '/wp-admin/post.php?post=' + ref.id + '&action=edit')) +
+                    '" target="_blank" rel="noopener" class="imp-dup-ref-link imp-dup-ref-indirect">' + escHtml(uiText('dash_dup_open_post', 'Open post')) + '</a>';
+                html += '</li>';
+            });
+            html += '</ul></div>';
+        }
+
+        if (!direct.length && !indirect.length) {
+            html += '<div class="imp-dup-refs imp-dup-refs-empty">' + escHtml(uiText('dash_dup_refs_none', 'Not referenced in content (may be orphan)')) + '</div>';
+        } else if ((item.used_in_more || 0) > 0) {
+            html += '<div class="imp-dup-refs-more">+' + item.used_in_more + ' ' + escHtml(uiText('dash_dup_refs_more', 'more')) + '</div>';
+        }
+
+        return html;
+    }
+
+    function renderDuplicateGroups(groups) {
+        var $list = $('#imp-duplicates-list');
+        $list.empty();
+        groups.slice(0, 20).forEach(function(group, groupIndex) {
+            var itemCount = (group.items || []).length;
+            var header = uiText('dash_dup_group_label', 'Identical file') + ' #' + (groupIndex + 1) +
+                ' · ' + escHtml(group.size_h || '') +
+                ' · ' + itemCount + ' ' + uiText('dash_dup_entries', 'entries') +
+                ' · ' + escHtml(group.wasted_h || '') + ' ' + uiText('dash_dup_wasted_in_group', 'wasted in this group');
+            var html = '<div class="imp-dup-group">' +
+                '<div class="imp-dup-group-header"><strong>' + header + '</strong>' +
+                (group.same_filename ? '<div class="imp-dup-group-note">' + escHtml(uiText('dash_dup_same_name', 'Same filename but different Media Library IDs.')) + '</div>' : '') +
+                '<div class="imp-dup-group-hash" title="' + escHtml(group.hash || '') + '">MD5: ' + escHtml((group.hash || '').slice(0, 12)) + '…</div></div>';
+            (group.items || []).forEach(function(item) {
+                var dims = (item.width && item.height) ? (item.width + '×' + item.height + 'px') : '—';
+                html += '<div class="imp-dup-item">' +
+                    '<div class="imp-dup-thumb"><img src="' + escHtml(item.thumb || '') + '" alt=""></div>' +
+                    '<div class="imp-dup-body">' +
+                    '<div class="imp-dup-title"><strong>#' + item.id + '</strong> ' + escHtml(item.filename || '') + '</div>' +
+                    '<div class="imp-dup-meta">' +
+                    '<span><strong>' + escHtml(uiText('dash_dup_upload_path', 'Location')) + ':</strong> <code>' + escHtml(item.rel_path || item.filename || '') + '</code></span><br>' +
+                    '<span><strong>' + escHtml(uiText('dash_dup_dimensions', 'Dimensions')) + ':</strong> ' + escHtml(dims) +
+                    ' · <strong>' + escHtml(item.filesize_h || '') + '</strong>' +
+                    (item.uploaded_h ? ' · <strong>' + escHtml(uiText('dash_dup_uploaded', 'Uploaded')) + ':</strong> ' + escHtml(item.uploaded_h) : '') +
+                    '</span>' +
+                    (item.title ? '<br><span><strong>' + escHtml(uiText('dash_dup_item_title', 'Title')) + ':</strong> ' + escHtml(item.title) + '</span>' : '') +
+                    '</div>' +
+                    renderDuplicateUsedIn(item) +
+                    '</div>' +
+                    '<div class="imp-dup-actions">' +
+                    '<button type="button" class="imp-btn imp-btn-sm imp-dup-open-im" data-id="' + item.id + '">' + escHtml(uiText('dash_dup_open_im', 'Open in Image Master')) + '</button>' +
+                    '<a href="' + escHtml(item.edit_url || '#') + '" target="_blank" rel="noopener" class="imp-btn imp-btn-sm imp-btn-ghost">' + escHtml(uiText('dash_dup_open_wp', 'WP Media')) + '</a>' +
+                    '</div></div>';
+            });
+            html += '</div>';
+            $list.append(html);
+        });
+    }
+
+    function renderQueueStatus(queue) {
+        var $el = $('#imp-queue-status');
+        if (!$el.length) return;
+        if (!queue.total) {
+            $el.html('<span style="color:var(--imp-text-muted);">' + uiText('dash_queue_empty', 'Queue is empty.') + '</span>');
+            $('#imp-queue-cancel').prop('disabled', true);
+            return;
+        }
+        $el.html(
+            (function() {
+                var parts = [
+                    (queue.done || 0) + '/' + queue.total + ' ' + uiText('dash_queue_done', 'done')
+                ];
+                if (queue.processing > 0) {
+                    parts.push((queue.processing || 0) + ' ' + uiText('dash_queue_processing', 'processing'));
+                }
+                if (queue.thumbs_pending > 0) {
+                    parts.push((queue.thumbs_pending || 0) + ' ' + uiText('dash_queue_thumbs', 'thumbnails pending'));
+                }
+                if (queue.pending > 0) {
+                    parts.push((queue.pending || 0) + ' ' + uiText('dash_queue_pending', 'pending'));
+                }
+                if (queue.errors) {
+                    parts.push(queue.errors + ' ' + uiText('dash_queue_errors', 'errors'));
+                }
+                return '<span>' + escHtml(parts.join(' · ')) + '</span>';
+            })()
+        );
+        $('#imp-queue-cancel').prop('disabled', !(queue.pending > 0));
+    }
+
+    function loadBackupRetention() {
+        ajax('tsoimma_get_backup_retention', {}, function(data) {
+            $('#imp-backup-days').val(data.days || 0);
+            $('#imp-backup-max-mb').val(data.max_mb || 0);
+        });
+    }
+
+    function pollQueueStatus() {
+        ajax('tsoimma_get_queue_status', {}, function(data) {
+            if ($('#tab-dashboard').hasClass('active')) {
+                renderQueueStatus(data);
+            }
+            if (data.running) {
+                if ($('#tab-dashboard').hasClass('active')) {
+                    setTimeout(pollQueueStatus, 4000);
+                } else {
+                    markDashboardDirty();
+                }
+            } else if (data.total > 0) {
+                markDashboardDirty();
+                if ($('#tab-dashboard').hasClass('active')) {
+                    refreshDashboardTab(false);
+                }
+            }
+        });
+    }
+
+    function loadDashboardOverview(onDone) {
+        var $stats = $('#imp-dashboard-stats');
+        var $engines = $('#imp-dashboard-engines');
+        $stats.html('<div class="imp-loading">' + uiText('loading_data', 'Loading...') + '</div>');
+        state.dashboard.xhrOverview = ajax('tsoimma_get_dashboard_overview', {}, function(data) {
+            state.dashboard.xhrOverview = null;
+            var altPending = !!data.missing_alt_pending || data.missing_alt == null;
+            var altCount = altPending ? null : (parseInt(data.missing_alt, 10) || 0);
+            var warnAlt = !altPending && altCount > 0;
+            var fmtKey = String(data.auto_format || 'webp').toLowerCase();
+            var fmtLabels = { webp: 'WebP', avif: 'AVIF', jpg: 'JPG', png: 'PNG', original: uiText('fmt_keep', 'Original') };
+            var fmtLabel = fmtLabels[fmtKey] || fmtKey.toUpperCase();
+            var autoSub = data.auto_enabled
+                ? uiText('dash_auto_format_sub', 'Output format: %s').replace('%s', fmtLabel)
+                : uiText('dash_auto_disabled_hint', 'Disabled — enable in Auto tab');
+            var cards = [
+                { label: uiText('dash_total_images', 'Images in library'), val: data.total_images || 0, sub: '\u00a0', cls: '' },
+                { label: uiText('dash_missing_alt', 'Missing alt text'), val: altPending ? '…' : altCount, sub: altPending ? uiText('loading_data', 'Loading...') : (warnAlt ? uiText('dash_alt_title', 'Review below') : '✓'), cls: altPending ? '' : (warnAlt ? 'is-warn is-clickable imp-dash-jump' : 'is-ok'), jump: 'dashboard', statKey: 'missing_alt' },
+                { label: uiText('dash_backups', 'TSO backups'), val: data.backup_count || 0, sub: data.backup_bytes_h || '0 B', cls: (data.backup_count || 0) > 0 ? 'is-warn' : 'is-ok' },
+                { label: uiText('dash_saved', 'Space saved'), val: data.total_saved_h || '0 B', sub: (data.total_operations || 0) + ' ' + uiText('dash_operations', 'operations'), cls: 'is-ok' },
+                { label: uiText('dash_auto_label', 'Auto-optimize'), val: data.auto_enabled ? uiText('dash_auto_status_on', 'ON') : uiText('dash_auto_status_off', 'OFF'), sub: autoSub, cls: data.auto_enabled ? 'is-ok is-clickable imp-dash-jump' : '', jump: 'auto' }
+            ];
+            $stats.empty();
+            cards.forEach(function(card) {
+                var attrs = card.jump ? ' data-jump-tab="' + card.jump + '"' : '';
+                attrs += card.statKey ? ' data-stat-key="' + card.statKey + '"' : '';
+                $stats.append(
+                    '<div class="imp-stat-card ' + (card.cls || '') + '"' + attrs + '>' +
+                    '<span class="imp-stat-label">' + escHtml(card.label) + '</span>' +
+                    '<span class="imp-stat-val">' + escHtml(String(card.val)) + '</span>' +
+                    (card.sub ? '<span class="imp-stat-sub">' + escHtml(card.sub) + '</span>' : '') +
+                    '</div>'
+                );
+            });
+
+            var engines = data.engines || {};
+            state.dashboard.engines = engines;
+            var pills = [
+                { key: 'gd_webp', label: uiText('dash_engine_gd', 'GD WebP'), descKey: 'dash_engine_gd_desc' },
+                { key: 'gd_avif', label: uiText('dash_engine_avif', 'GD AVIF'), descKey: 'dash_engine_avif_desc' },
+                { key: 'ghostscript', label: uiText('dash_engine_gs', 'GhostScript'), descKey: 'dash_engine_gs_desc' },
+                { key: 'imagick', label: uiText('dash_engine_imagick', 'Imagick'), descKey: 'dash_engine_imagick_desc' }
+            ];
+            $engines.empty();
+            $engines.append('<span class="imp-engine-row-title">' + escHtml(uiText('dash_engine_info_title', 'Server engines')) + '</span>');
+            pills.forEach(function(pill) {
+                var engineData = engines[pill.key];
+                var ok = (engineData && typeof engineData === 'object') ? !!engineData.ok : !!engineData;
+                $engines.append(
+                    '<button type="button" class="imp-engine-pill ' + (ok ? 'ok' : 'nok') + '" ' +
+                    'data-engine-key="' + escHtml(pill.key) + '" ' +
+                    'data-engine-label="' + escHtml(pill.label) + '" ' +
+                    'data-engine-desc="' + escHtml(uiText(pill.descKey, '')) + '">' +
+                    (ok ? '✓' : '✗') + ' ' + escHtml(pill.label) +
+                    '</button>'
+                );
+            });
+
+            renderQueueStatus(data.queue || {});
+            state.dashboard.overviewLoaded = true;
+            if (data.queue && data.queue.running) {
+                pollQueueStatus();
+            }
+            if (onDone) {
+                onDone();
+            }
+        }, function(err) {
+            state.dashboard.xhrOverview = null;
+            $stats.html('<div class="imp-error">' + escHtml(err) + '</div>');
+            $engines.empty();
+            if (onDone) {
+                onDone();
+            }
+        }, 180000);
+    }
+
+    function initEngineInfo() {
+        $(document).on('click', '.imp-engine-pill', function() {
+            var key = $(this).attr('data-engine-key') || '';
+            var label = $(this).attr('data-engine-label') || '';
+            var desc = $(this).attr('data-engine-desc') || '';
+            var engineData = state.dashboard.engines[key] || {};
+            var ok = (engineData && typeof engineData === 'object') ? !!engineData.ok : !!engineData;
+            var reason = (engineData && typeof engineData === 'object') ? (engineData.reason || '') : '';
+            $('#imp-engine-info-title').text(label);
+            $('#imp-engine-info-desc').text(desc);
+            $('#imp-engine-info-status')
+                .attr('class', 'imp-engine-info-status ' + (ok ? 'ok' : 'nok'))
+                .text((ok ? '✓ ' : '✗ ') + uiText(ok ? 'dash_engine_available' : 'dash_engine_unavailable', ok ? 'Available' : 'Not available'));
+            if (!ok && reason) {
+                $('#imp-engine-info-reason').text(reason);
+                $('#imp-engine-info-reason-wrap').show();
+            } else {
+                $('#imp-engine-info-reason-wrap').hide();
+            }
+            $('#imp-engine-info-modal').show();
+        });
+        $(document).on('click', '.imp-engine-info-close', function() {
+            $('#imp-engine-info-modal').hide();
+        });
+    }
+
+    function initHelpTips() {
+        var $popover = null;
+        function hidePopover() {
+            if ($popover) {
+                $popover.remove();
+                $popover = null;
+            }
+        }
+        $(document).on('click', '.imp-help-tip', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var key = $(this).data('help');
+            var text = uiText(key, '');
+            if (!text) return;
+            hidePopover();
+            $popover = $('<div class="imp-help-popover" role="tooltip"></div>').text(text).appendTo('body');
+            var rect = this.getBoundingClientRect();
+            var top = rect.bottom + window.scrollY + 8;
+            var left = Math.max(12, rect.left + window.scrollX - 40);
+            $popover.css({ top: top + 'px', left: left + 'px' });
+        });
+        $(document).on('click', function() { hidePopover(); });
+        $(document).on('keydown', function(e) {
+            if (e.key === 'Escape') hidePopover();
+        });
+    }
+
+    function getAltSuggestInputValue(item) {
+        if (item.suggested_alt) {
+            return item.suggested_alt;
+        }
+        if (item.alt) {
+            return item.alt;
+        }
+        return '';
+    }
+
+    function getAltDraftFromRow(attachmentId) {
+        var id = parseInt(attachmentId, 10);
+        if (!id) {
+            return '';
+        }
+        var $row = $('.imp-alt-row[data-attachment-id="' + id + '"]');
+        if ($row.length) {
+            var draft = $.trim(String($row.attr('data-draft-alt') || ''));
+            if (draft) {
+                return draft;
+            }
+            return $.trim($row.find('.imp-alt-suggest-text').text() || '');
+        }
+        if (state.dashboard.altDraftById && state.dashboard.altDraftById[id]) {
+            return $.trim(String(state.dashboard.altDraftById[id]));
+        }
+        return '';
+    }
+
+    function rememberAltDraft(attachmentId, altText) {
+        var id = parseInt(attachmentId, 10);
+        if (!id) {
+            return;
+        }
+        if (!state.dashboard.altDraftById) {
+            state.dashboard.altDraftById = {};
+        }
+        state.dashboard.altDraftById[id] = $.trim(String(altText || ''));
+    }
+
+    function adjustDashboardStat(key, delta) {
+        var $card = $('#imp-dashboard-stats .imp-stat-card[data-stat-key="' + key + '"]');
+        if (!$card.length) {
+            return;
+        }
+        var $val = $card.find('.imp-stat-val');
+        var n = parseInt($val.text(), 10) || 0;
+        n = Math.max(0, n + delta);
+        setDashboardStatValue(key, n);
+    }
+
+    function setDashboardStatValue(key, value) {
+        var $card = $('#imp-dashboard-stats .imp-stat-card[data-stat-key="' + key + '"]');
+        if (!$card.length) {
+            return;
+        }
+        var n = Math.max(0, parseInt(value, 10) || 0);
+        $card.find('.imp-stat-val').text(String(n));
+        if (key === 'missing_alt') {
+            if (n === 0) {
+                $card.removeClass('is-warn is-clickable imp-dash-jump').addClass('is-ok');
+                $card.find('.imp-stat-sub').text('\u2713');
+            } else {
+                $card.addClass('is-warn is-clickable imp-dash-jump').removeClass('is-ok');
+                $card.find('.imp-stat-sub').text(uiText('dash_alt_title', 'Review below'));
+            }
+        }
+    }
+
+    function removeAltRowAfterSave($row) {
+        hideImgHoverPreview();
+        var id = parseInt($row.attr('data-attachment-id'), 10);
+        if (id) {
+            state.dashboard.altSelected.delete(id);
+        }
+        $row.stop(true, true).fadeOut(220, function() {
+            $(this).remove();
+            var $grid = $('#imp-alt-grid');
+            if (!$grid.find('.imp-alt-row').length) {
+                $grid.html('<p class="imp-alt-all-done">\u2713 ' + escHtml(uiText('dash_alt_all_ok', 'All images have useful alt text.')) + '</p>');
+                $('#imp-alt-pagination').empty();
+            }
+        });
+        markDashboardDirty();
+    }
+
+    function focusAltInputAtEnd($input) {
+        var el = $input && $input[0];
+        if (!el) {
+            return;
+        }
+        el.focus();
+        var len = (el.value || '').length;
+        if (typeof el.setSelectionRange === 'function') {
+            try {
+                el.setSelectionRange(len, len);
+            } catch (ignore) {}
+        }
+    }
+
+    function closeAltEditor($row, revert) {
+        if (!$row || !$row.length) {
+            return;
+        }
+        if (revert) {
+            var shown = $.trim($row.find('.imp-alt-suggest-text').text() || '');
+            $row.attr('data-draft-alt', shown);
+            $row.find('.imp-alt-suggest-input').val(shown).removeClass('is-error');
+        }
+        $row.removeClass('is-editing');
+        $row.find('.imp-alt-suggest-view').prop('hidden', false);
+        $row.find('.imp-alt-suggest-edit').prop('hidden', true);
+    }
+
+    function closeAllAltEditors(revert) {
+        $('.imp-alt-row.is-editing').each(function() {
+            closeAltEditor($(this), revert);
+        });
+    }
+
+    function openAltEditor($row) {
+        if (!$row || !$row.length) {
+            return;
+        }
+        closeAllAltEditors(true);
+        var draft = $.trim(String($row.attr('data-draft-alt') || ''));
+        var $input = $row.find('.imp-alt-suggest-input');
+        $input.val(draft).removeClass('is-error');
+        $row.addClass('is-editing');
+        $row.find('.imp-alt-suggest-view').prop('hidden', true);
+        $row.find('.imp-alt-suggest-edit').prop('hidden', false);
+        setTimeout(function() {
+            focusAltInputAtEnd($input);
+        }, 0);
+    }
+
+    function restoreAltRowSaveUi($row) {
+        $row.data('saving', false);
+        $row.find('.imp-alt-save-one').prop('disabled', false).text(uiText('dash_alt_save', 'Save'));
+        $row.find('.imp-alt-cancel-one').prop('disabled', false);
+        $row.find('.imp-alt-accept-one').prop('disabled', false);
+        $row.find('.imp-alt-edit-one').prop('disabled', false);
+    }
+
+    function saveAltForRow($row, altText, fromView) {
+        var $input = $row.find('.imp-alt-suggest-input');
+        var id = parseInt($row.attr('data-attachment-id'), 10);
+        var alt = $.trim(String(altText || ''));
+        var saved = $.trim(String($row.attr('data-saved-alt') || ''));
+
+        if ($row.hasClass('is-editing')) {
+            $input.removeClass('is-error');
+        }
+
+        if (!id) {
+            return;
+        }
+        if (!alt) {
+            if ($row.hasClass('is-editing')) {
+                $input.addClass('is-error');
+            }
+            return;
+        }
+
+        $row.attr('data-draft-alt', alt);
+        $row.find('.imp-alt-suggest-text').text(alt);
+
+        if (alt === saved) {
+            if ($row.hasClass('is-editing')) {
+                closeAltEditor($row, false);
+            }
+            if (fromView) {
+                removeAltRowAfterSave($row);
+            }
+            return;
+        }
+        if ($row.data('saving')) {
+            return;
+        }
+
+        hideImgHoverPreview();
+        $row.data('saving', true);
+        $row.find('.imp-alt-save-one').prop('disabled', true).text(uiText('processing', 'Processing...'));
+        $row.find('.imp-alt-cancel-one').prop('disabled', true);
+        $row.find('.imp-alt-accept-one').prop('disabled', true);
+        $row.find('.imp-alt-edit-one').prop('disabled', true);
+
+        ajax('tsoimma_update_seo', {
+            attachment_id: id,
+            alt: alt,
+            context: 'dashboard_alt'
+        }, function(data) {
+            $row.data('saving', false);
+            if (data && typeof data.missing_alt === 'number') {
+                setDashboardStatValue('missing_alt', data.missing_alt);
+            }
+            removeAltRowAfterSave($row);
+        }, function(err) {
+            restoreAltRowSaveUi($row);
+            if ($row.hasClass('is-editing')) {
+                $input.addClass('is-error');
+            }
+            alert((L.error_prefix || 'Error: ') + err);
+        });
+    }
+
+    function saveAltSuggestRow($row) {
+        saveAltForRow($row, $.trim($row.find('.imp-alt-suggest-input').val()), false);
+    }
+
+    function acceptAltSuggestRow($row) {
+        var alt = $.trim(String($row.attr('data-draft-alt') || ''));
+        if (!alt) {
+            alt = $.trim($row.find('.imp-alt-suggest-text').text() || '');
+        }
+        saveAltForRow($row, alt, true);
+    }
+
+    function initAltSuggestEditors() {
+        $(document).on('click', '.imp-alt-edit-one', function(e) {
+            e.preventDefault();
+            openAltEditor($(this).closest('.imp-alt-row'));
+        });
+
+        $(document).on('mousedown', '.imp-alt-accept-one', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var $btn = $(this);
+            var $row = $btn.closest('.imp-alt-row');
+            if ($btn.prop('disabled') || $row.data('saving') || $row.hasClass('is-editing')) {
+                return;
+            }
+            acceptAltSuggestRow($row);
+        });
+
+        $(document).on('mousedown', '.imp-alt-save-one', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var $btn = $(this);
+            var $row = $btn.closest('.imp-alt-row');
+            if ($btn.prop('disabled') || $row.data('saving')) {
+                return;
+            }
+            saveAltSuggestRow($row);
+        });
+
+        $(document).on('mousedown', '.imp-alt-cancel-one', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var $row = $(this).closest('.imp-alt-row');
+            if ($row.data('saving')) {
+                return;
+            }
+            closeAltEditor($row, true);
+        });
+
+        $(document).on('input', '.imp-alt-suggest-input', function() {
+            var $row = $(this).closest('.imp-alt-row');
+            var draft = $.trim($(this).val());
+            $row.attr('data-draft-alt', draft);
+            rememberAltDraft($row.attr('data-attachment-id'), draft);
+        });
+
+        $(document).on('keydown', '.imp-alt-suggest-input', function(e) {
+            var $row = $(this).closest('.imp-alt-row');
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveAltSuggestRow($row);
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                closeAltEditor($row, true);
+            }
+        });
+    }
+
+    function loadMissingAlt() {
+        hideImgHoverPreview();
+        var $grid = $('#imp-alt-grid');
+        $grid.html('<div class="imp-loading">' + uiText('loading_data', 'Loading...') + '</div>');
+        state.dashboard.xhrAlt = ajax('tsoimma_get_missing_alt', {
+            page: state.dashboard.altPage,
+            per_page: 35,
+            used_only: $('#imp-alt-used-only').is(':checked') ? 1 : 0
+        }, function(data) {
+            state.dashboard.xhrAlt = null;
+            $grid.empty();
+            if (!data.items || !data.items.length) {
+                $grid.html('<p style="color:var(--imp-success);padding:12px;">✓ ' + uiText('dash_alt_all_ok', 'All images have useful alt text.') + '</p>');
+                $('#imp-alt-pagination').empty();
+                state.dashboard.altListLoaded = true;
+                state.dashboard.altListCacheKey = dashboardAltCacheKey();
+                setDashboardStatValue('missing_alt', 0);
+                return;
+            }
+            data.items.forEach(function(item) {
+                var checked = state.dashboard.altSelected.has(item.id) ? ' checked' : '';
+                var suggestVal = getAltSuggestInputValue(item);
+                rememberAltDraft(item.id, suggestVal);
+                var thumbUrl = item.thumb || '';
+                var fullUrl = item.url || item.thumb || '';
+                var usedLabel = item.is_used ? '\u2713' : '\u2014';
+                var manualCls = item.needs_manual_alt ? ' is-manual-alt' : '';
+                var manualHint = uiText('dash_alt_manual_hint', 'Write alt text…');
+                var suggestView = suggestVal
+                    ? escHtml(suggestVal)
+                    : '<span class="imp-alt-manual-hint">' + escHtml(manualHint) + '</span>';
+                var inputPlaceholder = item.needs_manual_alt ? manualHint : '';
+                $grid.append(
+                    '<div class="imp-alt-row' + manualCls + '" data-attachment-id="' + item.id + '" data-draft-alt="' + escHtml(suggestVal) + '" data-saved-alt="' + escHtml(item.alt || '') + '">' +
+                    '<input type="checkbox" class="imp-alt-check" data-id="' + item.id + '"' + checked + '>' +
+                    '<img class="imp-alt-row-thumb" src="' + escHtml(thumbUrl) + '" data-full-url="' + escHtml(fullUrl) + '" data-filename="' + escHtml(item.filename || '') + '" alt="">' +
+                    '<div><div class="imp-alt-filename">' + escHtml(item.filename || '') + '</div>' +
+                    '<div>' + escHtml(item.title || '') + '</div></div>' +
+                    '<div class="imp-alt-suggest-cell">' +
+                    '<div class="imp-alt-suggest-view">' +
+                    '<span class="imp-alt-suggest-text">' + suggestView + '</span>' +
+                    '<span class="imp-alt-suggest-actions">' +
+                    '<button type="button" class="imp-alt-accept-one imp-btn imp-btn-sm imp-btn-success" data-id="' + item.id + '" title="' + escHtml(uiText('dash_alt_accept', 'Accept suggested alt')) + '" aria-label="' + escHtml(uiText('dash_alt_accept', 'Accept suggested alt')) + '">✓</button>' +
+                    '<button type="button" class="imp-alt-edit-one imp-btn imp-btn-sm imp-btn-ghost" data-id="' + item.id + '" title="' + escHtml(uiText('dash_alt_edit', 'Edit alt')) + '" aria-label="' + escHtml(uiText('dash_alt_edit', 'Edit alt')) + '">✎</button>' +
+                    '</span></div>' +
+                    '<div class="imp-alt-suggest-edit" hidden>' +
+                    '<input type="text" class="imp-alt-suggest-input" data-id="' + item.id + '" value="' + escHtml(suggestVal) + '" placeholder="' + escHtml(inputPlaceholder) + '" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="true" aria-label="' + escHtml(uiText('dash_alt_suggested', 'Suggested alt')) + '">' +
+                    '<span class="imp-alt-suggest-actions">' +
+                    '<button type="button" class="imp-alt-save-one imp-btn imp-btn-sm imp-btn-success" data-id="' + item.id + '">' + escHtml(uiText('dash_alt_save', 'Save')) + '</button>' +
+                    '<button type="button" class="imp-alt-cancel-one imp-btn imp-btn-sm imp-btn-ghost" data-id="' + item.id + '" title="' + escHtml(uiText('dash_alt_cancel', 'Cancel')) + '" aria-label="' + escHtml(uiText('dash_alt_cancel', 'Cancel')) + '">✕</button>' +
+                    '</span></div>' +
+                    '</div>' +
+                    '<div class="imp-alt-used">' + usedLabel + '</div>' +
+                    '</div>'
+                );
+            });
+            renderAltPagination(data.page, data.total_pages);
+            state.dashboard.altListLoaded = true;
+            state.dashboard.altListCacheKey = dashboardAltCacheKey();
+            if (typeof data.total === 'number') {
+                setDashboardStatValue('missing_alt', data.total);
+            }
+        }, function(err) {
+            state.dashboard.xhrAlt = null;
+            $grid.html('<div class="imp-error">' + escHtml(err) + '</div>');
+        }, 180000);
+    }
+
+    function renderAltPagination(page, totalPages) {
+        var $p = $('#imp-alt-pagination');
+        $p.empty();
+        if (totalPages <= 1) {
+            return;
+        }
+
+        var maxButtons = 12;
+        var start = Math.max(1, page - Math.floor(maxButtons / 2));
+        var end = Math.min(totalPages, start + maxButtons - 1);
+        start = Math.max(1, end - maxButtons + 1);
+
+        if (start > 1) {
+            $p.append('<span class="imp-alt-page-ellipsis">\u2026</span>');
+        }
+        for (var i = start; i <= end; i++) {
+            var $btn = $('<button class="imp-btn imp-btn-ghost imp-btn-sm" data-page="' + i + '"></button>').text(i);
+            if (i === page) {
+                $btn.addClass('active');
+            }
+            $p.append($btn);
+        }
+        if (end < totalPages) {
+            $p.append('<span class="imp-alt-page-ellipsis">\u2026</span>');
+        }
+        $p.off('click', 'button').on('click', 'button', function() {
+            state.dashboard.altPage = parseInt($(this).attr('data-page'), 10);
+            loadMissingAlt();
+        });
+    }
+
+    // ================================================================
     // Tabs
     // ================================================================
     function initTabs() {
         $(document).on('click', '.imp-tab', function() {
             var tab = $(this).data('tab');
+            if (tab !== 'dashboard') {
+                hideImgHoverPreview();
+                abortDashboardRequests();
+            }
             $('.imp-tab').removeClass('active');
             $(this).addClass('active');
             $('.imp-tab-content').removeClass('active');
@@ -1150,12 +2779,47 @@
     // ================================================================
     // Search with debounce
     // ================================================================
+    function syncSearchClearButton($input) {
+        var $btn = $input.closest('.imp-search-wrap').find('.imp-search-clear');
+        if (!$btn.length) {
+            return;
+        }
+        if ($.trim($input.val()) === '') {
+            $btn.prop('hidden', true).attr('tabindex', '-1');
+        } else {
+            $btn.prop('hidden', false).attr('tabindex', '0');
+        }
+    }
+
+    function initSearchClearControls() {
+        $('.imp-search-wrap .imp-search').each(function() {
+            syncSearchClearButton($(this));
+        });
+
+        $(document).on('input', '.imp-search-wrap .imp-search', function() {
+            syncSearchClearButton($(this));
+        });
+
+        $(document).on('click', '.imp-search-clear', function(e) {
+            e.preventDefault();
+            var $input = $(this).closest('.imp-search-wrap').find('.imp-search');
+            if (!$input.length || $.trim($input.val()) === '') {
+                return;
+            }
+            $input.val('');
+            syncSearchClearButton($input);
+            $input.trigger('input').focus();
+        });
+    }
+
     function initSearch() {
-        var timer;
+        initSearchClearControls();
+        var optTimer;
+        var seoTimer;
         $('#imp-search-opt').on('input', function() {
-            clearTimeout(timer);
+            clearTimeout(optTimer);
             var val = $(this).val();
-            timer = setTimeout(function() {
+            optTimer = setTimeout(function() {
                 state.opt.search = val;
                 state.opt.page = 1;
                 state.opt.selected.clear();
@@ -1163,9 +2827,9 @@
             }, 400);
         });
         $('#imp-search-seo').on('input', function() {
-            clearTimeout(timer);
+            clearTimeout(seoTimer);
             var val = $(this).val();
-            timer = setTimeout(function() {
+            seoTimer = setTimeout(function() {
                 state.seo.search = val;
                 state.seo.page = 1;
                 loadSeoImages();
@@ -1216,6 +2880,9 @@
             $('#imp-log-content').empty();
             $('#imp-opt-log').hide();
         });
+        $('#imp-opt-per-page').on('change', function() {
+            applyPerPage($(this).val(), true);
+        });
     }
 
     function updateSelectedCount() {
@@ -1227,7 +2894,7 @@
     function loadOptImages() {
         var grid = $('#imp-images-grid');
         grid.html('<div class="imp-loading">' + (L.loading_images || 'Loading images...') + '</div>');
-        ajax('tso_im_get_images', {
+        ajax('tsoimma_get_images', {
             page: state.opt.page, per_page: state.opt.perPage,
             search: state.opt.search, sort: 'filesize'
         }, function(data) {
@@ -1274,6 +2941,30 @@
         var quality = $('#imp-quality').val();
         var replace = $('#imp-replace').is(':checked') ? 1 : 0;
         var total   = ids.length;
+
+        if (total > 2) {
+            $('#imp-bulk-progress').show();
+            $('#imp-progress-fill').css('width', '0%');
+            $('#imp-progress-text').text(uiText('dash_queue_queued', 'Queued for background processing...'));
+            $('#imp-opt-log').show();
+            $('#imp-bulk-optimize').prop('disabled', true);
+            ajax('tsoimma_enqueue_optimize_queue', {
+                ids: ids, format: format, quality: quality, replace: replace
+            }, function(data) {
+                $('#imp-bulk-optimize').prop('disabled', false);
+                $('#imp-bulk-progress').hide();
+                addLog('info', '✓ ' + total + ' ' + uiText('dash_queue_queued_n', 'images queued.'));
+                renderQueueStatus(data);
+                markDashboardDirty();
+                $('.imp-tab[data-tab="dashboard"]').trigger('click');
+                pollQueueStatus();
+            }, function(err) {
+                $('#imp-bulk-optimize').prop('disabled', false);
+                addLog('err', err);
+            });
+            return;
+        }
+
         var done    = 0;
         $('#imp-bulk-progress').show();
         $('#imp-progress-fill').css('width', '0%');
@@ -1287,28 +2978,44 @@
                 $('#imp-bulk-progress').hide();
                 addLog('info', '✓ ' + (L.bulk_done || 'Done') + ': ' + done + '/' + total);
                 loadOptImages();
-                refreshHistoryUi();
                 return;
             }
             var id = ids[done];
-            ajax('tso_im_optimize_image', {
+            ajax('tsoimma_optimize_image', {
                 attachment_id: id, format: format, quality: quality, replace: replace
             }, function(data) {
-                done++;
-                var pct = Math.round(done / total * 100);
-                $('#imp-progress-fill').css('width', pct + '%');
-                $('#imp-progress-text').text((L.bulk_processing || 'Processing') + ' ' + done + '/' + total + '...');
-                if (data.replaced) {
-                    addLog('ok', '✓ ID ' + id + ' \u2192 ' + data.format.toUpperCase() + ' | ' + data.savings_pct + '% ' + (L.optimize_done || 'saved'));
-                } else {
-                    addLog('ok', '✓ ID ' + id + ' \u2192 ' + (L.optimized_no_replace || 'optimized'));
+                function finishBulkItem(thumbErr) {
+                    done++;
+                    var pct = Math.round(done / total * 100);
+                    $('#imp-progress-fill').css('width', pct + '%');
+                    $('#imp-progress-text').text((L.bulk_processing || 'Processing') + ' ' + done + '/' + total + '...');
+                    if (thumbErr) {
+                        addLog('err', '⚠ ID ' + id + ' → ' + (L.optimizing_thumbs || 'Optimizing thumbnails...') + ' (' + thumbErr + ')');
+                    } else if (data && data.replaced) {
+                        addLog('ok', '✓ ID ' + id + ' \u2192 ' + data.format.toUpperCase() + ' | ' + data.savings_pct + '% ' + (L.optimize_done || 'saved'));
+                    } else if (data) {
+                        addLog('ok', '✓ ID ' + id + ' \u2192 ' + (L.optimized_no_replace || 'optimized'));
+                    }
+                    processNext();
                 }
-                processNext();
+                if (data.replaced && data.thumbnails_pending) {
+                    ajax('tsoimma_optimize_thumbnails', {
+                        attachment_id: id,
+                        format: format,
+                        quality: quality
+                    }, function() {
+                        finishBulkItem(null);
+                    }, function(err) {
+                        finishBulkItem(err);
+                    }, 300000);
+                    return;
+                }
+                finishBulkItem(null);
             }, function(err) {
                 done++;
                 addLog('err', '✗ ID ' + id + ' \u2192 ' + err);
                 processNext();
-            });
+            }, 120000);
         }
         processNext();
     }
@@ -1352,11 +3059,12 @@
             var ids = Array.from(state.orphanSelected);
             if (!ids.length) { alert(L.no_selection || 'Select at least one image.'); return; }
             if (!confirm(L.confirm_delete || 'Delete selected images? This cannot be undone.')) return;
-            ajax('tso_im_delete_images', { ids: ids }, function(data) {
+            ajax('tsoimma_delete_images', { ids: ids }, function(data) {
                 alert('✓ ' + data.deleted.length + ' ' + (L.images_deleted || 'images deleted.'));
                 state.orphans.found = state.orphans.found.filter(function(o) { return ids.indexOf(o.id) === -1; });
                 state.orphanSelected.clear();
                 renderOrphansGrid();
+                markDashboardDirty();
             }, function(err) { alert((L.error_prefix || 'Error: ') + err); });
         });
     }
@@ -1364,7 +3072,7 @@
     function scanOrphans(limit, offset, accumulated) {
         $('#imp-orphans-loading').show();
         $('#imp-orphans-result').hide();
-        ajax('tso_im_find_orphans', { limit: limit, offset: offset }, function(data) {
+        ajax('tsoimma_find_orphans', { limit: limit, offset: offset }, function(data) {
             accumulated = accumulated.concat(data.orphans);
             var scanned = offset + data.total_scanned;
             $('#imp-orphans-progress-text').text((L.scanning_msg || 'Scanning') + ' ' + scanned + '/' + data.total_images + '...');
@@ -1422,25 +3130,36 @@
     (function initRogueScanner() {
         var rogueFiles    = [];
         var rogueSelected = new Set();
+        var rogueAllowlistExpires = 0;
+
+        function rogueAllowlistNote(data) {
+            var hours = data && data.delete_allowlist_hours ? data.delete_allowlist_hours : 24;
+            return uiText('rogue_delete_allowlist_note', 'You can delete scanned files for 24 hours (current admin only). Rescan if delete fails.')
+                .replace('24', String(hours));
+        }
 
         $('#imp-scan-rogue').on('click', function() {
             var btn = $(this);
             btn.prop('disabled', true).text(L.btn_scanning || '⏳ Scanning...');
             $('#imp-rogue-result').hide();
             $('#imp-rogue-loading').show();
-            ajax('tso_im_scan_rogue_files', {}, function(data) {
+            ajax('tsoimma_scan_rogue_files', {}, function(data) {
                 btn.prop('disabled', false).text(uiText('scan_rogue', '🔍 Scan extra upload files'));
                 $('#imp-rogue-loading').hide();
                 rogueFiles    = data.files || [];
                 rogueSelected = new Set();
+                rogueAllowlistExpires = data.delete_allowlist_expires || 0;
                 if (!rogueFiles.length) {
                     $('#imp-rogue-result').show();
                     $('#imp-rogue-grid').html('<div class="imp-loading" style="padding:30px 0">✓ ' + (L.no_rogue || 'No extra files found.') + '</div>');
-                    $('#imp-rogue-summary').text('');
+                    $('#imp-rogue-summary').text(rogueAllowlistNote(data));
                     $('#imp-delete-rogue, #imp-rogue-select-all, #imp-rogue-deselect').hide();
                     return;
                 }
-                $('#imp-rogue-summary').text(data.total + ' ' + (L.files_label || 'files') + ' \u00b7 ' + data.total_size_h);
+                $('#imp-rogue-summary').html(
+                    escHtml(data.total + ' ' + (L.files_label || 'files') + ' \u00b7 ' + data.total_size_h) +
+                    '<br><small style="color:var(--imp-text-muted)">' + escHtml(rogueAllowlistNote(data)) + '</small>'
+                );
                 $('#imp-delete-rogue, #imp-rogue-select-all, #imp-rogue-deselect').show();
                 renderRogueGrid();
                 $('#imp-rogue-result').show();
@@ -1484,8 +3203,12 @@
             var paths_b64 = rogueFiles
                 .filter(function(f) { return rogueSelected.has(f.path); })
                 .map(function(f) { return f.path_b64; });
-            ajax('tso_im_delete_rogue_files', { paths_b64: paths_b64 }, function(data) {
+            ajax('tsoimma_delete_rogue_files', { paths_b64: paths_b64 }, function(data) {
                 btn.prop('disabled', false).text(L.delete_rogue || '🗑 Delete selected');
+                if (data.rescan_required) {
+                    alert(uiText('rogue_rescan_required', 'Some files were skipped: run Scan again before deleting (allowlist expires after 24 hours).'));
+                    rogueAllowlistExpires = 0;
+                }
                 rogueFiles    = rogueFiles.filter(function(f) { return !rogueSelected.has(f.path); });
                 rogueSelected = new Set();
                 if (data.errors && data.errors.length) {
@@ -1539,7 +3262,11 @@
         function updateRogueToolbar() {
             var n   = rogueFiles.length;
             var sel = rogueSelected.size;
-            $('#imp-rogue-summary').text(n + ' ' + (L.files_label || 'files') + ' | ' + sel + ' ' + (L.n_selected || 'selected'));
+            var summary = n + ' ' + (L.files_label || 'files') + ' | ' + sel + ' ' + (L.n_selected || 'selected');
+            if (rogueAllowlistExpires > 0 && Math.floor(Date.now() / 1000) >= rogueAllowlistExpires) {
+                summary += ' · ' + uiText('rogue_rescan_required', 'Some files were skipped: run Scan again before deleting (allowlist expires after 24 hours).');
+            }
+            $('#imp-rogue-summary').text(summary);
             $('#imp-delete-rogue').prop('disabled', sel === 0);
         }
 
@@ -1557,6 +3284,9 @@
         $('#imp-seo-sort').on('change', function() {
             state.seo.page = 1; loadSeoImages();
         });
+        $('#imp-seo-per-page').on('change', function() {
+            applyPerPage($(this).val(), true);
+        });
         $(document).on('click', '#imp-seo-grid .imp-image-card', function(e) {
             if ($(e.target).hasClass('imp-card-edit-btn')) return;
             openModal($(this).data('id'), 'seo');
@@ -1571,7 +3301,7 @@
         var grid = $('#imp-seo-grid');
         var sort = $('#imp-seo-sort').val() || 'filesize';
         grid.html('<div class="imp-loading">' + (L.loading_images || 'Loading...') + '</div>');
-        ajax('tso_im_get_images', {
+        ajax('tsoimma_get_images', {
             page: state.seo.page, per_page: state.seo.perPage,
             search: state.seo.search, sort: sort
         }, function(data) {
@@ -1591,13 +3321,13 @@
         if (!items.length) { grid.html('<div class="imp-loading">' + (L.no_images || 'No images.') + '</div>'); return; }
         items.forEach(function(item) {
             var ext    = item.ext || item.mime.replace('image/', '').toUpperCase();
-            var seoOk  = item.slug_ok && item.alt;
+            var seoOk  = item.slug_ok && (item.alt_ok === true || (item.alt_ok !== false && item.alt && String(item.alt).trim()));
             var seoCls = seoOk ? 'imp-badge-seo-ok' : 'imp-badge-seo-bad';
             var seoTxt = seoOk ? 'SEO ✓' : 'SEO ✗';
             var card   = $('<div class="imp-image-card" data-id="' + item.id + '" style="cursor:pointer;"></div>');
             card.append('<div class="imp-card-badges"><span class="' + seoCls + '">' + seoTxt + '</span></div>');
             card.append('<img class="imp-card-thumb" src="' + escHtml(cacheBustUrl(item.thumb || '', item.id)) + '" alt="' + escHtml(item.title) + '" loading="lazy">');
-            var altWarn = item.alt ? '' : '<div style="font-size:10px;color:var(--imp-warn);margin-top:4px;">⚠ ' + (L.no_alt_text || 'No alt text') + '</div>';
+            var altWarn = (item.alt_ok === false || (!item.alt && item.alt_ok !== true)) ? '<div style="font-size:10px;color:var(--imp-warn);margin-top:4px;">⚠ ' + (L.no_alt_text || 'No alt text') + '</div>' : '';
             card.append(
                 '<div class="imp-card-info">' +
                 '<div class="imp-card-name">' + escHtml(item.filename) + '</div>' +
@@ -1615,8 +3345,16 @@
     // MODAL
     // ================================================================
     function initModal() {
-        $(document).on('click', '.imp-modal-close, .imp-modal-overlay', closeModal);
-        $(document).on('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
+        $(document).on('click', '.imp-modal-close, .imp-modal-overlay', function() {
+            hideImgHoverPreview();
+            closeModal();
+        });
+        $(document).on('keydown', function(e) {
+            if (e.key === 'Escape') {
+                hideImgHoverPreview();
+                closeModal();
+            }
+        });
         $(document).on('click', '.imp-mtab', function() {
             var tab = $(this).data('mtab');
             $(this).closest('.imp-modal-tabs').find('.imp-mtab').removeClass('active');
@@ -1630,7 +3368,7 @@
             var id  = state.currentModalId;
             var btn = $(this);
             btn.prop('disabled', true).text(L.processing || 'Processing...');
-            ajax('tso_im_update_seo', {
+            ajax('tsoimma_update_seo', {
                 attachment_id: id,
                 title: $('#imp-seo-title').val(), alt: $('#imp-seo-alt').val(),
                 caption: $('#imp-seo-caption').val(), description: $('#imp-seo-description').val()
@@ -1638,6 +3376,7 @@
                 btn.text(L.save_ok || '✓ Saved!');
                 setTimeout(function() { btn.prop('disabled', false).text(L.save_seo || '💾 Save SEO'); }, 1500);
                 loadSeoImages();
+                markDashboardDirty();
             }, function(err) { btn.prop('disabled', false).text(L.save_seo || '💾 Save SEO'); alert((L.error_prefix || 'Error: ') + err); });
         });
 
@@ -1653,7 +3392,7 @@
             if (!newName) { alert(L.enter_name || 'Enter a name.'); return; }
             var btn = $(this);
             btn.prop('disabled', true).text(L.processing || 'Processing...');
-            ajax('tso_im_rename_image', { attachment_id: id, new_name: newName, strict_seo: 0 }, function(data) {
+            ajax('tsoimma_rename_image', { attachment_id: id, new_name: newName, strict_seo: 0 }, function(data) {
                 btn.prop('disabled', false).text(uiText('rename_btn', '✏ Rename file'));
                 $('#imp-current-filename').val(data.new_filename);
                 alert('✓ ' + data.old_filename + ' \u2192 ' + data.new_filename);
@@ -1697,7 +3436,7 @@
             var btn      = $(this);
             var doResize = $('#imp-modal-resize').is(':checked');
             btn.prop('disabled', true).text(L.processing || 'Processing...');
-            ajax('tso_im_optimize_image', {
+            ajax('tsoimma_optimize_image', {
                 attachment_id: id,
                 format:     $('#imp-modal-format').val(),
                 quality:    $('#imp-modal-quality').val(),
@@ -1705,19 +3444,17 @@
                 max_width:  doResize ? (parseInt($('#imp-modal-width').val(), 10)  || 0) : 0,
                 max_height: doResize ? (parseInt($('#imp-modal-height').val(), 10) || 0) : 0
             }, function(data) {
-                btn.prop('disabled', false).text(uiText('optimize_now', '⚡ Optimize now'));
+                btn.prop('disabled', false).text(L.optimize_now || '⚡ Optimize now');
+                resetModalResizeUi();
                 var box = $('#imp-modal-result');
                 if (data.replaced) {
                     var bigger   = data.savings_pct <= 0;
                     var cls      = bigger ? 'imp-result-warn' : 'imp-result-ok';
                     var origSize = data.backup_size ? formatBytes(data.backup_size) : formatBytes(data.original_size);
-                    var thumbsPending = !!data.needs_thumbnails && !data.thumbnails_done;
-                    var thumbNote = thumbsPending
-                        ? '<br><small id="imp-thumb-status" style="color:var(--imp-accent2)">⏳ ' + uiText('optimizing_thumbs', 'Optimizing thumbnails...') + '</small>'
-                        : '<br><small id="imp-thumb-status" style="color:var(--imp-success)">✓ ' + uiText('thumbs_done', 'Thumbnails processed.') + '</small>';
+                    var thumbNote = buildThumbStatusHtml(!!data.thumbnails_done);
                     var msg = (bigger ? '⚠ ' : '✓ ') +
-                        (bigger ? uiText('converted_bigger', 'Converted but larger') : uiText('optimized_ok', 'Optimized!')) +
-                        '<br>Format: <strong>' + String(data.format || '').toUpperCase() + '</strong><br>' +
+                        (bigger ? (L.converted_bigger || 'Converted but larger') : (L.optimized_ok || 'Optimized!')) +
+                        '<br>Format: <strong>' + escHtml(String(data.format || '').toUpperCase()) + '</strong><br>' +
                         origSize + ' \u2192 <strong>' + formatBytes(data.new_size) + '</strong>' +
                         (data.savings_pct > 0 ? ' | <strong>' + data.savings_pct + '%</strong>' : '') +
                         thumbNote;
@@ -1727,29 +3464,23 @@
                         var ts = state.imgCacheTs[id];
                         $('#imp-modal-img').attr('src', data.new_url + '?_t=' + ts).attr('data-full-url', data.new_url + '?_t=' + ts);
                     }
-                    refreshModalImageInfo(id, true);
-                    if (box[0] && box[0].scrollIntoView) {
-                        box[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    }
+                    refreshModalImageInfo(id);
                     loadOptImages();
                     loadSeoImages();
-                    refreshHistoryUi();
-                    if (thumbsPending) {
-                        setTimeout(function() {
-                            var $thumb = $('#imp-thumb-status');
-                            if ($thumb.length) {
-                                $thumb.replaceWith('<small id="imp-thumb-status" style="color:var(--imp-success)">✓ ' + uiText('thumbs_done', 'Thumbnails processed.') + '</small>');
-                            }
-                            refreshModalImageInfo(id, true);
-                        }, 4000);
+                    if (data.thumbnails_pending) {
+                        runModalThumbnailPass(
+                            id,
+                            $('#imp-modal-format').val(),
+                            $('#imp-modal-quality').val(),
+                            box
+                        );
                     }
                 } else {
                     box.removeClass('imp-result-err imp-result-warn').addClass('imp-result-ok imp-result-box').show()
-                       .html('✓ ' + uiText('optimized_no_replace', 'Optimized (not replaced).') + ' ' + data.savings_pct + '%');
-                    refreshHistoryUi();
+                       .html('✓ ' + (L.optimized_no_replace || 'Optimized (not replaced).') + ' ' + data.savings_pct + '%');
                 }
             }, function(err) {
-                btn.prop('disabled', false).text(uiText('optimize_now', '⚡ Optimize now'));
+                btn.prop('disabled', false).text(L.optimize_now || '⚡ Optimize now');
                 $('#imp-modal-result').show().removeClass('imp-result-ok imp-result-warn').addClass('imp-result-err imp-result-box').text((L.error_prefix || 'Error: ') + err);
             }, 120000);
         });
@@ -1761,15 +3492,13 @@
         var btn = $(this);
         if (!confirm(L.confirm_revert || 'Revert to original? Optimized version will be lost.')) return;
         btn.prop('disabled', true).text(L.btn_reverting || '⏳ Reverting...');
-        ajax('tso_im_revert_image', { attachment_id: id }, function(data) {
-            var box      = $('#imp-modal-result');
+        ajax('tsoimma_revert_image', { attachment_id: id }, function(data) {
             var savedHtml = '↩ ' + (L.reverted_ok || 'Reverted!') + '<br>' + data.restored_ext + ' | ' + data.restored_size_h;
             var savedCls  = 'imp-result-ok imp-result-box';
-            setTimeout(function() {
-                openModal(id, 'optimize');
-                setTimeout(function() { $('#imp-modal-result').attr('class', savedCls).html(savedHtml).show(); }, 80);
-            }, 400);
-            loadOptImages(); loadSeoImages();
+            refreshModalImageInfo(id);
+            $('#imp-modal-result').attr('class', savedCls).html(savedHtml).show();
+            loadOptImages();
+            loadSeoImages();
         }, function(err) {
             btn.prop('disabled', false).text(L.revert_btn || '↩ Revert');
             var msg = (err === 'backup_mismatch_after_rename')
@@ -1785,36 +3514,34 @@
         var btn = $(this);
         if (!confirm(L.confirm_del_backup || 'Delete backup? You will not be able to revert.')) return;
         btn.prop('disabled', true).text(L.btn_deleting || '⏳ Deleting...');
-        ajax('tso_im_delete_backup', { attachment_id: id }, function() {
-            openModal(id, 'optimize');
+        ajax('tsoimma_delete_backup', { attachment_id: id }, function() {
+            btn.prop('disabled', false).text(L.del_backup || '🗑 Delete backup');
+            refreshModalImageInfo(id);
+            $('#imp-modal-result').hide().text('');
+            markDashboardDirty();
         }, function(err) { btn.prop('disabled', false).text(L.del_backup || '🗑 Delete backup'); alert((L.error_prefix || 'Error: ') + err); });
     });
 
-    function openModal(id, defaultTab) {
-        state.currentModalId = id;
-        $('#imp-modal-result').hide().text('');
-        $('#imp-modal-resize').prop('checked', false);
-        $('#imp-resize-options').hide();
-        $('#imp-modal-width, #imp-modal-height').val('');
-        $('.imp-preset-btn').removeClass('active');
-        $('#imp-modal').show();
-        $('.imp-mtab').removeClass('active');
-        $('.imp-mtab-content').removeClass('active');
-        $('.imp-mtab[data-mtab="' + defaultTab + '"]').addClass('active');
-        $('#mtab-' + defaultTab).addClass('active');
-        $('#imp-modal-title-head').html('<span style="color:var(--imp-text-muted)">' + uiText('loading_modal', 'Loading...') + '</span>');
-        $('#imp-modal-img').attr('src', '');
-        ajax('tso_im_get_image_info', { attachment_id: id }, function(data) {
-            populateModalFromData(data);
-        }, function(err) {
-            $('#imp-modal-title-head').html('<span style="color:var(--imp-danger)">' + escHtml((L.error_prefix || 'Error: ') + err) + '</span>');
-        });
+    function renderModalStats(data) {
+        var backupHtml = data.has_backup
+            ? '<div class="imp-stat-box imp-stat-backup" style="border-color:var(--imp-warn);grid-column:1/-1">' +
+              '<div class="imp-backup-info"><span>💾 <strong>' + (L.backup_available || 'Backup available') + '</strong>' + (data.backup_size ? ' \u00b7 ' + data.backup_size : '') + '</span></div>' +
+              '<button id="imp-revert-btn" class="imp-btn imp-btn-sm imp-btn-danger">' + (L.revert_btn || 'Revert to original') + '</button>' +
+              '<button id="imp-delete-backup-btn" class="imp-btn imp-btn-sm" style="border-color:var(--imp-warn);color:var(--imp-warn)">🗑 ' + (L.del_backup || 'Delete backup') + '</button>' +
+              '</div>'
+            : '';
+        $('#imp-modal-stats').html(
+            '<div class="imp-stat-box"><span class="imp-stat-label">' + (L.stat_current_size || 'Current size') + '</span><span class="imp-stat-val">' + escHtml(data.filesize_h) + '</span></div>' +
+            '<div class="imp-stat-box"><span class="imp-stat-label">' + (L.stat_real_format || 'Format') + '</span><span class="imp-stat-val" style="color:var(--imp-accent2)">' + escHtml(data.ext) + '</span></div>' +
+            backupHtml
+        );
     }
 
-    function populateModalFromData(data) {
+    function applyModalImageInfo(data) {
         $('#imp-modal-title-head').html('<span class="imp-modal-fname">' + escHtml(data.filename) + '</span>');
         $('#imp-modal-id').val(data.id);
         var ts = state.imgCacheTs[data.id] || Date.now();
+        state.imgCacheTs[data.id] = ts;
         $('#imp-modal-img')
             .attr('src', (data.thumb || '') + '?t=' + ts)
             .attr('data-full-url', (data.url || data.thumb || '') + '?t=' + ts)
@@ -1833,26 +3560,69 @@
         $('#imp-current-filename').val(data.filename);
         $('#imp-new-filename').val('');
         $('#imp-suggested-name').text(data.suggested || '');
-        var backupHtml = data.has_backup
-            ? '<div class="imp-stat-box imp-stat-backup" style="border-color:var(--imp-warn);grid-column:1/-1">' +
-              '<div class="imp-backup-info"><span>💾 <strong>' + uiText('backup_available', 'Backup available') + '</strong>' + (data.backup_size ? ' \u00b7 ' + data.backup_size : '') + '</span></div>' +
-              '<button id="imp-revert-btn" class="imp-btn imp-btn-sm imp-btn-danger">' + uiText('revert_btn', 'Revert to original') + '</button>' +
-              '<button id="imp-delete-backup-btn" class="imp-btn imp-btn-sm" style="border-color:var(--imp-warn);color:var(--imp-warn)">🗑 ' + uiText('del_backup', 'Delete backup') + '</button>' +
-              '</div>'
-            : '';
-        $('#imp-modal-stats').html(
-            '<div class="imp-stat-box"><span class="imp-stat-label">' + uiText('stat_current_size', 'Current size') + '</span><span class="imp-stat-val">' + escHtml(data.filesize_h) + '</span></div>' +
-            '<div class="imp-stat-box"><span class="imp-stat-label">' + uiText('stat_real_format', 'Format') + '</span><span class="imp-stat-val" style="color:var(--imp-accent2)">' + escHtml(data.ext) + '</span></div>' +
-            backupHtml
-        );
+        renderModalStats(data);
     }
 
-    function refreshModalImageInfo(id, keepResult) {
-        if (!keepResult) {
-            $('#imp-modal-result').hide().text('');
+    function refreshModalImageInfo(id) {
+        ajax('tsoimma_get_image_info', { attachment_id: id }, function(data) {
+            applyModalImageInfo(data);
+        });
+    }
+
+    function buildThumbStatusHtml(done) {
+        if (done) {
+            return '<br><small id="imp-thumb-status" style="color:var(--imp-success)">✓ ' + (L.thumbs_done || 'Thumbnails processed.') + '</small>';
         }
-        ajax('tso_im_get_image_info', { attachment_id: id }, function(data) {
-            populateModalFromData(data);
+        return '<br><small id="imp-thumb-status" style="color:var(--imp-accent2)">⏳ ' + (L.optimizing_thumbs || 'Optimizing thumbnails...') + '</small>';
+    }
+
+    function runModalThumbnailPass(id, format, quality, $resultBox, onDone) {
+        var btn = $('#imp-optimize-single');
+        btn.prop('disabled', true).text(L.optimizing_thumbs || 'Optimizing thumbnails...');
+        ajax('tsoimma_optimize_thumbnails', {
+            attachment_id: id,
+            format:     format,
+            quality:    quality
+        }, function(data) {
+            btn.prop('disabled', false).text(L.optimize_now || '⚡ Optimize now');
+            state.imgCacheTs[id] = Date.now();
+            if ($resultBox && $resultBox.length) {
+                var doneNote = buildThumbStatusHtml(true);
+                $resultBox.html($resultBox.html().replace(/<small id="imp-thumb-status"[^>]*>.*?<\/small>/, doneNote));
+            }
+            refreshModalImageInfo(id);
+            loadOptImages();
+            loadSeoImages();
+            if (onDone) onDone(data);
+        }, function() {
+            btn.prop('disabled', false).text(L.optimize_now || '⚡ Optimize now');
+            if ($resultBox && $resultBox.length) {
+                var warnNote = '<small id="imp-thumb-status" style="color:var(--imp-warn)">⚠ ' + (L.error_prefix || 'Error: ') + (L.optimizing_thumbs || 'Optimizing thumbnails...') + '</small>';
+                $resultBox.html($resultBox.html().replace(/<small id="imp-thumb-status"[^>]*>.*?<\/small>/, warnNote));
+            }
+        }, 300000);
+    }
+
+    function resetModalResizeUi() {
+        $('#imp-modal-resize').prop('checked', false);
+        $('#imp-resize-options').hide();
+        $('#imp-modal-width, #imp-modal-height').val('');
+        $('.imp-preset-btn').removeClass('active');
+    }
+
+    function openModal(id, defaultTab) {
+        state.currentModalId = id;
+        $('#imp-modal-result').hide().text('');
+        resetModalResizeUi();
+        $('#imp-modal').show();
+        $('.imp-mtab').removeClass('active');
+        $('.imp-mtab-content').removeClass('active');
+        $('.imp-mtab[data-mtab="' + defaultTab + '"]').addClass('active');
+        $('#mtab-' + defaultTab).addClass('active');
+        $('#imp-modal-title-head').html('<span style="color:var(--imp-text-muted)">' + (L.loading_modal || 'Loading...') + '</span>');
+        $('#imp-modal-img').attr('src', '');
+        ajax('tsoimma_get_image_info', { attachment_id: id }, function(data) {
+            applyModalImageInfo(data);
         });
     }
 
@@ -1926,7 +3696,7 @@
     }
 
     function ajax(action, data, onSuccess, onError, timeoutMs) {
-        $.ajax({
+        return $.ajax({
             url:     TSOIMMA.ajax_url,
             type:    'POST',
             timeout: timeoutMs || 120000,
@@ -1939,6 +3709,9 @@
                 }
             },
             error: function(xhr, status) {
+                if (status === 'abort') {
+                    return;
+                }
                 if (status === 'timeout') {
                     if (onError) onError('timeout');
                 } else {
@@ -1988,7 +3761,7 @@
         if (attempt > MAX_ATTEMPTS) {
             btn.prop('disabled', false).text(uiText('pdf_compress_btn', '📄 Compress')).css('background', '');
             var timeoutMessage = L.pdf_timeout_msg || 'GhostScript timed out. Check FTP.';
-            ajax('tso_im_mark_pdf_non_compressible', {
+            ajax('tsoimma_mark_pdf_non_compressible', {
                 attachment_id: id,
                 code: 'client_timeout',
                 message: timeoutMessage
@@ -2008,7 +3781,7 @@
         btn.text('⏳ ' + (L.btn_processing || 'Processing') + dots + ' ' + elapsed + 's');
 
         setTimeout(function() {
-            ajax('tso_im_pdf_status', { attachment_id: id, replace: replace }, function(data) {
+            ajax('tsoimma_pdf_status', { attachment_id: id, replace: replace }, function(data) {
                 if (data.status === 'done') {
                     // Application error (no_gain, corrupt PDF, replace failed)
                     if (data.error) {
@@ -2040,7 +3813,7 @@
         attempt = attempt || 0;
         if (attempt > MAX_ATTEMPTS) { onDone(null); return; }
         setTimeout(function() {
-            ajax('tso_im_pdf_status', { attachment_id: id, replace: 1 }, function(data) {
+            ajax('tsoimma_pdf_status', { attachment_id: id, replace: 1 }, function(data) {
                 if (data.status === 'done')       onDone(data.result || {});
                 else if (data.status === 'idle')  onDone(null);
                 else                              pollPdfStatusBulk(id, onDone, attempt + 1);
@@ -2078,7 +3851,7 @@
             var id  = $(this).data('id');
             var btn = $(this);
             btn.prop('disabled', true).text('⏳');
-            ajax('tso_im_compress_pdf', {
+            ajax('tsoimma_compress_pdf', {
                 attachment_id: id,
                 quality: $('#imp-pdf-quality').val(),
                 replace: $('#imp-pdf-replace').is(':checked') ? 1 : 0
@@ -2132,7 +3905,7 @@
     function loadPdfs() {
         var grid = $('#imp-pdf-grid');
         grid.html('<div class="imp-loading">' + (L.loading_pdfs || 'Loading PDFs...') + '</div>');
-        ajax('tso_im_get_pdfs', { page: pdfState.page, per_page: pdfState.perPage, search: pdfState.search }, function(data) {
+        ajax('tsoimma_get_pdfs', { page: pdfState.page, per_page: pdfState.perPage, search: pdfState.search }, function(data) {
             var $eng = $('#imp-pdf-engine-status');
             if (data.gs_available) {
                 $eng.html('<span class="imp-pdf-engine-ok">✓ ' + (L.gs_available || 'GhostScript available') + '</span>');
@@ -2180,7 +3953,7 @@
         function next() {
             if (done >= total) { $('#imp-bulk-compress-pdf').prop('disabled', false); loadPdfs(); return; }
             var id = ids[done];
-            ajax('tso_im_compress_pdf', { attachment_id: id, quality: $('#imp-pdf-quality').val(), replace: 1 }, function(data) {
+            ajax('tsoimma_compress_pdf', { attachment_id: id, quality: $('#imp-pdf-quality').val(), replace: 1 }, function(data) {
                 if (data.status === 'processing') {
                     pollPdfStatusBulk(id, function(result) {
                         done++;
@@ -2214,18 +3987,18 @@
         });
         $('#imp-auto-history-clear-30').on('click', function() {
             if (!confirm(L.confirm_clean_30 || 'Delete entries older than 30 days?')) return;
-            ajax('tso_im_clear_history', { days: 30, type: 'auto_optimize' }, function() { autoHistState.page = 1; loadAutoHistory(); loadHistoryStats('#imp-auto-stats'); });
+            ajax('tsoimma_clear_history', { days: 30, type: 'auto_optimize' }, function() { autoHistState.page = 1; loadAutoHistory(); loadHistoryStats('#imp-auto-stats'); });
         });
         $('#imp-auto-history-clear-all').on('click', function() {
             if (!confirm(L.confirm_clean_all || 'Delete ALL history?')) return;
-            ajax('tso_im_clear_history', { days: 0, type: 'auto_optimize' }, function() { autoHistState.page = 1; loadAutoHistory(); loadHistoryStats('#imp-auto-stats'); });
+            ajax('tsoimma_clear_history', { days: 0, type: 'auto_optimize' }, function() { autoHistState.page = 1; loadAutoHistory(); loadHistoryStats('#imp-auto-stats'); });
         });
         $('#imp-fix-orphan-meta').on('click', function() {
             var $btn = $(this);
             var $res = $('#imp-fix-orphan-result');
             $btn.prop('disabled', true).text(L.btn_repairing || '⏳ Repairing...');
             $res.hide();
-            ajax('tso_im_fix_orphan_meta', {}, function(data) {
+            ajax('tsoimma_fix_orphan_meta', {}, function(data) {
                 $btn.prop('disabled', false).text(uiText('repair_paths', '🔧 Repair broken paths'));
                 $res.data('kind', 'repaired').data('count', (data.fixed || 0));
                 $res.show().css('color', 'var(--imp-success)').html('✓ ' + (data.fixed || 0) + ' ' + uiText('repaired_msg', 'images repaired.'));
@@ -2239,14 +4012,17 @@
         $('#imp-auto-enabled').on('change', function() { updateAutoToggleUI($(this).is(':checked')); });
         $('#imp-save-auto').on('click', function() {
             var selectedSourceFormats = $('.imp-auto-src-format:checked').map(function() { return $(this).val(); }).get();
-            ajax('tso_im_save_auto_settings', {
+            ajax('tsoimma_save_auto_settings', {
                 enabled: $('#imp-auto-enabled').is(':checked') ? 1 : 0,
                 format:  $('#imp-auto-format').val(),
                 quality: $('#imp-auto-quality').val(),
-                source_formats: selectedSourceFormats
+                source_formats: selectedSourceFormats,
+                fill_alt_on_upload: $('#imp-auto-fill-alt').is(':checked') ? 1 : 0,
+                skip_small_kb: $('#imp-auto-skip-kb').val()
             }, function(data) {
                 $('#imp-auto-saved').show().delay(2000).fadeOut();
                 updateAutoToggleUI(data.enabled);
+                markDashboardDirty();
             });
         });
         // ── Fix mime type mismatch ────────────────────────────────
@@ -2255,7 +4031,7 @@
             var $res = $('#imp-fix-mime-result');
             $btn.prop('disabled', true).text(L.btn_repairing || '⏳ Repairing...');
             $res.hide();
-            ajax('tso_im_fix_mime_mismatch', {}, function(data) {
+            ajax('tsoimma_fix_mime_mismatch', {}, function(data) {
                 $btn.prop('disabled', false).text(uiText('mime_fix_btn', '🔧 Fix incorrect mime types'));
                 var mimeMsg = data.fixed > 0
                     ? '✓ ' + data.fixed + ' ' + uiText('mime_fixed', 'attachments repaired.')
@@ -2281,7 +4057,7 @@
             $('#imp-ghost-actions').hide();
             ghostSelected.clear();
 
-            ajax('tso_im_find_ghost_attachments', {}, function(data) {
+            ajax('tsoimma_find_ghost_attachments', {}, function(data) {
                 $btn.prop('disabled', false).text('🔍 ' + uiText('scan_ghosts', 'Scan ghost attachments'));
                 if (!data.total) {
                     $res.data('kind', 'ghost_none').data('count', 0);
@@ -2346,7 +4122,7 @@
             var $res = $('#imp-ghost-delete-result');
             $btn.prop('disabled', true).text(L.btn_deleting || '⏳ Deleting...');
             $res.hide();
-            ajax('tso_im_delete_ghost_attachments', { ids: Array.from(ghostSelected) }, function(data) {
+            ajax('tsoimma_delete_ghost_attachments', { ids: Array.from(ghostSelected) }, function(data) {
                 $btn.prop('disabled', false).text('🗑 ' + uiText('delete_ghosts', 'Delete selected'));
                 var msg = '✓ ' + data.deleted + ' ' + (L.ghost_deleted_ok || 'deleted successfully.');
                 if (data.errors && data.errors.length) msg += ' ' + (L.errors_label || 'Errors:') + ' ' + data.errors.join(', ');
@@ -2360,6 +4136,7 @@
                 });
                 $('#imp-ghost-scan-result').text(($('#imp-ghost-list .imp-ghost-row').length - data.deleted) + ' ' + (L.remaining_label || 'remaining') + '.');
                 updateGhostToolbar();
+                markDashboardDirty();
             }, function(err) {
                 $btn.prop('disabled', false).text('🗑 ' + uiText('delete_ghosts', 'Delete selected'));
                 $res.show().css('color', 'var(--imp-danger)').text((L.error_prefix || 'Error: ') + err);
@@ -2368,7 +4145,7 @@
     }
 
     function loadAutoHistory() {
-        ajax('tso_im_get_history', { page: autoHistState.page, per_page: autoHistState.perPage, action_type: 'auto_optimize' }, function(data) {
+        ajax('tsoimma_get_history', { page: autoHistState.page, per_page: autoHistState.perPage, action_type: 'auto_optimize' }, function(data) {
             var wrap = $('#imp-auto-history-wrap');
             if (!data.items || !data.items.length) {
                 wrap.html('<div class="imp-loading">' + (L.no_auto_history || 'No auto-optimization entries.') + '</div>');
@@ -2388,7 +4165,7 @@
     }
 
     function loadAutoSettings() {
-        ajax('tso_im_get_auto_settings', {}, function(data) {
+        ajax('tsoimma_get_auto_settings', {}, function(data) {
             $('#imp-auto-enabled').prop('checked', !!data.enabled);
             $('#imp-auto-format').val(data.format || 'webp').trigger('change');
             $('#imp-auto-quality').val(data.quality || 82);
@@ -2397,6 +4174,8 @@
             (data.source_formats || ['jpg', 'png', 'webp']).forEach(function(fmt) {
                 $('.imp-auto-src-format[value="' + fmt + '"]').prop('checked', true);
             });
+            $('#imp-auto-fill-alt').prop('checked', !!data.fill_alt_on_upload);
+            $('#imp-auto-skip-kb').val(data.skip_small_kb || 0);
             updateAutoToggleUI(!!data.enabled);
         });
     }
@@ -2417,14 +4196,13 @@
     var histState = { page: 1, perPage: 50 };
 
     function initHistoryTab() {
-        // Empty = show all dates (default "today only" hid new optimize rows after filter/session drift).
         $('#imp-history-date-from').val('');
         $('#imp-history-date-to').val('');
         loadHistoryRetention();
         $('#imp-history-retention-save').on('click', function() {
             var $err = $('#imp-retention-error');
             $err.hide().text('');
-            ajax('tso_im_save_history_retention', {
+            ajax('tsoimma_save_history_retention', {
                 days: $('#imp-history-retention-days').val(),
                 interval: $('#imp-history-purge-interval').val()
             }, function(data) {
@@ -2439,20 +4217,14 @@
             histState.page = 1;
             loadHistory();
         });
-        $('#imp-history-clear-dates').on('click', function() {
-            $('#imp-history-date-from').val('');
-            $('#imp-history-date-to').val('');
-            histState.page = 1;
-            loadHistory();
-        });
         $('#imp-history-load').on('click', function() { histState.page = 1; loadHistory(); });
         $('#imp-history-clear-30').on('click', function() {
             if (!confirm(L.confirm_clean_30 || 'Delete entries older than 30 days?')) return;
-            ajax('tso_im_clear_history', { days: 30 }, function() { loadHistory(); loadHistoryStats('#imp-history-stats'); });
+            ajax('tsoimma_clear_history', { days: 30 }, function() { loadHistory(); loadHistoryStats('#imp-history-stats'); });
         });
         $('#imp-history-clear-all').on('click', function() {
             if (!confirm(L.confirm_clean_all || 'Delete ALL history?')) return;
-            ajax('tso_im_clear_history', { days: 0 }, function() {
+            ajax('tsoimma_clear_history', { days: 0 }, function() {
                 $('#imp-history-table-wrap').html('<div class="imp-loading">' + (L.history_empty || 'History empty.') + '</div>');
                 $('#imp-history-pagination').empty();
                 loadHistoryStats('#imp-history-stats');
@@ -2473,16 +4245,8 @@
         }
     }
 
-    function refreshHistoryUi() {
-        loadHistoryStats('#imp-history-stats');
-        if ($('#tab-history').hasClass('active')) {
-            histState.page = 1;
-            loadHistory();
-        }
-    }
-
     function loadHistoryRetention() {
-        ajax('tso_im_get_history_retention', {}, function(data) {
+        ajax('tsoimma_get_history_retention', {}, function(data) {
             applyHistoryRetention(data);
         });
     }
@@ -2490,7 +4254,7 @@
     function loadHistory() {
         var wrap = $('#imp-history-table-wrap');
         wrap.html('<div class="imp-loading">' + (L.loading_data || 'Loading...') + '</div>');
-        ajax('tso_im_get_history', {
+        ajax('tsoimma_get_history', {
             page: histState.page, per_page: histState.perPage,
             action_type: $('#imp-history-filter-type').val(),
             search:      $('#imp-history-search').val(),
@@ -2499,7 +4263,7 @@
         }, function(data) {
             renderHistoryTable(data.items);
             renderPagination('#imp-history-pagination', data.page, data.total_pages, function(p) { histState.page = p; loadHistory(); });
-        }, function(err) { wrap.html('<div class="imp-loading">' + (L.error_prefix || 'Error: ') + err + '</div>'); });
+        }, function(err) { wrap.html('<div class="imp-loading">' + (L.error_prefix || 'Error: ') + escHtml(err) + '</div>'); });
     }
 
     function renderHistoryTable(items) {
@@ -2513,17 +4277,40 @@
                 rename: uiText('action_rename', 'Renamed'),
                 seo_update: uiText('action_seo_update', 'SEO updated'),
                 delete: uiText('action_delete', 'Deleted'),
-                pdf_compress: uiText('action_pdf_compress', 'PDF compressed')
+                pdf_compress: uiText('action_pdf_compress', 'PDF compressed'),
+                revert: uiText('action_revert', 'Reverted')
             };
             var d    = item.details || {};
             var details = '';
             if (d.savings_pct)  details += '<span class="imp-history-savings">-' + d.savings_pct + '%</span> (' + formatBytes(d.savings_bytes || 0) + ')';
             if (d.old_filename && d.new_filename) details += '<span style="color:var(--imp-text-muted);display:block;font-size:11px">' + escHtml(d.old_filename) + '</span><span style="color:var(--imp-accent2);display:block;font-size:11px">\u2192 ' + escHtml(d.new_filename) + '</span>';
+            // SEO fields (seo_* keys; legacy alt/caption/description only — never auto-filled title).
+            var seoAlt = d.seo_alt || d.alt || '';
+            var seoTitle = (typeof d.seo_title === 'string') ? d.seo_title : '';
+            var seoCaption = d.seo_caption || d.caption || '';
+            var seoDesc = d.seo_description || d.description || '';
+            if (item.action_type === 'seo_update' || seoAlt || seoTitle || seoCaption || seoDesc) {
+                var seoBits = [];
+                if (seoTitle) seoBits.push('<strong>' + escHtml(uiText('seo_title_label', 'Title')) + ':</strong> ' + escHtml(seoTitle));
+                if (seoAlt) seoBits.push('<strong>' + escHtml(uiText('seo_alt_label', 'Alt')) + ':</strong> ' + escHtml(seoAlt));
+                if (seoCaption) seoBits.push('<strong>' + escHtml(uiText('seo_caption_label', 'Caption')) + ':</strong> ' + escHtml(seoCaption));
+                if (seoDesc) seoBits.push('<strong>' + escHtml(uiText('seo_desc_label', 'Description')) + ':</strong> ' + escHtml(String(seoDesc).slice(0, 120)));
+                if (d.source === 'dashboard_bulk_alt') seoBits.push('<span style="color:var(--imp-text-muted)">' + escHtml(uiText('hist_seo_bulk', 'Bulk fill')) + '</span>');
+                if (d.source === 'dashboard_inline_alt') seoBits.push('<span style="color:var(--imp-text-muted)">' + escHtml(uiText('hist_seo_dashboard', 'Dashboard')) + '</span>');
+                if (d.source === 'auto_upload_alt') seoBits.push('<span style="color:var(--imp-text-muted)">' + escHtml(uiText('hist_seo_auto', 'On upload')) + '</span>');
+                if (seoBits.length) {
+                    details += '<span style="display:block;font-size:11px;line-height:1.4">' + seoBits.join('<br>') + '</span>';
+                }
+            }
+            if (d.format && (item.action_type === 'optimize' || item.action_type === 'auto_optimize' || item.action_type === 'pdf_compress')) {
+                if (details) details += ' · ';
+                details += '<span style="font-size:11px;color:var(--imp-text-muted)">' + escHtml(String(d.format).toUpperCase()) + '</span>';
+            }
             if (!details) details = '<span style="color:var(--imp-text-muted)">—</span>';
             var thumb = item.thumb ? '<img class="imp-thumb-sm" src="' + escHtml(item.thumb) + '" alt="">' : '<span style="font-size:20px">📄</span>';
             var displayFile = d.filename || (d.new_filename || '—');
             var actionLabel = actionLabelMap[item.action_type] || item.action_label || item.action_type || '—';
-            var userLabel = (item.user_name === 'Sistema') ? uiText('system_user', 'System') : item.user_name;
+            var userLabel = (item.user_name === 'Sistema') ? uiText('system_user', 'System') : (item.user_name || '');
             html += '<tr><td>' + thumb + '</td><td style="font-family:var(--imp-mono);font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escHtml(displayFile) + '">' + escHtml(displayFile) + '</td><td><span class="imp-history-action ' + escHtml(item.action_type) + '">' + escHtml(actionLabel) + '</span></td><td style="max-width:220px">' + details + '</td><td style="font-size:12px;color:var(--imp-text-muted)">' + escHtml(userLabel) + '</td><td style="font-size:12px;color:var(--imp-text-muted);white-space:nowrap">' + escHtml(item.created_at_h) + '</td></tr>';
         });
         html += '</tbody></table></div>';
@@ -2531,7 +4318,7 @@
     }
 
     function loadHistoryStats(selector) {
-        ajax('tso_im_get_history_stats', {}, function(data) {
+        ajax('tsoimma_get_history_stats', {}, function(data) {
             var $el  = $(selector);
             var html = '<div class="imp-stat-card"><span class="imp-stat-label">' + uiText('stat_total', 'Total operations') + '</span><span class="imp-stat-val">' + data.total_operations + '</span></div>' +
                        '<div class="imp-stat-card"><span class="imp-stat-label">' + uiText('stat_saved', 'Space freed') + '</span><span class="imp-stat-val" style="color:var(--imp-success)">' + data.total_saved_h + '</span></div>';
@@ -2585,7 +4372,7 @@
             btn.prop('disabled', true).text(uiText('btn_scanning', '⏳ Scanning...'));
             $('#imp-url-result').hide();
             $('#imp-url-loading').show();
-            ajax('tso_im_scan_url_issues', {}, function(data) {
+            ajax('tsoimma_scan_url_issues', {}, function(data) {
                 btn.prop('disabled', false).text(uiText('scan_web', '🔍 Scan entire site'));
                 $('#imp-url-loading').hide();
                 urlIssues    = data.issues || [];
@@ -2653,7 +4440,7 @@
             urlIssues.forEach(function(issue) {
                 if (urlSelected.has(issue.old_url) && issue.has_fix) fixes.push({ old_url: issue.old_url, new_url: issue.new_url });
             });
-            ajax('tso_im_fix_url_issues', { fixes: fixes }, function(data) {
+            ajax('tsoimma_fix_url_issues', { fixes: fixes }, function(data) {
                 btn.prop('disabled', false).text(uiText('fix_selected', '✓ Fix selected'));
                 var msg = '✓ ' + data.fixed + ' ' + uiText('url_fixed_ok', 'URLs fixed.');
                 if (data.skipped) msg += ' (' + data.skipped + ' ' + uiText('skipped_suffix', 'skipped') + ')';
@@ -2676,7 +4463,7 @@
             var btn = $(this);
             btn.prop('disabled', true).text(uiText('url_removing', '⏳ Removing...'));
             var urls = Array.from(urlRemoveSelected);
-            ajax('tso_im_remove_url_issues', { urls: urls }, function(data) {
+            ajax('tsoimma_remove_url_issues', { urls: urls }, function(data) {
                 btn.prop('disabled', false).text(uiText('remove_selected', '🗑 Remove from content'));
                 var msg = '✓ ' + data.removed + ' ' + uiText('url_removed_ok', 'URL references removed.');
                 if (data.skipped) msg += ' (' + data.skipped + ' ' + uiText('skipped_suffix', 'skipped') + ')';

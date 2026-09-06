@@ -54,7 +54,7 @@ class TSOIMMA_Admin_Page {
 
         wp_localize_script( 'tso-im-admin-js', 'TSOIMMA', array(
             'ajax_url' => admin_url( 'admin-ajax.php' ),
-            'nonce'    => wp_create_nonce( 'tso_im_nonce' ),
+            'nonce'    => wp_create_nonce( TSOIMMA_NONCE_AJAX ),
             'site_url' => get_site_url(),
             'webp_ok'  => TSOIMMA_Optimizer::webp_supported() ? '1' : '0',
             // All UI strings are passed here so admin.js has no inline i18n data.
@@ -160,6 +160,86 @@ class TSOIMMA_Admin_Page {
                 'no_ghosts'           => __( 'No ghost attachments found.', 'tso-image-master' ),
                 'delete_ghosts'       => __( 'Delete selected', 'tso-image-master' ),
                 'confirm_delete_ghosts' => __( 'Delete', 'tso-image-master' ),
+                'tab_dashboard'       => __( 'Overview', 'tso-image-master' ),
+                'dash_title'            => __( 'Site overview', 'tso-image-master' ),
+                'dash_desc'             => __( 'Quick view of image health, available engines, and pending actions.', 'tso-image-master' ),
+                'dash_total_images'     => __( 'Images in library', 'tso-image-master' ),
+                'dash_missing_alt'      => __( 'Missing alt text', 'tso-image-master' ),
+                'dash_backups'          => __( 'TSO backups', 'tso-image-master' ),
+                'dash_saved'            => __( 'Space saved', 'tso-image-master' ),
+                'dash_operations'       => __( 'Plugin operations', 'tso-image-master' ),
+                'dash_auto_on'          => __( 'Auto-optimize ON', 'tso-image-master' ),
+                'dash_auto_off'         => __( 'Auto-optimize OFF', 'tso-image-master' ),
+                'dash_auto_label'       => __( 'Auto-optimize', 'tso-image-master' ),
+                'dash_auto_status_on'   => __( 'ON', 'tso-image-master' ),
+                'dash_auto_status_off'  => __( 'OFF', 'tso-image-master' ),
+                'dash_auto_format_sub'  =>
+                    /* translators: %s: output format name (e.g. WebP, AVIF, JPG). */
+                    __( 'Output format: %s', 'tso-image-master' ),
+                'dash_auto_disabled_hint' => __( 'Disabled — enable in Auto tab', 'tso-image-master' ),
+                'dash_alt_title'        => __( 'Images without alt (or generic alt)', 'tso-image-master' ),
+                'dash_alt_desc'         => __( 'Suggests alt from title or filename. Click ✎ to edit a row; Save (green) stores the alt. Bulk fill uses your edited text.', 'tso-image-master' ),
+                'dash_alt_used_only'    => __( 'Only used in content', 'tso-image-master' ),
+                'dash_alt_used_only_tip' => __( 'Shows only images referenced in posts, pages, featured images, widgets, or custom fields. Hides unused library uploads.', 'tso-image-master' ),
+                'dash_alt_fill'         => __( 'Fill alt for selected', 'tso-image-master' ),
+                'dash_alt_fill_tip'     => __( 'Writes the suggested alt (title if useful, otherwise humanized filename) into each selected image. Skips images that already have useful alt text.', 'tso-image-master' ),
+                'dash_alt_suggested'    => __( 'Suggested alt', 'tso-image-master' ),
+                'dash_alt_file_col'     => __( 'File', 'tso-image-master' ),
+                'dash_alt_used_in'      => __( 'Used in', 'tso-image-master' ),
+                'dash_alt_updated'      => __( 'alt texts updated.', 'tso-image-master' ),
+                'dash_alt_skipped'      => __( 'skipped (already had alt).', 'tso-image-master' ),
+                'dash_alt_manual_hint'  => __( 'Write alt text…', 'tso-image-master' ),
+                'dash_engine_gd'        => __( 'GD WebP', 'tso-image-master' ),
+                'dash_engine_gs'        => __( 'GhostScript', 'tso-image-master' ),
+                'dash_engine_imagick'   => __( 'Imagick', 'tso-image-master' ),
+                'dash_go_orphans'       => __( 'Find orphans', 'tso-image-master' ),
+                'dash_go_urls'          => __( 'Fix URLs', 'tso-image-master' ),
+                'dash_alt_all_ok'       => __( 'All images have useful alt text.', 'tso-image-master' ),
+                'dash_engine_avif'      => __( 'GD AVIF', 'tso-image-master' ),
+                'dash_engine_info_title' => __( 'Server engines', 'tso-image-master' ),
+                'dash_engine_gd_desc'   => __( 'PHP GD with WebP read/write. Required for WebP conversion and most image optimization.', 'tso-image-master' ),
+                'dash_engine_avif_desc' => __( 'PHP GD with AVIF read/write. Needed only when you choose AVIF as output format.', 'tso-image-master' ),
+                'dash_engine_gs_desc'   => __( 'Command-line tool used to compress PDF files in the PDFs tab.', 'tso-image-master' ),
+                'dash_engine_imagick_desc' => __( 'ImageMagick PHP extension. Used as fallback for PDF compression and some image tasks.', 'tso-image-master' ),
+                'dash_engine_available' => __( 'Available on this server.', 'tso-image-master' ),
+                'dash_engine_unavailable' => __( 'Not available on this server.', 'tso-image-master' ),
+                'dash_engine_why_fail'  => __( 'Why it is not working', 'tso-image-master' ),
+                'dash_engine_close'     => __( 'Close', 'tso-image-master' ),
+                'dash_queue_title'      => __( 'Background queue', 'tso-image-master' ),
+                'dash_queue_desc'       => __( 'Bulk optimize jobs run in the background via WP-Cron (5 images per batch).', 'tso-image-master' ),
+                'dash_queue_cancel'     => __( 'Cancel pending jobs', 'tso-image-master' ),
+                'dash_queue_empty'      => __( 'Queue is empty.', 'tso-image-master' ),
+                'dash_queue_done'       => __( 'done', 'tso-image-master' ),
+                'dash_queue_pending'    => __( 'pending', 'tso-image-master' ),
+                'dash_queue_errors'     => __( 'errors', 'tso-image-master' ),
+                'dash_queue_queued'     => __( 'Queued for background processing...', 'tso-image-master' ),
+                'dash_queue_queued_n'   => __( 'images queued.', 'tso-image-master' ),
+                'dash_backup_title'     => __( 'Backup retention', 'tso-image-master' ),
+                'dash_backup_desc'      => __( 'Auto-delete TSO backups under uploads/tso-image-master/ (0 = disabled).', 'tso-image-master' ),
+                'dash_backup_days'      => __( 'Keep backups (days)', 'tso-image-master' ),
+                'dash_backup_max'       => __( 'Max total size (MB, 0 = unlimited)', 'tso-image-master' ),
+                'dash_backup_purge'     => __( 'Purge now', 'tso-image-master' ),
+                'dash_backup_purge_noop'=> __( 'Retention is disabled (0 days and 0 MB). Nothing to purge.', 'tso-image-master' ),
+                'dash_dup_title'        => __( 'Duplicate images', 'tso-image-master' ),
+                'dash_dup_scan'         => __( 'Scan duplicates', 'tso-image-master' ),
+                'dash_dup_none'         => __( 'No duplicate groups found.', 'tso-image-master' ),
+                'dash_dup_groups'       => __( 'duplicate groups', 'tso-image-master' ),
+                'dash_dup_wasted'       => __( 'Wasted space', 'tso-image-master' ),
+                'dash_heavy_btn'        => __( 'Largest images', 'tso-image-master' ),
+                'auto_skip_kb_label'    => __( 'Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)', 'tso-image-master' ),
+                'auto_fill_alt_label'   => __( 'Fill missing alt text on upload', 'tso-image-master' ),
+                'fmt_avif'              => __( 'AVIF', 'tso-image-master' ),
+                'fmt_png'               => __( 'PNG', 'tso-image-master' ),
+                'fmt_webp'              => __( 'WebP (recommended)', 'tso-image-master' ),
+                'fmt_keep'              => __( 'Keep original format', 'tso-image-master' ),
+                'fmt_keep_current'      => __( 'Keep current format', 'tso-image-master' ),
+                'per_page_21'           => __( '📄 21 per page', 'tso-image-master' ),
+                'per_page_35'           => __( '📄 35 per page', 'tso-image-master' ),
+                'per_page_49'           => __( '📄 49 per page', 'tso-image-master' ),
+                'per_page_70'           => __( '📄 70 per page', 'tso-image-master' ),
+                'per_page_105'          => __( '📄 105 per page', 'tso-image-master' ),
+                'hist_seo_bulk'         => __( 'Bulk fill', 'tso-image-master' ),
+                'hist_seo_auto'         => __( 'On upload', 'tso-image-master' ),
             ),
         ) );
     }
@@ -191,6 +271,7 @@ class TSOIMMA_Admin_Page {
      */
     private static function format_output_options( $keep_label, $keep_i18n ) {
         $webp_ok = TSOIMMA_Optimizer::webp_supported();
+        $avif_ok = TSOIMMA_Optimizer::avif_supported();
         return array(
             array(
                 'value'    => 'webp',
@@ -199,8 +280,19 @@ class TSOIMMA_Admin_Page {
                 'disabled' => ! $webp_ok,
             ),
             array(
+                'value'    => 'avif',
+                'label'    => 'AVIF',
+                'i18n'     => 'fmt_avif',
+                'disabled' => ! $avif_ok,
+            ),
+            array(
                 'value' => 'jpg',
                 'label' => 'JPG',
+            ),
+            array(
+                'value' => 'png',
+                'label' => 'PNG',
+                'i18n'  => 'fmt_png',
             ),
             array(
                 'value' => 'original',
@@ -208,6 +300,34 @@ class TSOIMMA_Admin_Page {
                 'i18n'  => $keep_i18n,
             ),
         );
+    }
+
+    /**
+     * Per-page options for image grids (multiples of 7 for the 7-column layout).
+     *
+     * @param string $selected Selected value.
+     * @return array<int, array<string, mixed>>
+     */
+    private static function per_page_options( $selected = '35' ) {
+        $selected = (string) $selected;
+        // Default labels in Catalan (UI markup language); JS i18n switches CA/ES/EN.
+        $map      = array(
+            '21'  => '📄 21 / pàgina',
+            '35'  => '📄 35 / pàgina',
+            '49'  => '📄 49 / pàgina',
+            '70'  => '📄 70 / pàgina',
+            '105' => '📄 105 / pàgina',
+        );
+        $options = array();
+        foreach ( $map as $value => $label ) {
+            $options[] = array(
+                'value'    => $value,
+                'label'    => $label,
+                'i18n'     => 'per_page_' . $value,
+                'selected' => ( $selected === (string) $value ),
+            );
+        }
+        return $options;
     }
 
     /**
@@ -301,6 +421,36 @@ class TSOIMMA_Admin_Page {
         echo '</div>';
     }
 
+    /**
+     * Search field with a clear (×) control on the right.
+     *
+     * @param array $args id, placeholder, placeholder_i18n.
+     * @return void
+     */
+    public static function render_search_field( $args ) {
+        $args = wp_parse_args(
+            $args,
+            array(
+                'id'               => '',
+                'placeholder'      => '',
+                'placeholder_i18n' => '',
+            )
+        );
+
+        $clear_label = __( 'Clear search', 'tso-image-master' );
+
+        echo '<div class="imp-search-wrap">';
+        echo '<input type="text" id="' . esc_attr( $args['id'] ) . '" class="imp-search" placeholder="' . esc_attr( $args['placeholder'] ) . '"';
+        if ( ! empty( $args['placeholder_i18n'] ) ) {
+            echo ' data-i18n-placeholder="' . esc_attr( $args['placeholder_i18n'] ) . '"';
+        }
+        echo '>';
+        echo '<button type="button" class="imp-search-clear" aria-label="' . esc_attr( $clear_label ) . '" title="' . esc_attr( $clear_label ) . '" tabindex="-1" hidden>';
+        echo '<span aria-hidden="true">&times;</span>';
+        echo '</button>';
+        echo '</div>';
+    }
+
     public static function render_page() {
         ?>
         <div id="imp-app" class="imp-wrap">
@@ -327,33 +477,117 @@ class TSOIMMA_Admin_Page {
 
             <!-- TABS -->
             <nav class="imp-tabs" role="tablist">
-                <button class="imp-tab active" data-tab="optimize" role="tab">
-                    <span>🔧</span> <span data-i18n="tab_optimize">Optimitzar</span>
+                <button class="imp-tab active" data-tab="dashboard" role="tab">
+                    <span>📊</span> <span data-i18n="tab_dashboard"><?php esc_html_e( 'Overview', 'tso-image-master' ); ?></span>
+                </button>
+                <button class="imp-tab" data-tab="optimize" role="tab">
+                    <span>🔧</span> <span data-i18n="tab_optimize"><?php esc_html_e( 'Optimize', 'tso-image-master' ); ?></span>
                 </button>
                 <button class="imp-tab" data-tab="orphans" role="tab">
-                    <span>🔍</span> <span data-i18n="tab_orphans">Imatges Òrfenes</span>
+                    <span>🔍</span> <span data-i18n="tab_orphans"><?php esc_html_e( 'Orphan Images', 'tso-image-master' ); ?></span>
                 </button>
                 <button class="imp-tab" data-tab="seo" role="tab">
-                    <span>✏️</span> <span data-i18n="tab_seo">SEO & Noms</span>
+                    <span>✏️</span> <span data-i18n="tab_seo"><?php esc_html_e( 'SEO & Names', 'tso-image-master' ); ?></span>
                 </button>
                 <button class="imp-tab" data-tab="pdf" role="tab">
-                    <span>📄</span> <span data-i18n="tab_pdf">PDFs</span>
+                    <span>📄</span> <span data-i18n="tab_pdf"><?php esc_html_e( 'PDFs', 'tso-image-master' ); ?></span>
                 </button>
                 <button class="imp-tab" data-tab="auto" role="tab">
-                    <span>🤖</span> <span data-i18n="tab_auto">Auto-optimització</span>
-                </button>
-                <button class="imp-tab" data-tab="history" role="tab">
-                    <span>📋</span> <span data-i18n="tab_history">Historial</span>
+                    <span>🤖</span> <span data-i18n="tab_auto"><?php esc_html_e( 'Auto-optimization', 'tso-image-master' ); ?></span>
                 </button>
                 <button class="imp-tab" data-tab="urlfixer" role="tab">
-                    <span>🔗</span> <span data-i18n="tab_urls">URLs</span>
+                    <span>🔗</span> <span data-i18n="tab_urls"><?php esc_html_e( 'URLs', 'tso-image-master' ); ?></span>
+                </button>
+                <button class="imp-tab" data-tab="history" role="tab">
+                    <span>📋</span> <span data-i18n="tab_history"><?php esc_html_e( 'History', 'tso-image-master' ); ?></span>
                 </button>
             </nav>
 
             <!-- =====================================================
+                 TAB: DASHBOARD
+                 ===================================================== -->
+            <div id="tab-dashboard" class="imp-tab-content active">
+                <div class="imp-panel">
+                    <h2 class="imp-panel-title" data-i18n="dash_title"><?php esc_html_e( 'Site overview', 'tso-image-master' ); ?></h2>
+                    <p class="imp-panel-desc" data-i18n="dash_desc"><?php esc_html_e( 'Quick view of image health, available engines, and pending actions.', 'tso-image-master' ); ?></p>
+                    <div id="imp-dashboard-stats" class="imp-stats-grid">
+                        <div class="imp-loading" data-i18n="loading_data">Carregant...</div>
+                    </div>
+                    <div id="imp-dashboard-engines" class="imp-engine-row"></div>
+                </div>
+
+                <div class="imp-panel">
+                    <div class="imp-toolbar" style="margin-bottom:16px;">
+                        <div class="imp-toolbar-left">
+                            <h2 class="imp-panel-title" style="margin:0;" data-i18n="dash_alt_title">Imatges sense alt (o alt genèric)</h2>
+                        </div>
+                        <div class="imp-toolbar-right">
+                            <label class="imp-field-check" style="margin:0;">
+                                <input type="checkbox" id="imp-alt-used-only">
+                                <span data-i18n="dash_alt_used_only">Només usades en contingut</span>
+                                <button type="button" class="imp-help-tip" data-help="dash_alt_used_only_tip" aria-label="?">?</button>
+                            </label>
+                            <button id="imp-alt-select-all" class="imp-btn imp-btn-ghost" data-i18n="select_all">Seleccionar tot</button>
+                            <button id="imp-alt-deselect" class="imp-btn imp-btn-ghost" data-i18n="deselect">Deseleccionar</button>
+                            <button id="imp-alt-bulk-fill" class="imp-btn imp-btn-primary" data-i18n="dash_alt_fill">Omplir alt seleccionades</button>
+                            <button type="button" class="imp-help-tip" data-help="dash_alt_fill_tip" aria-label="?">?</button>
+                        </div>
+                    </div>
+                    <p class="imp-panel-desc" data-i18n="dash_alt_desc">Suggereix alt des del títol o nom de fitxer. Clica ✎ per editar una fila; Desar (verd) guarda l'alt. «Omplir alt seleccionades» usa el text editat.</p>
+                    <div class="imp-alt-list-head">
+                        <span></span><span></span><span data-i18n="dash_alt_file_col">Fitxer</span><span data-i18n="dash_alt_suggested">Alt suggerit</span><span data-i18n="dash_alt_used_in">Usada a</span>
+                    </div>
+                    <div id="imp-alt-grid" class="imp-alt-list">
+                        <div class="imp-loading" data-i18n="loading_data">Carregant...</div>
+                    </div>
+                    <div id="imp-alt-pagination" class="imp-pagination"></div>
+                    <div id="imp-alt-bulk-result" style="display:none;margin-top:12px;font-size:13px;"></div>
+                </div>
+
+                <div class="imp-dash-split">
+                <div class="imp-panel">
+                    <h2 class="imp-panel-title" data-i18n="dash_queue_title">Cua en segon pla</h2>
+                    <p class="imp-panel-desc" data-i18n="dash_queue_desc">Les optimitzacions massives s'executen en segon pla via WP-Cron (5 imatges per lot).</p>
+                    <div id="imp-queue-status" class="imp-queue-status"></div>
+                    <button id="imp-queue-cancel" class="imp-btn imp-btn-ghost" data-i18n="dash_queue_cancel">Cancel·lar jobs pendents</button>
+                </div>
+
+                <div class="imp-panel">
+                    <h2 class="imp-panel-title" data-i18n="dash_backup_title">Retenció de còpies de seguretat</h2>
+                    <p class="imp-panel-desc" data-i18n="dash_backup_desc">Elimina automàticament les còpies TSO a uploads/tso-image-master/ (0 = desactivat).</p>
+                    <div class="imp-settings-grid imp-backup-retention-grid">
+                        <div class="imp-field">
+                            <label for="imp-backup-days" data-i18n="dash_backup_days">Conservar còpies (dies)</label>
+                            <input type="number" id="imp-backup-days" min="0" max="3650" value="0">
+                        </div>
+                        <div class="imp-field">
+                            <label for="imp-backup-max-mb" data-i18n="dash_backup_max">Mida màxima total (MB, 0 = il·limitat)</label>
+                            <input type="number" id="imp-backup-max-mb" min="0" max="102400" value="0">
+                        </div>
+                    </div>
+                    <div class="imp-backup-retention-actions">
+                        <button id="imp-save-backup-retention" class="imp-btn imp-btn-primary" data-i18n="save_config">Guardar configuració</button>
+                        <button id="imp-purge-backups-now" class="imp-btn imp-btn-ghost" data-i18n="dash_backup_purge">Purga ara</button>
+                    </div>
+                    <span id="imp-backup-retention-msg" style="display:none;margin-top:10px;font-size:13px;"></span>
+                </div>
+                </div>
+
+                <div class="imp-panel">
+                    <div class="imp-toolbar" style="margin-bottom:12px;">
+                        <h2 class="imp-panel-title" style="margin:0;" data-i18n="dash_dup_title">Imatges duplicades</h2>
+                        <button id="imp-scan-duplicates" class="imp-btn imp-btn-ghost" data-i18n="dash_dup_scan">Escanejar duplicats</button>
+                        <button id="imp-heavy-images" class="imp-btn imp-btn-ghost imp-dash-jump" data-jump-tab="optimize" data-i18n="dash_heavy_btn">Imatges més pesades</button>
+                    </div>
+                    <div id="imp-duplicates-result"></div>
+                    <div id="imp-duplicates-list"></div>
+                </div>
+            </div>
+
+            <!-- =====================================================
                  TAB: OPTIMITZAR
                  ===================================================== -->
-            <div id="tab-optimize" class="imp-tab-content active">
+            <div id="tab-optimize" class="imp-tab-content">
                 <div class="imp-panel">
                     <h2 class="imp-panel-title" data-i18n="opt_config_title">Configuració d'Optimització</h2>
                     <div class="imp-settings-grid">
@@ -377,9 +611,28 @@ class TSOIMMA_Admin_Page {
                 <!-- Toolbar -->
                 <div class="imp-toolbar">
                     <div class="imp-toolbar-left">
-                        <input type="text" id="imp-search-opt" class="imp-search" placeholder="🔎 Cercar imatge..." data-i18n-placeholder="search_image_ph">
+                        <?php
+                        self::render_search_field(
+                            array(
+                                'id'               => 'imp-search-opt',
+                                'placeholder'      => '🔎 Cercar imatge...',
+                                'placeholder_i18n' => 'search_image_ph',
+                            )
+                        );
+                        ?>
                         <button id="imp-select-all" class="imp-btn imp-btn-ghost" data-i18n="select_all">Seleccionar tot</button>
                         <button id="imp-deselect-all" class="imp-btn imp-btn-ghost" data-i18n="deselect">Deseleccionar</button>
+                        <?php
+                        self::render_custom_select(
+                            array(
+                                'id'         => 'imp-opt-per-page',
+                                'class'      => 'imp-select',
+                                'wrap_style' => 'width:auto;min-width:150px;',
+                                'selected'   => '35',
+                                'options'    => self::per_page_options( '35' ),
+                            )
+                        );
+                        ?>
                     </div>
                     <div class="imp-toolbar-right">
                         <span id="imp-selected-count" class="imp-count-badge">0 seleccionades</span>
@@ -495,7 +748,15 @@ class TSOIMMA_Admin_Page {
             <div id="tab-seo" class="imp-tab-content">
                 <div class="imp-toolbar">
                     <div class="imp-toolbar-left">
-                        <input type="text" id="imp-search-seo" class="imp-search" placeholder="🔎 Cercar imatge..." data-i18n-placeholder="search_image_ph">
+                        <?php
+                        self::render_search_field(
+                            array(
+                                'id'               => 'imp-search-seo',
+                                'placeholder'      => '🔎 Cercar imatge...',
+                                'placeholder_i18n' => 'search_image_ph',
+                            )
+                        );
+                        ?>
                         <?php
                         self::render_custom_select(
                             array(
@@ -508,6 +769,15 @@ class TSOIMMA_Admin_Page {
                                     array( 'value' => 'date', 'label' => '📅 Ordenar per data de creació', 'i18n' => 'sort_date' ),
                                     array( 'value' => 'modified', 'label' => '✏️ Ordenar per data de modificació', 'i18n' => 'sort_modified' ),
                                 ),
+                            )
+                        );
+                        self::render_custom_select(
+                            array(
+                                'id'         => 'imp-seo-per-page',
+                                'class'      => 'imp-select',
+                                'wrap_style' => 'width:auto;min-width:150px;',
+                                'selected'   => '35',
+                                'options'    => self::per_page_options( '35' ),
                             )
                         );
                         ?>
@@ -716,7 +986,15 @@ class TSOIMMA_Admin_Page {
                 </div>
                 <div class="imp-toolbar">
                     <div class="imp-toolbar-left">
-                        <input type="text" id="imp-search-pdf" class="imp-search" placeholder="🔎 Cercar PDF..." data-i18n-placeholder="search_pdf_ph">
+                        <?php
+                        self::render_search_field(
+                            array(
+                                'id'               => 'imp-search-pdf',
+                                'placeholder'      => '🔎 Cercar PDF...',
+                                'placeholder_i18n' => 'search_pdf_ph',
+                            )
+                        );
+                        ?>
                         <button id="imp-pdf-select-all" class="imp-btn imp-btn-ghost" data-i18n="select_all">Seleccionar tot</button>
                         <button id="imp-pdf-deselect" class="imp-btn imp-btn-ghost" data-i18n="deselect">Deseleccionar</button>
                     </div>
@@ -771,6 +1049,19 @@ class TSOIMMA_Admin_Page {
                                 <label class="imp-auto-src-item"><input type="checkbox" class="imp-auto-src-format" value="gif" checked> <span data-i18n="auto_src_gif">GIF (només estàtic)</span></label>
                                 <label class="imp-auto-src-item"><input type="checkbox" class="imp-auto-src-format" value="bmp" checked> <span data-i18n="auto_src_bmp">BMP</span></label>
                                 <label class="imp-auto-src-item"><input type="checkbox" class="imp-auto-src-format" value="tiff" checked> <span data-i18n="auto_src_tiff">TIFF</span></label>
+                            </div>
+                        </div>
+                        <div class="imp-auto-extra-row">
+                            <div class="imp-field">
+                                <label for="imp-auto-skip-kb" data-i18n="auto_skip_kb_label">Ometre auto-optimitzar si WebP/AVIF ≤ (KB, 0 = off)</label>
+                                <input type="number" id="imp-auto-skip-kb" min="0" max="5120" value="0">
+                            </div>
+                            <div class="imp-field imp-field-check">
+                                <label>
+                                    <input type="checkbox" id="imp-auto-fill-alt">
+                                    <span data-i18n="auto_fill_alt_label">Omplir alt absent en pujar</span>
+                                    <button type="button" class="imp-help-tip" data-help="dash_alt_fill_tip" aria-label="?">?</button>
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -866,7 +1157,6 @@ class TSOIMMA_Admin_Page {
                     </div>
                     <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
                         <button id="imp-history-load" class="imp-btn imp-btn-primary"data-i18n="history_load">🔄 Carregar / filtrar</button>
-                        <button type="button" id="imp-history-clear-dates" class="imp-btn imp-btn-ghost" data-i18n="history_clear_dates">📅 Totes les dates</button>
                         <button id="imp-history-clear-30" class="imp-btn imp-btn-ghost" data-i18n="clear_30">🗑️ Netejar >30 dies</button>
                         <button id="imp-history-clear-all" class="imp-btn imp-btn-danger" data-i18n="clear_all">🗑️ Netejar tot</button>
                     </div>
@@ -956,6 +1246,21 @@ class TSOIMMA_Admin_Page {
                     </div>
 
                     <div id="imp-url-list"></div>
+                </div>
+            </div>
+
+            <div id="imp-engine-info-modal" class="imp-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="imp-engine-info-title">
+                <div class="imp-modal-overlay imp-engine-info-close"></div>
+                <div class="imp-engine-info-box">
+                    <button type="button" class="imp-modal-close imp-engine-info-close" aria-label="Tancar">✕</button>
+                    <h4 id="imp-engine-info-title"></h4>
+                    <div id="imp-engine-info-status" class="imp-engine-info-status"></div>
+                    <p id="imp-engine-info-desc"></p>
+                    <div id="imp-engine-info-reason-wrap" style="display:none;">
+                        <strong style="font-size:12px;display:block;margin-bottom:6px;" data-i18n="dash_engine_why_fail">Per què no funciona</strong>
+                        <div id="imp-engine-info-reason" class="imp-engine-info-reason"></div>
+                    </div>
+                    <button type="button" class="imp-btn imp-btn-ghost imp-engine-info-close" style="margin-top:14px;" data-i18n="dash_engine_close">Tancar</button>
                 </div>
             </div>
 

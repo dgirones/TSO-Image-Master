@@ -3,9 +3,30 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 class TSOIMMA_History {
 
-    const TABLE   = 'tso_im_history';
-    const DB_VER  = '1.0';
-    const OPT_VER = 'tsoimma_db_version';
+    const TABLE         = 'tsoimma_history';
+    const TABLE_LEGACY  = 'tso_im_history';
+    const DB_VER        = '1.2';
+    const OPT_VER       = 'tsoimma_db_version';
+    const OPT_LEGACY_MERGED = 'tsoimma_history_legacy_merged';
+
+    /**
+     * Per-request cache for SHOW TABLES discovery.
+     *
+     * @var array{canonical: string, canonical_exists: bool, legacy: string[]}|null
+     */
+    private static $discovered_tables = null;
+
+    /**
+     * Per-request table existence cache.
+     *
+     * @var array<string, bool>
+     */
+    private static $table_exists_cache = array();
+
+    /**
+     * @var bool
+     */
+    private static $maybe_install_ran = false;
 
     /** @var string[] Allowed WP-Cron intervals for history auto-purge. */
     const PURGE_INTERVALS = array( 'daily', 'weekly', 'monthly' );
@@ -83,69 +104,297 @@ class TSOIMMA_History {
             require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         }
         dbDelta( $sql );
+        self::set_named_table_exists( $table, true );
+        self::reset_table_discovery_cache();
         update_option( self::OPT_VER, self::DB_VER );
     }
 
     public static function maybe_install() {
-        global $wpdb;
+        if ( self::$maybe_install_ran ) {
+            return;
+        }
+        self::$maybe_install_ran = true;
+
         try {
-            // Migració: renomenar taules antigues → wp_tso_im_history (una sola vegada)
-            $new_table       = $wpdb->prefix . self::TABLE;
-            $old_table_names = array(
-                $wpdb->prefix . 'imp_history',  // nom original
-                $wpdb->prefix . 'tso_history',  // nom intermedi v1
-            );
-            // Només intentar migrar si la taula destí NO existeix encara
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-            $new_exists = (int) $wpdb->get_var( $wpdb->prepare(
-                'SELECT COUNT(1) FROM information_schema.tables WHERE table_schema = %s AND table_name = %s LIMIT 1',
-                DB_NAME,
-                $new_table
-            ) );
+            self::migrate_history_tables();
 
-            if ( ! $new_exists ) {
-                foreach ( $old_table_names as $old_table ) {
-                    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-                    $old_exists = (int) $wpdb->get_var( $wpdb->prepare(
-                        'SELECT COUNT(1) FROM information_schema.tables WHERE table_schema = %s AND table_name = %s LIMIT 1',
-                        DB_NAME,
-                        $old_table
-                    ) );
-                    if ( $old_exists ) {
-                        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepareReplacement
-                        $wpdb->query( "RENAME TABLE `{$old_table}` TO `{$new_table}`" ); // phpcs:ignore
-                        break;
-                    }
-                }
-            }
-
-            // Instal·lar si la versió no coincideix O si la taula no existeix
             if ( get_option( self::OPT_VER ) !== self::DB_VER || ! self::table_exists() ) {
                 self::install();
             }
         } catch ( \Throwable $e ) {
+            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+                error_log( 'TSOIMMA_History::maybe_install: ' . $e->getMessage() );
+            }
         }
+    }
+
+    /**
+     * Rename, merge, and drop legacy history tables into the canonical table.
+     *
+     * @return void
+     */
+    private static function migrate_history_tables() {
+        if ( '1' === get_option( self::OPT_LEGACY_MERGED, '' ) ) {
+            return;
+        }
+
+        global $wpdb;
+
+        $discovered       = self::discover_history_tables();
+        $new_table        = $discovered['canonical'];
+        $legacy           = $discovered['legacy'];
+        $canonical_exists = ! empty( $discovered['canonical_exists'] );
+
+        if ( ! $canonical_exists && ! empty( $legacy ) ) {
+            $old_table = array_shift( $legacy );
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $wpdb->query( "RENAME TABLE `{$old_table}` TO `{$new_table}`" );
+            self::reset_table_discovery_cache();
+            $discovered       = self::discover_history_tables();
+            $new_table        = $discovered['canonical'];
+            $legacy           = $discovered['legacy'];
+            $canonical_exists = ! empty( $discovered['canonical_exists'] );
+        }
+
+        if ( ! $canonical_exists ) {
+            return;
+        }
+
+        foreach ( $legacy as $old_table ) {
+            if ( $old_table === $new_table ) {
+                continue;
+            }
+            if ( ! self::copy_history_rows( $old_table, $new_table ) ) {
+                if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                    // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+                    error_log( 'TSOIMMA_History merge failed (' . $old_table . '): ' . $wpdb->last_error );
+                }
+                continue;
+            }
+            self::drop_named_table( $old_table );
+            self::reset_table_discovery_cache();
+        }
+
+        $discovered = self::discover_history_tables();
+        if ( empty( $discovered['legacy'] ) ) {
+            update_option( self::OPT_LEGACY_MERGED, '1' );
+        }
+    }
+
+    /**
+     * Discover canonical and legacy history tables with one SHOW TABLES query.
+     *
+     * @return array{canonical: string, canonical_exists: bool, legacy: string[]}
+     */
+    private static function discover_history_tables() {
+        if ( null !== self::$discovered_tables ) {
+            return self::$discovered_tables;
+        }
+
+        global $wpdb;
+
+        $canonical_suffix = self::TABLE;
+        $legacy_suffixes  = array(
+            'imp_history',
+            'tso_history',
+            self::TABLE_LEGACY,
+        );
+        $expected_canonical = $wpdb->prefix . self::TABLE;
+
+        $result = array(
+            'canonical'        => $expected_canonical,
+            'canonical_exists' => false,
+            'legacy'           => array(),
+        );
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+        $tables = $wpdb->get_col(
+            $wpdb->prepare(
+                'SHOW TABLES LIKE %s',
+                $wpdb->esc_like( $wpdb->prefix ) . '%'
+            )
+        );
+
+        foreach ( (array) $tables as $table ) {
+            if ( ! is_string( $table ) || '' === $table ) {
+                continue;
+            }
+
+            self::$table_exists_cache[ $table ] = true;
+
+            if ( self::table_name_ends_with( $table, $canonical_suffix ) ) {
+                $result['canonical']        = $table;
+                $result['canonical_exists'] = true;
+                continue;
+            }
+
+            foreach ( $legacy_suffixes as $suffix ) {
+                if ( self::table_name_ends_with( $table, $suffix ) ) {
+                    $result['legacy'][] = $table;
+                    break;
+                }
+            }
+        }
+
+        self::$discovered_tables = $result;
+
+        return $result;
+    }
+
+    /**
+     * @return void
+     */
+    private static function reset_table_discovery_cache() {
+        self::$discovered_tables = null;
+    }
+
+    /**
+     * Mark a table as present or absent after DDL in the same request.
+     *
+     * @param string $table_name Fully qualified table name.
+     * @param bool   $exists     Whether the table exists.
+     * @return void
+     */
+    private static function set_named_table_exists( $table_name, $exists ) {
+        self::$table_exists_cache[ (string) $table_name ] = (bool) $exists;
+    }
+
+    /**
+     * @param string $table_name Table name.
+     * @param string $suffix     Suffix to match.
+     * @return bool
+     */
+    private static function table_name_ends_with( $table_name, $suffix ) {
+        $suffix = (string) $suffix;
+        if ( '' === $suffix ) {
+            return false;
+        }
+
+        return substr( (string) $table_name, -strlen( $suffix ) ) === $suffix;
+    }
+
+    /**
+     * @param string $from_table Fully qualified table name.
+     * @param string $to_table   Fully qualified table name.
+     * @return bool
+     */
+    private static function copy_history_rows( $from_table, $to_table ) {
+        global $wpdb;
+
+        $wpdb->last_error = '';
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $wpdb->query(
+            "INSERT INTO `{$to_table}` (attachment_id, action_type, user_id, created_at, details)
+             SELECT o.attachment_id, o.action_type, o.user_id, o.created_at, o.details
+             FROM `{$from_table}` o
+             WHERE NOT EXISTS (
+                SELECT 1 FROM `{$to_table}` n
+                WHERE n.attachment_id = o.attachment_id
+                  AND n.action_type = o.action_type
+                  AND n.user_id = o.user_id
+                  AND n.created_at = o.created_at
+             )"
+        );
+
+        if ( '' === $wpdb->last_error ) {
+            return true;
+        }
+
+        $wpdb->last_error = '';
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $rows = $wpdb->get_results(
+            "SELECT attachment_id, action_type, user_id, created_at, details FROM `{$from_table}`",
+            ARRAY_A
+        );
+
+        foreach ( (array) $rows as $row ) {
+            if ( ! is_array( $row ) ) {
+                continue;
+            }
+
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $exists = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT COUNT(1) FROM `{$to_table}`
+                     WHERE attachment_id = %d AND action_type = %s AND user_id = %d AND created_at = %s",
+                    (int) $row['attachment_id'],
+                    (string) $row['action_type'],
+                    (int) $row['user_id'],
+                    (string) $row['created_at']
+                )
+            );
+
+            if ( $exists > 0 ) {
+                continue;
+            }
+
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+            $wpdb->insert(
+                $to_table,
+                array(
+                    'attachment_id' => (int) $row['attachment_id'],
+                    'action_type'   => (string) $row['action_type'],
+                    'user_id'       => (int) $row['user_id'],
+                    'created_at'    => (string) $row['created_at'],
+                    'details'       => (string) $row['details'],
+                ),
+                array( '%d', '%s', '%d', '%s', '%s' )
+            );
+
+            if ( '' !== $wpdb->last_error ) {
+                return false;
+            }
+        }
+
+        return '' === $wpdb->last_error;
+    }
+
+    /**
+     * @param string $table_name Fully qualified table name.
+     * @return void
+     */
+    private static function drop_named_table( $table_name ) {
+        global $wpdb;
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $wpdb->query( "DROP TABLE IF EXISTS `{$table_name}`" );
+        self::set_named_table_exists( $table_name, false );
+    }
+
+    /**
+     * @return string
+     */
+    private static function get_canonical_table_name() {
+        $discovered = self::discover_history_tables();
+
+        return $discovered['canonical'];
     }
 
     public static function log( $attachment_id, $action_type, $details = array() ) {
         global $wpdb;
         try {
-            // Assegurar que la taula existeix sempre abans d'inserir
-            // (cobreix el cas de plugin actualitzat sense desactivar/reactivar)
             if ( ! self::table_exists() ) {
-                self::install();
+                self::maybe_install();
+            }
+
+            if ( ! self::table_exists() ) {
+                return;
             }
 
             $file = get_attached_file( $attachment_id );
             if ( empty( $details['filename'] ) ) {
                 $details['filename'] = $file ? basename( $file ) : '';
             }
-            if ( empty( $details['title'] ) ) {
-                $details['title'] = get_the_title( $attachment_id );
+            // Use attachment_title — never 'title', which collides with SEO seo_title display.
+            if ( empty( $details['attachment_title'] ) ) {
+                $details['attachment_title'] = get_the_title( $attachment_id );
             }
             // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-            $inserted = $wpdb->insert(
-                $wpdb->prefix . self::TABLE,
+            $wpdb->insert(
+                self::get_canonical_table_name(),
                 array(
                     'attachment_id' => absint( $attachment_id ),
                     'action_type'   => sanitize_key( $action_type ),
@@ -155,20 +404,29 @@ class TSOIMMA_History {
                 ),
                 array( '%d', '%s', '%d', '%s', '%s' )
             );
-
-            return ( false !== $inserted && ! $wpdb->last_error );
+            if ( $wpdb->last_error ) {
+                if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                    // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+                    error_log( 'TSOIMMA_History::log DB error: ' . $wpdb->last_error );
+                }
+            }
         } catch ( \Throwable $e ) {
-            return false;
+            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+                error_log( 'TSOIMMA_History::log: ' . $e->getMessage() );
+            }
         }
     }
 
     public static function get_entries( $args = array() ) {
         global $wpdb;
-        $table = $wpdb->prefix . self::TABLE;
+        $table = self::get_canonical_table_name();
 
         if ( ! self::table_exists() ) {
-            self::install();
-            return array( 'items' => array(), 'total' => 0, 'total_pages' => 1, 'page' => 1 );
+            self::maybe_install();
+            if ( ! self::table_exists() ) {
+                return array( 'items' => array(), 'total' => 0, 'total_pages' => 1, 'page' => 1 );
+            }
         }
 
         $defaults = array(
@@ -325,7 +583,7 @@ class TSOIMMA_History {
 
     public static function get_stats() {
         global $wpdb;
-        $table = $wpdb->prefix . self::TABLE;
+        $table = self::get_canonical_table_name();
 
         $stats = array(
             'total_operations' => 0,
@@ -369,7 +627,7 @@ class TSOIMMA_History {
      */
     public static function delete_by_attachment( $attachment_id ) {
         global $wpdb;
-        $table = $wpdb->prefix . self::TABLE;
+        $table = self::get_canonical_table_name();
         if ( ! self::table_exists() ) return;
 
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -393,7 +651,7 @@ class TSOIMMA_History {
 
     public static function clear( $days = 0, $type = '' ) {
         global $wpdb;
-        $table = $wpdb->prefix . self::TABLE;
+        $table = self::get_canonical_table_name();
         if ( ! self::table_exists() ) {
             return;
         }
@@ -411,14 +669,9 @@ class TSOIMMA_History {
     }
 
     private static function table_exists() {
-        global $wpdb;
-        $table = $wpdb->prefix . self::TABLE;
-        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-        return (int) $wpdb->get_var( $wpdb->prepare(
-            'SELECT COUNT(1) FROM information_schema.tables WHERE table_schema = %s AND table_name = %s LIMIT 1',
-            DB_NAME,
-            $table
-        ) ) > 0;
+        $discovered = self::discover_history_tables();
+
+        return ! empty( $discovered['canonical_exists'] );
     }
 
     private static function action_label( $type ) {
