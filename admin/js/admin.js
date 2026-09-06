@@ -2978,6 +2978,7 @@
                 $('#imp-bulk-progress').hide();
                 addLog('info', '✓ ' + (L.bulk_done || 'Done') + ': ' + done + '/' + total);
                 loadOptImages();
+                refreshHistoryUi();
                 return;
             }
             var id = ids[done];
@@ -3467,6 +3468,7 @@
                     refreshModalImageInfo(id);
                     loadOptImages();
                     loadSeoImages();
+                    refreshHistoryUi();
                     if (data.thumbnails_pending) {
                         runModalThumbnailPass(
                             id,
@@ -3478,6 +3480,7 @@
                 } else {
                     box.removeClass('imp-result-err imp-result-warn').addClass('imp-result-ok imp-result-box').show()
                        .html('✓ ' + (L.optimized_no_replace || 'Optimized (not replaced).') + ' ' + data.savings_pct + '%');
+                    refreshHistoryUi();
                 }
             }, function(err) {
                 btn.prop('disabled', false).text(L.optimize_now || '⚡ Optimize now');
@@ -4218,6 +4221,12 @@
             loadHistory();
         });
         $('#imp-history-load').on('click', function() { histState.page = 1; loadHistory(); });
+        $('#imp-history-clear-dates').on('click', function() {
+            $('#imp-history-date-from').val('');
+            $('#imp-history-date-to').val('');
+            histState.page = 1;
+            loadHistory();
+        });
         $('#imp-history-clear-30').on('click', function() {
             if (!confirm(L.confirm_clean_30 || 'Delete entries older than 30 days?')) return;
             ajax('tsoimma_clear_history', { days: 30 }, function() { loadHistory(); loadHistoryStats('#imp-history-stats'); });
@@ -4242,6 +4251,14 @@
             $interval.val(data.interval).trigger('change');
             var api = $interval.closest('.imp-csel').data('impCselApi');
             if (api && api.sync) api.sync();
+        }
+    }
+
+    function refreshHistoryUi() {
+        loadHistoryStats('#imp-history-stats');
+        if ($('#tab-history').hasClass('active')) {
+            histState.page = 1;
+            loadHistory();
         }
     }
 

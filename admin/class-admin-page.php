@@ -1157,6 +1157,7 @@ class TSOIMMA_Admin_Page {
                     </div>
                     <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
                         <button id="imp-history-load" class="imp-btn imp-btn-primary"data-i18n="history_load">🔄 Carregar / filtrar</button>
+                        <button type="button" id="imp-history-clear-dates" class="imp-btn imp-btn-ghost" data-i18n="history_clear_dates">📅 Totes les dates</button>
                         <button id="imp-history-clear-30" class="imp-btn imp-btn-ghost" data-i18n="clear_30">🗑️ Netejar >30 dies</button>
                         <button id="imp-history-clear-all" class="imp-btn imp-btn-danger" data-i18n="clear_all">🗑️ Netejar tot</button>
                     </div>
