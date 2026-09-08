@@ -2,10 +2,10 @@
 Contributors: deadko
 Donate link: https://ko-fi.com/deadko_cat
 Tags: image optimization, webp, avif, media library, pdf compression
-Requires at least: 6.1
+Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.9.8
+Stable tag: 2.0.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -40,7 +40,7 @@ TSO Image Master is a complete media management and image optimization plugin fo
 = Requirements =
 
 * PHP 7.4 or higher (tested up to 8.3)
-* WordPress 6.1 or higher (tested up to 7.1)
+* WordPress 6.2 or higher (tested up to 7.1)
 * PHP GD library with JPEG, PNG, GIF, and WebP support (AVIF output needs GD with `imageavif()` / `imagecreatefromavif()`)
 * GhostScript (optional, required for best PDF compression)
 * Imagick PHP extension (optional, fallback for PDF compression)
@@ -130,9 +130,29 @@ On Overview, **Scan duplicates** groups Media Library files with the same MD5 ha
 
 3. Per-image Optimize modal with output format, resize, and replace-original options.
 
+4. Overview dashboard — site health cards, server engines, and missing-alt editor with bulk fill.
+
+5. PDF compressor — DPI quality, replace-original option, GhostScript status, and PDF search/select toolbar.
+
 == Changelog ==
 
 For release history from 1.0.0 through 1.9.3, see CHANGELOG.txt in the plugin folder.
+
+= 2.0.1 =
+* Fixed: Optimize actions appear in History immediately (no longer wait for thumbnails).
+* Fixed: Recover missing History rows from existing TSO backups when a prior deferred log was lost.
+* Fixed: Auto-optimize logs History right after convert/metadata (thumbs failures no longer hide the entry; rollback removes a premature row).
+* Improved: Removed duplicate auto-optimize history/stats from the Auto tab (use History filter instead).
+* Added: Hover preview for History thumbnails (same as optimize modal).
+* Fixed: Attachment optimize locks use ownership tokens; revert takes a lock; queue reclaim no longer double-logs History; thumbs AJAX clears cron only after success; History logs only when the file is replaced.
+* Fixed: Refresh attachment lock TTL during convert/thumbs; removed global `wp_cache_flush()` from thumbnail paths; enqueue reports queued vs skipped; cancel queue also cancels `thumbs_pending` jobs.
+* Fixed: History purge uses WordPress timezone (not MySQL NOW()); auto-optimize enqueues a background job when the attachment lock is busy.
+
+= 2.0.0 =
+* Added: Day / night UI themes with Auto mode based on sunrise and sunset (follows WordPress timezone).
+* Improved: History legacy table merge — single discovery query, skip when already merged.
+* Improved: SQL table identifiers use `$wpdb->prepare()` `%i` placeholders (Requires at least WordPress 6.2).
+* Fixed: Missing translations.
 
 = 1.9.8 =
 * Improved: WordPress.org compliance — canonical `tsoimma_` AJAX/storage layer, prefixed history table, attachment meta migration, sanitized AJAX inputs.
@@ -148,55 +168,16 @@ For release history from 1.0.0 through 1.9.3, see CHANGELOG.txt in the plugin fo
 * Improved: Optimize modal collapses the resize section after a successful optimization.
 * Fixed: Alt save button contrast and spacing; hover preview stuck after bulk alt fill; save blocked when browser autocomplete was open.
 
-= 1.9.6 =
-* Improved: Smarter suggested alt text (humanized filenames, EXIF/caption, skips pure numbers and camera noise).
-* Improved: Overview alt list shows only images with a fillable suggestion; bulk fill skips unusable names.
-* Improved: URL Fixer matches uploads URLs with http/https and encoded paths; safer path resolution.
-* Improved: Background queue shows pending vs processing separately; Cancel only affects pending jobs.
-* Improved: MIME mismatch and ghost attachment scans paginate in batches (large libraries).
-* Improved: Rogue file delete allowlist UX (24h scan note and rescan hint).
-* Fixed: Auto-optimize rollback, queue lock TTL/refresh, ghost delete on valid images, history default dates.
-* Fixed: Optimize modal thumbnail status (no fake delay; sync fallback without double cron).
-* Fixed: Duplicate scan covers full library; backup meta purge without basename collisions.
-* Fixed: History logs optimize only when replaced; revert action translated in history table.
-* Fixed: Plugin Check LIKE placeholder warnings in maintenance AJAX queries.
-* Added: Filter `tsoimma_suggest_alt_text` for custom/AI alt enrichment.
-
-= 1.9.5 =
-* Added: Background job queue for bulk optimize (WP-Cron, 5 images per batch).
-* Added: TSO backup retention (max age + max total size) with daily purge cron.
-* Added: AVIF and PNG output formats (AVIF when GD supports `imageavif()`).
-* Added: Duplicate image scanner (MD5 groups) on Overview tab.
-* Added: Auto-upload options — skip small WebP/AVIF files (WP 7.1) and fill missing alt on upload.
-* Added: Media Library row action, bulk queue action, and attachment box note.
-* Added: Per-page selector (21/35/49/70/105) on Optimize and SEO grids.
-* Improved: History shows SEO field details (title/alt/caption/description); History tab moved to end of nav.
-* Improved: Orphan detection scans FSE templates/parts/patterns, term meta, and menu items.
-* Improved: Cache purge also clears Breeze, SiteGround Optimizer, and Autoptimize when present.
-* Fixed: Auto settings save persists fill-alt-on-upload and skip-small-file options.
-* Fixed: Media Library bulk optimize hooks, image-only filtering, and upload-screen notice.
-* Fixed: Queue status excludes cancelled jobs; skips duplicate pending attachment IDs.
-* Fixed: AVIF load/save fallback, backup delete verification, and deep-link opens Optimize tab.
-* Improved: Dashboard alt filter and duplicate scan use fast reference checks (avoids timeouts).
-* Improved: Queue polling on dashboard load; backup directory scan handles permission errors.
-* Fixed: Queue lock + per-job status writes (no lost enqueue, no double-process, stuck reclaim).
-* Fixed: Backup retention purge clears related attachment meta; purge-now no-op when retention is off.
-* Fixed: AVIF thumbnail cleanup and truecolor encode; orphan-meta repair finds `.avif`.
-* Fixed: Fill-alt-on-upload works without auto-optimize; weak-alt no longer fights humanized fills.
-* Fixed: Uninstall removes all backup meta keys and queue lock option.
-* Fixed: History no longer shows attachment title as SEO title on alt-only updates.
-* Fixed: PNG compression level clamped to 0–9; invalid output formats normalized.
-
 == Upgrade Notice ==
+
+= 2.0.1 =
+History now records optimizations immediately and recovers missing entries from existing TSO backups.
+
+= 2.0.0 =
+Day/night UI themes (auto sunrise/sunset from WordPress timezone), Catalan/Spanish i18n fixes, faster history table migration. Requires WordPress 6.2+.
 
 = 1.9.8 =
 Overview alt manual edit, WordPress.org prefix/storage hardening, dashboard UX, and queue/backup layout improvements.
 
 = 1.9.7 =
 Overview alt editor UX, hover preview, humanization tweaks, dashboard cache, and optimize modal polish.
-
-= 1.9.6 =
-Smarter alt suggestions, stability fixes (queue, rollback, URL fixer, ghost scan), and maintenance scan improvements.
-
-= 1.9.5 =
-Queue, backup retention, AVIF/PNG output, duplicate scanner, Media Library integration, history SEO details, and related bug fixes.

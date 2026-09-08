@@ -27,34 +27,56 @@ class TSOIMMA_Ajax_Handler {
         tsoimma_verify_ajax_nonce();
         self::require_admin();
 
-        // Capturar errors fatals PHP i retornar-los com a JSON llegible
-        // (sense tocar els buffers de WordPress — ob_get_level() > 0 mata WP)
-        register_shutdown_function( function() {
-            $e = error_get_last();
-            if ( $e && in_array( $e['type'], array( E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR ), true ) ) {
-                if ( ! headers_sent() ) {
-                    header( 'Content-Type: application/json; charset=utf-8', true, 200 );
-                }
-                echo wp_json_encode( array(
-                    'success' => false,
-                    'data'    => 'PHP Fatal [' . $e['type'] . ']: ' . $e['message']
-                               . ' a ' . basename( $e['file'] ) . ':' . $e['line'],
-                ) );
-                exit;
-            }
-        } );
-
         $id = self::require_attachment_id( tsoimma_get_ajax_post_int( 'attachment_id' ) );
         $format = tsoimma_get_ajax_post_key( 'format', 'webp' );
-        $quality = tsoimma_get_ajax_post_int( 'quality', 82 );
+        $quality = tsoimma_clamp_image_quality( tsoimma_get_ajax_post_int( 'quality', 82 ) );
         $replace = tsoimma_get_ajax_post_bool( 'replace' );
         $max_width = tsoimma_get_ajax_post_int( 'max_width' );
         $max_height = tsoimma_get_ajax_post_int( 'max_height' );
 
+        if ( TSOIMMA_Queue::is_attachment_busy( $id ) ) {
+            wp_send_json_error( __( 'This image is already being optimized (queue or another request).', 'tso-image-master' ) );
+        }
+        $lock_token = TSOIMMA_Queue::acquire_attachment_lock( $id );
+        if ( '' === $lock_token ) {
+            wp_send_json_error( __( 'This image is already being optimized (queue or another request).', 'tso-image-master' ) );
+        }
+
+        // Capturar errors fatals PHP i retornar-los com a JSON llegible
+        // (sense tocar els buffers de WordPress — ob_get_level() > 0 mata WP)
+        register_shutdown_function(
+            function () use ( $id, &$lock_token ) {
+                $e = error_get_last();
+                if ( $e && in_array( $e['type'], array( E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR ), true ) ) {
+                    if ( '' !== $lock_token ) {
+                        TSOIMMA_Queue::release_attachment_lock( $id, $lock_token );
+                        $lock_token = '';
+                    }
+                    if ( ! headers_sent() ) {
+                        header( 'Content-Type: application/json; charset=utf-8', true, 200 );
+                    }
+                    echo wp_json_encode(
+                        array(
+                            'success' => false,
+                            'data'    => 'PHP Fatal [' . $e['type'] . ']: ' . $e['message']
+                                . ' a ' . basename( $e['file'] ) . ':' . $e['line'],
+                        )
+                    );
+                    exit;
+                }
+            }
+        );
+
+        $keep_lock_for_thumbs = false;
+
         // FASE 1: conversió GD (sense cap operació DB de WordPress)
         try {
+            TSOIMMA_Queue::refresh_attachment_lock( $id, $lock_token );
             $result = TSOIMMA_Optimizer::optimize( $id, $format, $quality, $replace, $max_width, $max_height );
         } catch ( \Throwable $ex ) {
+            TSOIMMA_Optimizer::cleanup_opt_temps_for_attachment( $id );
+            TSOIMMA_Queue::release_attachment_lock( $id, $lock_token );
+            $lock_token = '';
             wp_send_json_error(
                 sprintf(
                     /* translators: %s: exception message */
@@ -66,6 +88,9 @@ class TSOIMMA_Ajax_Handler {
         }
 
         if ( is_wp_error( $result ) ) {
+            TSOIMMA_Optimizer::cleanup_opt_temps_for_attachment( $id );
+            TSOIMMA_Queue::release_attachment_lock( $id, $lock_token );
+            $lock_token = '';
             wp_send_json_error( array(
                 'message' => $result->get_error_message(),
                 'code'    => $result->get_error_code(),
@@ -75,10 +100,14 @@ class TSOIMMA_Ajax_Handler {
 
         if ( $replace && ! empty( $result['replaced'] ) ) {
             // FASE 2: actualitzar metadata WP
+            $snapshot = TSOIMMA_Optimizer::snapshot_attachment_state( $id );
             try {
                 TSOIMMA_Optimizer::update_wp_metadata_only( $id, $result, $format );
             } catch ( \Throwable $ex ) {
-                TSOIMMA_Optimizer::rollback_optimize_files( $result );
+                TSOIMMA_Optimizer::rollback_optimize_state( $id, $result, $snapshot );
+                TSOIMMA_History::clear_pending( $id );
+                TSOIMMA_Queue::release_attachment_lock( $id, $lock_token );
+                $lock_token = '';
                 wp_send_json_error(
                     sprintf(
                         /* translators: 1: exception message, 2: file name, 3: line number */
@@ -93,19 +122,23 @@ class TSOIMMA_Ajax_Handler {
 
             // FASE 3: regenerate/optimize thumbnails in a follow-up AJAX call so the
             // first response returns quickly (avoids a frozen modal on format changes).
+            // Also schedule a server-side cron as safety net if the browser never calls back.
             $result['thumbnails_pending'] = true;
+            $keep_lock_for_thumbs         = true;
+            if ( ! empty( $result['format'] ) ) {
+                $format = sanitize_key( (string) $result['format'] );
+            }
+            self::schedule_thumbnail_cron( $id, $format, $quality );
 
             $backup_status = TSOIMMA_Optimizer::get_backup_status( $id, false );
             if ( ! empty( $backup_status['has_backup'] ) ) {
                 $result['has_backup']  = true;
                 $result['backup_size'] = (int) $backup_status['backup_bytes'];
             }
-        }
 
-        // Log historial
-        $log_file = isset( $result['new_path'] ) ? $result['new_path'] : get_attached_file( $id );
-        try {
-            TSOIMMA_History::log( $id, 'optimize', array(
+            // Log history as soon as convert (+ metadata) succeeds.
+            $log_file = isset( $result['new_path'] ) ? $result['new_path'] : get_attached_file( $id );
+            $log_details = array(
                 'filename'      => $log_file ? basename( $log_file ) : '',
                 'format'        => $format,
                 'quality'       => $quality,
@@ -116,13 +149,26 @@ class TSOIMMA_Ajax_Handler {
                 'new_size'      => isset( $result['new_size'] ) ? $result['new_size'] : 0,
                 'savings_bytes' => isset( $result['savings_bytes'] ) ? $result['savings_bytes'] : 0,
                 'savings_pct'   => isset( $result['savings_pct'] ) ? $result['savings_pct'] : 0,
-                'replaced'      => $replace,
-            ) );
-        } catch ( \Throwable $ex ) {
+                'replaced'      => true,
+            );
+            try {
+                TSOIMMA_History::log( $id, 'optimize', $log_details );
+                TSOIMMA_History::clear_pending( $id );
+            } catch ( \Throwable $ex ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- History must not break optimize.
+            }
+        } else {
+            // Dry-run / no replace: discard temp and do not write History.
+            TSOIMMA_Optimizer::cleanup_opt_temps_for_attachment( $id );
         }
 
         $result['thumbnails_done']    = ! empty( $result['thumbnails_done'] );
         $result['thumbnails_pending'] = ! empty( $result['thumbnails_pending'] );
+
+        if ( ! $keep_lock_for_thumbs ) {
+            TSOIMMA_Queue::release_attachment_lock( $id, $lock_token );
+            $lock_token = '';
+        }
+
         wp_send_json_success( $result );
     }
 
@@ -146,12 +192,77 @@ class TSOIMMA_Ajax_Handler {
             return;
         }
 
-        $quality = absint( $quality );
-        if ( $quality < 50 || $quality > 100 ) {
-            $quality = 82;
+        $quality = tsoimma_clamp_image_quality( $quality );
+
+        $lock_token = TSOIMMA_Queue::get_attachment_lock_token( $attachment_id );
+        if ( '' !== $lock_token ) {
+            TSOIMMA_Queue::refresh_attachment_lock( $attachment_id, $lock_token );
+        }
+        try {
+            TSOIMMA_Optimizer::process_thumbnails_background( $attachment_id, $format, $quality );
+            TSOIMMA_History::flush_pending( $attachment_id );
+        } finally {
+            if ( '' !== $lock_token ) {
+                TSOIMMA_Queue::release_attachment_lock( $attachment_id, $lock_token );
+            }
+        }
+    }
+
+    /**
+     * Schedule a one-off WP-Cron for thumbnails (safety net if AJAX follow-up never runs).
+     *
+     * @param int    $attachment_id Attachment ID.
+     * @param string $format        Output format.
+     * @param int    $quality       Quality.
+     * @return void
+     */
+    public static function schedule_thumbnail_cron( $attachment_id, $format, $quality ) {
+        $attachment_id = absint( $attachment_id );
+        $format        = sanitize_key( (string) $format );
+        $quality       = tsoimma_clamp_image_quality( $quality );
+        if ( $attachment_id <= 0 ) {
+            return;
+        }
+        if ( ! in_array( $format, array( 'webp', 'jpg', 'jpeg', 'avif', 'png', 'original' ), true ) ) {
+            $format = 'webp';
         }
 
-        TSOIMMA_Optimizer::process_thumbnails_background( $attachment_id, $format, $quality );
+        $args = array( $attachment_id, $format, $quality );
+        if ( ! wp_next_scheduled( 'tsoimma_process_thumbnails', $args ) ) {
+            wp_schedule_single_event( time() + 15, 'tsoimma_process_thumbnails', $args );
+        }
+    }
+
+    /**
+     * Clear pending thumbnail cron events for an attachment (any format/quality args).
+     *
+     * @param int    $attachment_id Attachment ID.
+     * @param string $format        Unused (kept for call-site compatibility).
+     * @param int    $quality       Unused (kept for call-site compatibility).
+     * @return void
+     */
+    private static function clear_thumbnail_cron( $attachment_id, $format = '', $quality = 0 ) {
+        $attachment_id = absint( $attachment_id );
+        if ( $attachment_id <= 0 || ! function_exists( '_get_cron_array' ) ) {
+            return;
+        }
+
+        $crons = _get_cron_array();
+        if ( ! is_array( $crons ) ) {
+            return;
+        }
+
+        foreach ( $crons as $timestamp => $hooks ) {
+            if ( empty( $hooks['tsoimma_process_thumbnails'] ) || ! is_array( $hooks['tsoimma_process_thumbnails'] ) ) {
+                continue;
+            }
+            foreach ( $hooks['tsoimma_process_thumbnails'] as $event ) {
+                $args = isset( $event['args'] ) && is_array( $event['args'] ) ? $event['args'] : array();
+                if ( isset( $args[0] ) && absint( $args[0] ) === $attachment_id ) {
+                    wp_unschedule_event( (int) $timestamp, 'tsoimma_process_thumbnails', $args );
+                }
+            }
+        }
     }
 
     // ----------------------------------------------------------------
@@ -167,11 +278,23 @@ class TSOIMMA_Ajax_Handler {
 
         $id = self::require_attachment_id( tsoimma_get_ajax_post_int( 'attachment_id' ) );
         $format = tsoimma_get_ajax_post_key( 'format', 'webp' );
-        $quality = tsoimma_get_ajax_post_int( 'quality', 82 );
+        $quality = tsoimma_clamp_image_quality( tsoimma_get_ajax_post_int( 'quality', 82 ) );
+
+        $lock_token = TSOIMMA_Queue::get_attachment_lock_token( $id );
 
         try {
+            if ( '' !== $lock_token ) {
+                TSOIMMA_Queue::refresh_attachment_lock( $id, $lock_token );
+            }
             TSOIMMA_Optimizer::run_optimize_thumbnails_phase( $id, $format, $quality );
+            TSOIMMA_History::flush_pending( $id );
+            // Clear safety-net cron only after thumbs succeed.
+            self::clear_thumbnail_cron( $id );
         } catch ( \Throwable $ex ) {
+            TSOIMMA_History::flush_pending( $id );
+            if ( '' !== $lock_token ) {
+                TSOIMMA_Queue::release_attachment_lock( $id, $lock_token );
+            }
             wp_send_json_error(
                 sprintf(
                     /* translators: %s: exception message */
@@ -179,6 +302,10 @@ class TSOIMMA_Ajax_Handler {
                     $ex->getMessage()
                 )
             );
+        }
+
+        if ( '' !== $lock_token ) {
+            TSOIMMA_Queue::release_attachment_lock( $id, $lock_token );
         }
 
         clean_post_cache( $id );
@@ -212,24 +339,43 @@ class TSOIMMA_Ajax_Handler {
         }
 
         $format = tsoimma_get_ajax_post_key( 'format', 'webp' );
-        $quality = tsoimma_get_ajax_post_int( 'quality', 82 );
+        $quality = tsoimma_clamp_image_quality( tsoimma_get_ajax_post_int( 'quality', 82 ) );
 
         $results = array();
         foreach ( $ids as $id ) {
-            $res = TSOIMMA_Optimizer::run_optimize_pipeline( $id, $format, $quality, true, true );
-            if ( is_wp_error( $res ) ) {
-                $results[] = array( 'id' => $id, 'error' => $res->get_error_message() );
+            if ( TSOIMMA_Queue::is_attachment_busy( $id ) ) {
+                $results[] = array(
+                    'id'    => $id,
+                    'error' => __( 'This image is already being optimized (queue or another request).', 'tso-image-master' ),
+                );
                 continue;
             }
-            if ( ! empty( $res['thumbnails_pending'] ) ) {
-                try {
-                    TSOIMMA_Optimizer::run_optimize_thumbnails_phase( $id, $format, $quality, $res );
-                } catch ( \Throwable $ex ) {
-                    $results[] = array( 'id' => $id, 'error' => 'Thumbnails: ' . $ex->getMessage() );
+            $lock_token = TSOIMMA_Queue::acquire_attachment_lock( $id );
+            if ( '' === $lock_token ) {
+                $results[] = array(
+                    'id'    => $id,
+                    'error' => __( 'This image is already being optimized (queue or another request).', 'tso-image-master' ),
+                );
+                continue;
+            }
+            try {
+                $res = TSOIMMA_Optimizer::run_optimize_pipeline( $id, $format, $quality, true, true );
+                if ( is_wp_error( $res ) ) {
+                    $results[] = array( 'id' => $id, 'error' => $res->get_error_message() );
                     continue;
                 }
+                if ( ! empty( $res['thumbnails_pending'] ) ) {
+                    try {
+                        TSOIMMA_Optimizer::run_optimize_thumbnails_phase( $id, $format, $quality, $res );
+                    } catch ( \Throwable $ex ) {
+                        $results[] = array( 'id' => $id, 'error' => 'Thumbnails: ' . $ex->getMessage() );
+                        continue;
+                    }
+                }
+                $results[] = $res;
+            } finally {
+                TSOIMMA_Queue::release_attachment_lock( $id, $lock_token );
             }
-            $results[] = $res;
         }
         wp_send_json_success( $results );
     }
@@ -598,16 +744,44 @@ class TSOIMMA_Ajax_Handler {
         tsoimma_verify_ajax_nonce();
         self::require_admin();
 
-        $id = tsoimma_get_ajax_post_int( 'attachment_id' );
+        $id       = tsoimma_get_ajax_post_int( 'attachment_id' );
         $file     = get_attached_file( $id );
         $metadata = wp_get_attachment_metadata( $id );
+        $file_ext = ( $file ) ? strtolower( (string) pathinfo( $file, PATHINFO_EXTENSION ) ) : '';
 
-        $real_mime = ( $file && file_exists( $file ) ) ? mime_content_type( $file ) : get_post_mime_type( $id );
-        $ext_map   = array(
-            'image/jpeg' => 'JPG', 'image/png'  => 'PNG',
-            'image/gif'  => 'GIF', 'image/webp' => 'WEBP', 'image/svg+xml' => 'SVG',
+        $real_mime = get_post_mime_type( $id );
+        if ( $file && file_exists( $file ) && function_exists( 'mime_content_type' ) ) {
+            $detected = mime_content_type( $file );
+            if ( is_string( $detected ) && 0 === strpos( $detected, 'image/' ) ) {
+                $real_mime = $detected;
+            }
+        }
+        // mime_content_type() often misreports AVIF; prefer extension.
+        if ( 'avif' === $file_ext ) {
+            $real_mime = 'image/avif';
+        } elseif ( 'webp' === $file_ext && ( ! is_string( $real_mime ) || 0 !== strpos( $real_mime, 'image/' ) ) ) {
+            $real_mime = 'image/webp';
+        }
+
+        $ext_map = array(
+            'image/jpeg'    => 'JPG',
+            'image/png'     => 'PNG',
+            'image/gif'     => 'GIF',
+            'image/webp'    => 'WEBP',
+            'image/avif'    => 'AVIF',
+            'image/svg+xml' => 'SVG',
         );
-        $real_ext = isset( $ext_map[ $real_mime ] ) ? $ext_map[ $real_mime ] : strtoupper( pathinfo( $file ?? '', PATHINFO_EXTENSION ) );
+        $real_ext = isset( $ext_map[ $real_mime ] ) ? $ext_map[ $real_mime ] : strtoupper( $file_ext );
+
+        $width  = isset( $metadata['width'] ) ? absint( $metadata['width'] ) : 0;
+        $height = isset( $metadata['height'] ) ? absint( $metadata['height'] ) : 0;
+        if ( ( $width <= 0 || $height <= 0 ) && $file && file_exists( $file ) ) {
+            $size = @getimagesize( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- getimagesize warns on non-images.
+            if ( is_array( $size ) ) {
+                $width  = absint( $size[0] );
+                $height = absint( $size[1] );
+            }
+        }
 
         $backup = TSOIMMA_Optimizer::get_backup_status( $id );
 
@@ -624,8 +798,8 @@ class TSOIMMA_Ajax_Handler {
             'filesize_h'  => $file && file_exists( $file ) ? size_format( filesize( $file ) ) : '—',
             'mime'        => $real_mime,
             'ext'         => $real_ext,
-            'width'       => isset( $metadata['width'] )  ? $metadata['width']  : 0,
-            'height'      => isset( $metadata['height'] ) ? $metadata['height'] : 0,
+            'width'       => $width,
+            'height'      => $height,
             'suggested'   => TSOIMMA_Image_Manager::suggest_filename( $id ),
             'is_orphan'   => TSOIMMA_Orphan_Finder::is_orphan( $id ),
             'used_in'     => TSOIMMA_Image_Manager::get_used_in_posts( $id ),
@@ -642,15 +816,30 @@ class TSOIMMA_Ajax_Handler {
         self::require_admin();
 
         $id = tsoimma_get_ajax_post_int( 'attachment_id' );
-        $result = TSOIMMA_Optimizer::revert( $id );
-        if ( is_wp_error( $result ) ) {
-            wp_send_json_error( $result->get_error_message() );
+        if ( TSOIMMA_Queue::is_attachment_busy( $id ) ) {
+            wp_send_json_error( __( 'This image is already being optimized (queue or another request).', 'tso-image-master' ) );
         }
-        TSOIMMA_History::log( $id, 'revert', array(
-            'restored_ext'  => $result['restored_ext'],
-            'restored_size' => $result['restored_size'],
-        ) );
-        wp_send_json_success( $result );
+        $lock_token = TSOIMMA_Queue::acquire_attachment_lock( $id );
+        if ( '' === $lock_token ) {
+            wp_send_json_error( __( 'This image is already being optimized (queue or another request).', 'tso-image-master' ) );
+        }
+        try {
+            $result = TSOIMMA_Optimizer::revert( $id );
+            if ( is_wp_error( $result ) ) {
+                wp_send_json_error( $result->get_error_message() );
+            }
+            TSOIMMA_History::log(
+                $id,
+                'revert',
+                array(
+                    'restored_ext'  => $result['restored_ext'],
+                    'restored_size' => $result['restored_size'],
+                )
+            );
+            wp_send_json_success( $result );
+        } finally {
+            TSOIMMA_Queue::release_attachment_lock( $id, $lock_token );
+        }
     }
 
     // ----------------------------------------------------------------

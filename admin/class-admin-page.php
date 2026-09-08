@@ -52,11 +52,16 @@ class TSOIMMA_Admin_Page {
             true
         );
 
+        $theme_coords = self::theme_coords();
+
         wp_localize_script( 'tso-im-admin-js', 'TSOIMMA', array(
             'ajax_url' => admin_url( 'admin-ajax.php' ),
             'nonce'    => wp_create_nonce( TSOIMMA_NONCE_AJAX ),
             'site_url' => get_site_url(),
             'webp_ok'  => TSOIMMA_Optimizer::webp_supported() ? '1' : '0',
+            'timezone' => self::theme_timezone_string(),
+            'lat'      => $theme_coords['lat'],
+            'lng'      => $theme_coords['lng'],
             // All UI strings are passed here so admin.js has no inline i18n data.
             // This complies with WP.org guidelines (no JSON.parse blocks in JS).
             'strings'  => array(
@@ -207,7 +212,7 @@ class TSOIMMA_Admin_Page {
                 'dash_engine_close'     => __( 'Close', 'tso-image-master' ),
                 'dash_queue_title'      => __( 'Background queue', 'tso-image-master' ),
                 'dash_queue_desc'       => __( 'Bulk optimize jobs run in the background via WP-Cron (5 images per batch).', 'tso-image-master' ),
-                'dash_queue_cancel'     => __( 'Cancel pending jobs', 'tso-image-master' ),
+                'dash_queue_cancel'     => __( 'Cancel pending / thumbnails', 'tso-image-master' ),
                 'dash_queue_empty'      => __( 'Queue is empty.', 'tso-image-master' ),
                 'dash_queue_done'       => __( 'done', 'tso-image-master' ),
                 'dash_queue_pending'    => __( 'pending', 'tso-image-master' ),
@@ -242,6 +247,94 @@ class TSOIMMA_Admin_Page {
                 'hist_seo_auto'         => __( 'On upload', 'tso-image-master' ),
             ),
         ) );
+    }
+
+    /**
+     * WordPress site timezone string (Settings → General).
+     *
+     * @return string
+     */
+    private static function theme_timezone_string() {
+        if ( function_exists( 'wp_timezone_string' ) ) {
+            return (string) wp_timezone_string();
+        }
+        return (string) get_option( 'timezone_string', '' );
+    }
+
+    /**
+     * Approximate lat/lng for sunrise/sunset from the site timezone.
+     * WordPress has no country field — timezone city is the location signal.
+     *
+     * @return array{lat: float, lng: float}
+     */
+    private static function theme_coords() {
+        $tz = self::theme_timezone_string();
+
+        $map = array(
+            'Europe/Madrid'                      => array( 40.42, -3.70 ),
+            'Europe/Andorra'                     => array( 42.51, 1.52 ),
+            'Atlantic/Canary'                    => array( 28.29, -16.63 ),
+            'Europe/London'                      => array( 51.51, -0.13 ),
+            'Europe/Paris'                       => array( 48.86, 2.35 ),
+            'Europe/Berlin'                      => array( 52.52, 13.41 ),
+            'Europe/Rome'                        => array( 41.90, 12.50 ),
+            'Europe/Lisbon'                      => array( 38.72, -9.14 ),
+            'Europe/Brussels'                    => array( 50.85, 4.35 ),
+            'Europe/Amsterdam'                   => array( 52.37, 4.90 ),
+            'Europe/Zurich'                      => array( 47.37, 8.54 ),
+            'Europe/Vienna'                      => array( 48.21, 16.37 ),
+            'America/Mexico_City'                => array( 19.43, -99.13 ),
+            'America/New_York'                   => array( 40.71, -74.01 ),
+            'America/Chicago'                    => array( 41.88, -87.63 ),
+            'America/Denver'                     => array( 39.74, -104.99 ),
+            'America/Los_Angeles'                => array( 34.05, -118.24 ),
+            'America/Argentina/Buenos_Aires'     => array( -34.60, -58.38 ),
+            'America/Sao_Paulo'                  => array( -23.55, -46.63 ),
+            'America/Bogota'                     => array( 4.71, -74.07 ),
+            'America/Lima'                       => array( -12.05, -77.04 ),
+            'America/Santiago'                   => array( -33.45, -70.67 ),
+            'America/Caracas'                    => array( 10.48, -66.90 ),
+            'America/Guayaquil'                  => array( -2.17, -79.92 ),
+            'America/Panama'                     => array( 8.98, -79.52 ),
+            'America/Costa_Rica'                 => array( 9.93, -84.08 ),
+            'America/Guatemala'                  => array( 14.63, -90.51 ),
+            'America/Havana'                     => array( 23.11, -82.37 ),
+            'America/Puerto_Rico'                => array( 18.47, -66.11 ),
+            'America/Santo_Domingo'              => array( 18.49, -69.93 ),
+            'Asia/Tokyo'                         => array( 35.68, 139.69 ),
+            'Australia/Sydney'                   => array( -33.87, 151.21 ),
+            'UTC'                                => array( 0.0, 0.0 ),
+        );
+
+        if ( isset( $map[ $tz ] ) ) {
+            return array(
+                'lat' => (float) $map[ $tz ][0],
+                'lng' => (float) $map[ $tz ][1],
+            );
+        }
+
+        // Continent fallback when WP uses a city timezone not listed above.
+        if ( 0 === strpos( $tz, 'Europe/' ) ) {
+            return array( 'lat' => 41.39, 'lng' => 2.17 );
+        }
+        if ( 0 === strpos( $tz, 'America/' ) ) {
+            return array( 'lat' => 19.43, 'lng' => -99.13 );
+        }
+        if ( 0 === strpos( $tz, 'Atlantic/' ) ) {
+            return array( 'lat' => 28.29, 'lng' => -16.63 );
+        }
+        if ( 0 === strpos( $tz, 'Asia/' ) ) {
+            return array( 'lat' => 35.68, 'lng' => 139.69 );
+        }
+        if ( 0 === strpos( $tz, 'Australia/' ) || 0 === strpos( $tz, 'Pacific/' ) ) {
+            return array( 'lat' => -33.87, 'lng' => 151.21 );
+        }
+        if ( 0 === strpos( $tz, 'Africa/' ) ) {
+            return array( 'lat' => 30.04, 'lng' => 31.24 );
+        }
+
+        // UTC±offset or unknown — Iberian default (common TSO installs).
+        return array( 'lat' => 41.39, 'lng' => 2.17 );
     }
 
     /**
@@ -453,7 +546,7 @@ class TSOIMMA_Admin_Page {
 
     public static function render_page() {
         ?>
-        <div id="imp-app" class="imp-wrap">
+        <div id="imp-app" class="imp-wrap" data-theme="night" data-theme-pref="auto">
 
             <!-- HEADER -->
             <div class="imp-header">
@@ -467,6 +560,10 @@ class TSOIMMA_Admin_Page {
                     <a class="imp-donate-btn" href="https://ko-fi.com/deadko_cat" target="_blank" rel="noopener noreferrer">
                         <span data-i18n="donate_support">☕ Dona suport al plugin</span>
                     </a>
+                    <button type="button" id="imp-theme-toggle" class="imp-theme-btn" aria-pressed="mixed" title="Mode auto">
+                        <span class="imp-theme-icon" aria-hidden="true">🌓</span>
+                        <span class="imp-theme-label" data-i18n="theme_auto">Mode auto</span>
+                    </button>
                     <div class="imp-lang-switcher" role="group" aria-label="Idioma">
                         <button class="imp-lang-btn active" data-lang="ca" title="Català">CA</button>
                         <button class="imp-lang-btn" data-lang="es" title="Español">ES</button>
@@ -549,7 +646,7 @@ class TSOIMMA_Admin_Page {
                     <h2 class="imp-panel-title" data-i18n="dash_queue_title">Cua en segon pla</h2>
                     <p class="imp-panel-desc" data-i18n="dash_queue_desc">Les optimitzacions massives s'executen en segon pla via WP-Cron (5 imatges per lot).</p>
                     <div id="imp-queue-status" class="imp-queue-status"></div>
-                    <button id="imp-queue-cancel" class="imp-btn imp-btn-ghost" data-i18n="dash_queue_cancel">Cancel·lar jobs pendents</button>
+                    <button id="imp-queue-cancel" class="imp-btn imp-btn-ghost" data-i18n="dash_queue_cancel">Cancel·lar pendents / miniatures</button>
                 </div>
 
                 <div class="imp-panel">
@@ -602,7 +699,7 @@ class TSOIMMA_Admin_Page {
                         <div class="imp-field imp-field-check">
                             <label>
                                 <input type="checkbox" id="imp-replace" checked>
-                                Reemplaça l'original i actualitza tots els links
+                                <span data-i18n="bulk_replace_label">Reemplaça l'original i actualitza tots els links</span>
                             </label>
                         </div>
                     </div>
@@ -1067,6 +1164,7 @@ class TSOIMMA_Admin_Page {
                     </div>
                     <button id="imp-save-auto" class="imp-btn imp-btn-primary" style="margin-top:20px;" data-i18n="save_config">💾 Guardar configuració</button>
                     <span id="imp-auto-saved" style="display:none;margin-left:12px;color:var(--imp-success);font-size:13px;">✅ Guardat!</span>
+                    <p class="imp-panel-desc" style="margin-top:14px;margin-bottom:0;" data-i18n-html="auto_history_hint">Les auto-optimitzacions es registren a la pestanya <strong>Historial</strong> (filtre 🤖 Auto-optimitzades).</p>
                     <div style="margin-top:16px;padding:12px;background:var(--imp-surface2);border:1px solid var(--imp-border);border-radius:var(--imp-radius-sm);">
                         <p style="font-size:12px;color:var(--imp-text-muted);margin-bottom:8px;" data-i18n-html="repair_images_desc">🔧 <strong style="color:var(--imp-warn);">Reparació d'imatges</strong> — Si tens imatges auto-optimitzades a WebP que no apareixen a SEO &amp; Noms ni a Optimitzar, aquest botó repara el path a la base de dades.</p>
                         <button id="imp-fix-orphan-meta" class="imp-btn imp-btn-ghost" data-i18n="repair_paths">🔧 Reparar imatges amb path trencat</button>
@@ -1091,27 +1189,6 @@ class TSOIMMA_Admin_Page {
                             <span id="imp-ghost-delete-result" style="display:none;font-size:13px;margin-left:8px;"></span>
                         </div>
                     </div>
-                </div>
-
-                <div class="imp-panel">
-                    <h2 class="imp-panel-title" data-i18n="auto_stats_title">Estadístiques d'auto-optimització</h2>
-                    <div id="imp-auto-stats" class="imp-stats-grid">
-                        <div class="imp-loading" data-i18n="loading_stats">Carregant estadístiques...</div>
-                    </div>
-                </div>
-
-                <div class="imp-panel">
-                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
-                        <h2 class="imp-panel-title" style="margin-bottom:0;" data-i18n="auto_history_title">Historial d'auto-optimització</h2>
-                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                            <button id="imp-auto-history-clear-30" class="imp-btn imp-btn-ghost" data-i18n="clear_30">🗑️ Netejar &gt;30 dies</button>
-                            <button id="imp-auto-history-clear-all" class="imp-btn imp-btn-danger" data-i18n="clear_all">🗑️ Netejar tot</button>
-                        </div>
-                    </div>
-                    <div id="imp-auto-history-wrap">
-                        <div class="imp-loading" data-i18n="loading_data">Carregant...</div>
-                    </div>
-                    <div class="imp-pagination" id="imp-auto-history-pagination"></div>
                 </div>
             </div>
 
@@ -1157,7 +1234,6 @@ class TSOIMMA_Admin_Page {
                     </div>
                     <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
                         <button id="imp-history-load" class="imp-btn imp-btn-primary"data-i18n="history_load">🔄 Carregar / filtrar</button>
-                        <button type="button" id="imp-history-clear-dates" class="imp-btn imp-btn-ghost" data-i18n="history_clear_dates">📅 Totes les dates</button>
                         <button id="imp-history-clear-30" class="imp-btn imp-btn-ghost" data-i18n="clear_30">🗑️ Netejar >30 dies</button>
                         <button id="imp-history-clear-all" class="imp-btn imp-btn-danger" data-i18n="clear_all">🗑️ Netejar tot</button>
                     </div>

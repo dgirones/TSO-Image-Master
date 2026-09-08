@@ -13,6 +13,7 @@ class TSOIMMA_Queue {
 	const LOCK_OPTION     = 'tsoimma_queue_lock';
 	const ENQUEUE_LOCK_OPTION = 'tsoimma_queue_enqueue_lock';
 	const ENQUEUE_LOCK_TTL    = 30;
+	const ATTACHMENT_LOCK_PREFIX = 'tsoimma_opt_lock_';
 	const BATCH_SIZE      = 5;
 	const THUMBS_BATCH    = 2;
 	const LOCK_TTL        = 900;
@@ -42,16 +43,24 @@ class TSOIMMA_Queue {
 	 * @return array<string, mixed>
 	 */
 	public static function enqueue_optimize( $attachment_ids, $format, $quality, $replace = true ) {
+		$requested = array_values( array_unique( array_filter( array_map( 'absint', (array) $attachment_ids ) ) ) );
+		$queued    = 0;
+		$skipped   = 0;
+
 		if ( ! self::acquire_enqueue_lock() ) {
 			usleep( 100000 );
 			if ( ! self::acquire_enqueue_lock() ) {
-				return self::get_status();
+				$status             = self::get_status();
+				$status['queued']   = 0;
+				$status['skipped']  = count( $requested );
+				$status['requested'] = count( $requested );
+				return $status;
 			}
 		}
 
 		try {
 			$format  = sanitize_key( $format );
-			$quality = min( 100, max( 50, absint( $quality ) ) );
+			$quality = tsoimma_clamp_image_quality( $quality );
 			$queue   = self::get_queue();
 			self::prune_finished_jobs( $queue );
 
@@ -65,8 +74,12 @@ class TSOIMMA_Queue {
 				}
 			}
 
-			foreach ( array_map( 'absint', (array) $attachment_ids ) as $attachment_id ) {
-				if ( $attachment_id <= 0 || isset( $busy[ $attachment_id ] ) ) {
+			foreach ( $requested as $attachment_id ) {
+				if ( $attachment_id <= 0 ) {
+					continue;
+				}
+				if ( isset( $busy[ $attachment_id ] ) || self::has_attachment_lock( $attachment_id ) ) {
+					++$skipped;
 					continue;
 				}
 				$queue['jobs'][] = array(
@@ -83,13 +96,18 @@ class TSOIMMA_Queue {
 					'started'       => 0,
 				);
 				$busy[ $attachment_id ] = true;
+				++$queued;
 			}
 
 			$queue['updated'] = time();
 			update_option( self::OPTION_KEY, $queue, false );
 			self::schedule();
 
-			return self::get_status();
+			$status              = self::get_status();
+			$status['queued']    = $queued;
+			$status['skipped']   = $skipped;
+			$status['requested'] = count( $requested );
+			return $status;
 		} finally {
 			self::release_enqueue_lock();
 		}
@@ -210,20 +228,18 @@ class TSOIMMA_Queue {
 	 * @return void
 	 */
 	private static function process_job_convert( $job_id, $job ) {
-		$result = TSOIMMA_Optimizer::run_optimize_pipeline(
-			absint( $job['attachment_id'] ),
-			sanitize_key( $job['format'] ?? 'webp' ),
-			absint( $job['quality'] ?? 82 ),
-			! empty( $job['replace'] ),
-			true
-		);
+		$attachment_id = absint( $job['attachment_id'] );
+		$format        = sanitize_key( $job['format'] ?? 'webp' );
+		$quality       = tsoimma_clamp_image_quality( $job['quality'] ?? 82 );
+		$replace       = ! empty( $job['replace'] );
 
-		if ( is_wp_error( $result ) ) {
+		$lock_token = self::acquire_attachment_lock( $attachment_id );
+		if ( '' === $lock_token ) {
+			// AJAX (or another worker) owns this attachment — defer.
 			self::update_job(
 				$job_id,
 				array(
-					'status'  => 'error',
-					'error'   => $result->get_error_message(),
+					'status'  => 'pending',
 					'started' => 0,
 					'phase'   => 'convert',
 				)
@@ -231,28 +247,117 @@ class TSOIMMA_Queue {
 			return;
 		}
 
-		if ( ! empty( $result['thumbnails_pending'] ) ) {
+		$keep_lock_for_thumbs = false;
+		try {
+			self::refresh_attachment_lock( $attachment_id, $lock_token );
+
+			// Stuck reclaim: convert already applied (target ext + backup) → skip to thumbs.
+			if ( self::job_convert_already_applied( $attachment_id, $format ) ) {
+				$keep_lock_for_thumbs = true;
+				// Do not re-log History — pipeline already logged before the worker died.
+				self::update_job(
+					$job_id,
+					array(
+						'status'  => 'thumbs_pending',
+						'error'   => '',
+						'started' => 0,
+						'phase'   => 'thumbs',
+						'format'  => $format,
+					)
+				);
+				return;
+			}
+
+			$result = TSOIMMA_Optimizer::run_optimize_pipeline(
+				$attachment_id,
+				$format,
+				$quality,
+				$replace,
+				true
+			);
+
+			if ( is_wp_error( $result ) ) {
+				self::update_job(
+					$job_id,
+					array(
+						'status'  => 'error',
+						'error'   => $result->get_error_message(),
+						'started' => 0,
+						'phase'   => 'convert',
+					)
+				);
+				return;
+			}
+
+			if ( ! empty( $result['format'] ) ) {
+				$format = sanitize_key( (string) $result['format'] );
+			}
+
+			if ( ! empty( $result['thumbnails_pending'] ) ) {
+				$keep_lock_for_thumbs = true;
+				self::update_job(
+					$job_id,
+					array(
+						'status'  => 'thumbs_pending',
+						'error'   => '',
+						'started' => 0,
+						'phase'   => 'thumbs',
+						'format'  => $format,
+					)
+				);
+				return;
+			}
+
 			self::update_job(
 				$job_id,
 				array(
-					'status'  => 'thumbs_pending',
+					'status'  => 'done',
 					'error'   => '',
 					'started' => 0,
-					'phase'   => 'thumbs',
+					'phase'   => 'convert',
+					'format'  => $format,
 				)
 			);
-			return;
+		} finally {
+			if ( ! $keep_lock_for_thumbs ) {
+				self::release_attachment_lock( $attachment_id, $lock_token );
+			}
+		}
+	}
+
+	/**
+	 * Whether convert already produced the target file (used after stuck reclaim).
+	 *
+	 * @param int    $attachment_id Attachment ID.
+	 * @param string $format        Requested format.
+	 * @return bool
+	 */
+	private static function job_convert_already_applied( $attachment_id, $format ) {
+		$attachment_id = absint( $attachment_id );
+		if ( $attachment_id <= 0 ) {
+			return false;
 		}
 
-		self::update_job(
-			$job_id,
-			array(
-				'status'  => 'done',
-				'error'   => '',
-				'started' => 0,
-				'phase'   => 'convert',
-			)
-		);
+		$file = get_attached_file( $attachment_id );
+		if ( ! $file || ! file_exists( $file ) ) {
+			return false;
+		}
+
+		$backup = TSOIMMA_Optimizer::get_backup_status( $attachment_id, false );
+		if ( empty( $backup['has_backup'] ) ) {
+			return false;
+		}
+
+		$current_ext = strtolower( (string) pathinfo( $file, PATHINFO_EXTENSION ) );
+		$format      = sanitize_key( $format );
+		if ( 'jpeg' === $format ) {
+			$format = 'jpg';
+		}
+		if ( 'original' === $format ) {
+			return false;
+		}
+
+		return TSOIMMA_Optimizer::extensions_match( $current_ext, $format );
 	}
 
 	/**
@@ -265,9 +370,27 @@ class TSOIMMA_Queue {
 	private static function process_job_thumbnails( $job_id, $job ) {
 		$attachment_id = absint( $job['attachment_id'] );
 		$format        = sanitize_key( $job['format'] ?? 'webp' );
-		$quality       = absint( $job['quality'] ?? 82 );
+		$quality       = tsoimma_clamp_image_quality( $job['quality'] ?? 82 );
+
+		// Convert phase may already hold the lock; otherwise take it.
+		$lock_token = self::get_attachment_lock_token( $attachment_id );
+		if ( '' === $lock_token ) {
+			$lock_token = self::acquire_attachment_lock( $attachment_id );
+		}
+		if ( '' === $lock_token ) {
+			self::update_job(
+				$job_id,
+				array(
+					'status'  => 'thumbs_pending',
+					'started' => 0,
+					'phase'   => 'thumbs',
+				)
+			);
+			return;
+		}
 
 		try {
+			self::refresh_attachment_lock( $attachment_id, $lock_token );
 			TSOIMMA_Optimizer::run_optimize_thumbnails_phase( $attachment_id, $format, $quality );
 			TSOIMMA_Cache_Helper::purge_after_change( $attachment_id );
 			self::update_job(
@@ -279,8 +402,10 @@ class TSOIMMA_Queue {
 					'phase'   => 'thumbs',
 				)
 			);
-		} catch ( \Throwable $ex ) {
-			self::update_job(
+        } catch ( \Throwable $ex ) {
+            // Convert already succeeded — still record history; thumbs can be retried.
+            TSOIMMA_History::flush_pending( $attachment_id );
+            self::update_job(
 				$job_id,
 				array(
 					'status'  => 'error',
@@ -289,6 +414,8 @@ class TSOIMMA_Queue {
 					'phase'   => 'thumbs',
 				)
 			);
+		} finally {
+			self::release_attachment_lock( $attachment_id, $lock_token );
 		}
 	}
 
@@ -315,9 +442,19 @@ class TSOIMMA_Queue {
 		$queue = self::get_queue();
 		$jobs  = isset( $queue['jobs'] ) && is_array( $queue['jobs'] ) ? $queue['jobs'] : array();
 		foreach ( $jobs as $index => $job ) {
-			if ( isset( $job['status'] ) && 'pending' === $job['status'] ) {
-				$jobs[ $index ]['status'] = 'cancelled';
+			$status = isset( $job['status'] ) ? (string) $job['status'] : '';
+			if ( 'pending' !== $status && 'thumbs_pending' !== $status ) {
+				continue;
 			}
+			// Free attachment locks held for deferred thumbs so other work can proceed.
+			if ( 'thumbs_pending' === $status && ! empty( $job['attachment_id'] ) ) {
+				$aid   = absint( $job['attachment_id'] );
+				$token = self::get_attachment_lock_token( $aid );
+				if ( '' !== $token ) {
+					self::release_attachment_lock( $aid, $token );
+				}
+			}
+			$jobs[ $index ]['status'] = 'cancelled';
 		}
 		$queue['jobs']    = $jobs;
 		$queue['updated'] = time();
@@ -526,31 +663,12 @@ class TSOIMMA_Queue {
 	 * @return bool
 	 */
 	private static function acquire_lock() {
-		$now   = time();
-		$token = wp_generate_password( 12, false, false );
-		$payload = array(
-			'token' => $token,
-			'until' => $now + self::LOCK_TTL,
-		);
-
-		if ( add_option( self::LOCK_OPTION, $payload, '', 'no' ) ) {
-			self::$lock_token = $token;
-			return true;
-		}
-
-		$lock = get_option( self::LOCK_OPTION );
-		if ( is_array( $lock ) && isset( $lock['until'] ) && (int) $lock['until'] > $now ) {
+		$token = self::try_acquire_option_lock( self::LOCK_OPTION, self::LOCK_TTL );
+		if ( '' === $token ) {
 			return false;
 		}
-
-		update_option( self::LOCK_OPTION, $payload, false );
-		$check = get_option( self::LOCK_OPTION );
-		if ( is_array( $check ) && isset( $check['token'] ) && $check['token'] === $token ) {
-			self::$lock_token = $token;
-			return true;
-		}
-
-		return false;
+		self::$lock_token = $token;
+		return true;
 	}
 
 	/**
@@ -576,7 +694,14 @@ class TSOIMMA_Queue {
 	 * @return void
 	 */
 	private static function release_lock() {
+		$token = self::$lock_token;
 		self::$lock_token = '';
+		if ( '' === $token ) {
+			return;
+		}
+		if ( ! self::option_lock_owned( self::LOCK_OPTION, $token ) ) {
+			return;
+		}
 		delete_option( self::LOCK_OPTION );
 	}
 
@@ -586,25 +711,7 @@ class TSOIMMA_Queue {
 	 * @return bool
 	 */
 	private static function acquire_enqueue_lock() {
-		$now     = time();
-		$token   = wp_generate_password( 12, false, false );
-		$payload = array(
-			'token' => $token,
-			'until' => $now + self::ENQUEUE_LOCK_TTL,
-		);
-
-		if ( add_option( self::ENQUEUE_LOCK_OPTION, $payload, '', 'no' ) ) {
-			return true;
-		}
-
-		$lock = get_option( self::ENQUEUE_LOCK_OPTION );
-		if ( is_array( $lock ) && isset( $lock['until'] ) && (int) $lock['until'] > $now ) {
-			return false;
-		}
-
-		update_option( self::ENQUEUE_LOCK_OPTION, $payload, false );
-		$check = get_option( self::ENQUEUE_LOCK_OPTION );
-		return is_array( $check ) && isset( $check['token'] ) && $check['token'] === $token;
+		return '' !== self::try_acquire_option_lock( self::ENQUEUE_LOCK_OPTION, self::ENQUEUE_LOCK_TTL );
 	}
 
 	/**
@@ -612,6 +719,182 @@ class TSOIMMA_Queue {
 	 */
 	private static function release_enqueue_lock() {
 		delete_option( self::ENQUEUE_LOCK_OPTION );
+	}
+
+	/**
+	 * Atomic-ish option lock: add_option, or delete+add when expired.
+	 *
+	 * @param string $option Option name.
+	 * @param int    $ttl    Seconds.
+	 * @return string Token on success, empty string on failure.
+	 */
+	private static function try_acquire_option_lock( $option, $ttl ) {
+		$now     = time();
+		$token   = wp_generate_password( 12, false, false );
+		$payload = array(
+			'token' => $token,
+			'until' => $now + absint( $ttl ),
+		);
+
+		if ( add_option( $option, $payload, '', 'no' ) ) {
+			return self::option_lock_owned( $option, $token ) ? $token : '';
+		}
+
+		$lock = get_option( $option );
+		if ( is_array( $lock ) && isset( $lock['until'] ) && (int) $lock['until'] > $now ) {
+			return '';
+		}
+
+		// Expired/corrupt: claim with update_option, then verify we still own the token
+		// (two reclaimers → last writer wins; the other fails verification).
+		update_option( $option, $payload, false );
+		return self::option_lock_owned( $option, $token ) ? $token : '';
+	}
+
+	/**
+	 * @param string $option Option name.
+	 * @param string $token  Expected token.
+	 * @return bool
+	 */
+	private static function option_lock_owned( $option, $token ) {
+		$check = get_option( $option );
+		return is_array( $check ) && isset( $check['token'] ) && (string) $check['token'] === (string) $token;
+	}
+
+	/**
+	 * Option key for a per-attachment optimize lock.
+	 *
+	 * @param int $attachment_id Attachment ID.
+	 * @return string
+	 */
+	private static function attachment_lock_option( $attachment_id ) {
+		return self::ATTACHMENT_LOCK_PREFIX . absint( $attachment_id );
+	}
+
+	/**
+	 * Whether an attachment has an active optimize lock (AJAX or queue).
+	 *
+	 * @param int $attachment_id Attachment ID.
+	 * @return bool
+	 */
+	public static function has_attachment_lock( $attachment_id ) {
+		$attachment_id = absint( $attachment_id );
+		if ( $attachment_id <= 0 ) {
+			return false;
+		}
+		$lock = get_option( self::attachment_lock_option( $attachment_id ) );
+		return is_array( $lock ) && isset( $lock['until'] ) && (int) $lock['until'] > time();
+	}
+
+	/**
+	 * Whether the attachment is in an active queue job or has an optimize lock.
+	 *
+	 * @param int $attachment_id Attachment ID.
+	 * @return bool
+	 */
+	public static function is_attachment_busy( $attachment_id ) {
+		$attachment_id = absint( $attachment_id );
+		if ( $attachment_id <= 0 ) {
+			return false;
+		}
+		if ( self::has_attachment_lock( $attachment_id ) ) {
+			return true;
+		}
+		$queue = self::get_queue();
+		foreach ( $queue['jobs'] as $job ) {
+			if ( ! isset( $job['status'], $job['attachment_id'] ) ) {
+				continue;
+			}
+			if ( absint( $job['attachment_id'] ) !== $attachment_id ) {
+				continue;
+			}
+			if ( self::is_active_status( (string) $job['status'] ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Extend per-attachment lock TTL while convert/thumbs work continues.
+	 *
+	 * @param int    $attachment_id Attachment ID.
+	 * @param string $token         Lock ownership token.
+	 * @return void
+	 */
+	public static function refresh_attachment_lock( $attachment_id, $token ) {
+		$attachment_id = absint( $attachment_id );
+		$token         = (string) $token;
+		if ( $attachment_id <= 0 || '' === $token ) {
+			return;
+		}
+		$option = self::attachment_lock_option( $attachment_id );
+		if ( ! self::option_lock_owned( $option, $token ) ) {
+			return;
+		}
+		$lock = get_option( $option );
+		if ( ! is_array( $lock ) ) {
+			return;
+		}
+		$lock['until'] = time() + self::LOCK_TTL;
+		update_option( $option, $lock, false );
+	}
+
+	/**
+	 * Acquire a short-lived per-attachment optimize lock.
+	 *
+	 * @param int $attachment_id Attachment ID.
+	 * @return string Lock token on success, empty string on failure.
+	 */
+	public static function acquire_attachment_lock( $attachment_id ) {
+		$attachment_id = absint( $attachment_id );
+		if ( $attachment_id <= 0 ) {
+			return '';
+		}
+		return self::try_acquire_option_lock( self::attachment_lock_option( $attachment_id ), self::LOCK_TTL );
+	}
+
+	/**
+	 * Current attachment lock token when the lock is still active.
+	 *
+	 * Used to hand off ownership from convert → thumbs (AJAX/cron/queue).
+	 *
+	 * @param int $attachment_id Attachment ID.
+	 * @return string Token or empty string.
+	 */
+	public static function get_attachment_lock_token( $attachment_id ) {
+		$attachment_id = absint( $attachment_id );
+		if ( $attachment_id <= 0 ) {
+			return '';
+		}
+		$lock = get_option( self::attachment_lock_option( $attachment_id ) );
+		if ( ! is_array( $lock ) || empty( $lock['token'] ) ) {
+			return '';
+		}
+		if ( ! isset( $lock['until'] ) || (int) $lock['until'] <= time() ) {
+			return '';
+		}
+		return (string) $lock['token'];
+	}
+
+	/**
+	 * Release per-attachment optimize lock only when $token still owns it.
+	 *
+	 * @param int    $attachment_id Attachment ID.
+	 * @param string $token         Token returned by acquire_attachment_lock() / get_attachment_lock_token().
+	 * @return void
+	 */
+	public static function release_attachment_lock( $attachment_id, $token = '' ) {
+		$attachment_id = absint( $attachment_id );
+		$token         = (string) $token;
+		if ( $attachment_id <= 0 || '' === $token ) {
+			return;
+		}
+		$option = self::attachment_lock_option( $attachment_id );
+		if ( ! self::option_lock_owned( $option, $token ) ) {
+			return;
+		}
+		delete_option( $option );
 	}
 
 	/**

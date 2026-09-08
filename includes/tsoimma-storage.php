@@ -39,6 +39,7 @@ function tsoimma_attachment_meta_key_map() {
 		'pdf_bg_fallback_tried'  => array( '_tsoimma_pdf_bg_fallback_tried', '_tso_im_pdf_bg_fallback_tried' ),
 		'pdf_bg_prev_size'       => array( '_tsoimma_pdf_bg_prev_size', '_tso_im_pdf_bg_prev_size' ),
 		'pdf_status'             => array( '_tsoimma_pdf_status', '_tso_im_pdf_status' ),
+		'pending_history'        => array( '_tsoimma_pending_history', '_tsoimma_pending_history' ),
 	);
 }
 
@@ -231,6 +232,23 @@ function tsoimma_get_ajax_post_text_array( $key ) {
 function tsoimma_ajax_post_has( $key ) {
 	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Caller verifies nonce first.
 	return isset( $_POST[ $key ] );
+}
+
+/**
+ * Clamp image encode quality to the UI range (50–100).
+ *
+ * @param mixed $quality Raw quality value.
+ * @return int
+ */
+function tsoimma_clamp_image_quality( $quality ) {
+	$quality = absint( $quality );
+	if ( $quality < 50 ) {
+		return 50;
+	}
+	if ( $quality > 100 ) {
+		return 100;
+	}
+	return $quality;
 }
 
 /**

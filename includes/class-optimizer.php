@@ -19,7 +19,7 @@ class TSOIMMA_Optimizer {
     ) {
         $attachment_id   = absint( $attachment_id );
         $output_format   = self::normalize_output_format( $output_format );
-        $quality         = min( 100, max( 1, absint( $quality ) ) );
+        $quality         = tsoimma_clamp_image_quality( $quality );
         $file_path       = get_attached_file( $attachment_id );
 
         if ( ! $file_path || ! file_exists( $file_path ) ) {
@@ -155,34 +155,63 @@ class TSOIMMA_Optimizer {
         $final_path   = $path_info['dirname'] . '/' . $path_info['filename'] . '.' . $new_ext;
         $old_path     = $file_path;
         // Store backup in plugin-specific uploads subdirectory (WP.org guideline).
-        $backup_path  = self::get_backup_path( $old_path, strtolower( $old_ext ) );
+        $backup_path      = self::get_backup_path( $old_path, strtolower( $old_ext ) );
+        $backup_preserved = false;
 
         // Backup silenciós — només si $make_backup és true, després de validar el temp.
+        // Never overwrite an existing valid backup (keeps the true original for revert).
+        $fase2_rollback_path = '';
         if ( $make_backup ) {
-        if ( ! self::copy_file_validated( $old_path, $backup_path ) ) {
-            self::delete_file_if_exists( $temp_path );
-            self::prune_empty_backup_dirs( $backup_path );
-            return new WP_Error(
-                'backup_failed',
-                'No s\'ha pogut crear la còpia de seguretat. No s\'ha modificat l\'original.'
+            $existing_backup = self::resolve_backup_path(
+                (string) tsoimma_get_attachment_meta( $attachment_id, 'backup_file' ),
+                true
             );
-        }
+            if ( ! $existing_backup ) {
+                $existing_backup = self::locate_backup_file_for_attachment( $attachment_id );
+            }
+            if ( $existing_backup && self::is_valid_image_file( $existing_backup ) ) {
+                $backup_path      = $existing_backup;
+                $backup_preserved = true;
+                // Mid-pipeline rollback must restore the *current* file, not the first original.
+                $fase2_rollback_path = self::get_fase2_rollback_path( $old_path, strtolower( $old_ext ) );
+                if ( ! self::copy_file_validated( $old_path, $fase2_rollback_path ) ) {
+                    self::delete_file_if_exists( $temp_path );
+                    self::prune_empty_backup_dirs( $fase2_rollback_path );
+                    return new WP_Error(
+                        'backup_failed',
+                        'No s\'ha pogut crear la còpia de seguretat. No s\'ha modificat l\'original.'
+                    );
+                }
+            } elseif ( ! self::copy_file_validated( $old_path, $backup_path ) ) {
+                self::delete_file_if_exists( $temp_path );
+                self::prune_empty_backup_dirs( $backup_path );
+                return new WP_Error(
+                    'backup_failed',
+                    'No s\'ha pogut crear la còpia de seguretat. No s\'ha modificat l\'original.'
+                );
+            }
         }
 
         if ( ! self::copy_file_validated( $temp_path, $final_path ) ) {
             self::delete_file_if_exists( $temp_path );
-            self::delete_backup_file( $backup_path );
+            // Never delete a preserved first-original backup on write failure.
+            if ( ! $backup_preserved ) {
+                self::delete_backup_file( $backup_path );
+            }
+            self::delete_file_if_exists( $fase2_rollback_path );
+            self::prune_empty_backup_dirs( $fase2_rollback_path );
             return new WP_Error( 'move_failed', 'No s\'ha pogut escriure el fitxer final. Verifica permisos.' );
         }
 
         self::delete_file_if_exists( $temp_path );
 
-        // Eliminar original (i variant -scaled de WordPress) si l'extensió ha canviat.
+        // Eliminar original (i variant -scaled / full-size sibling) si l'extensió ha canviat.
         if ( ! self::extensions_match( $old_ext, $new_ext ) ) {
             if ( file_exists( $old_path ) ) {
                 wp_delete_file( $old_path );
             }
             self::delete_scaled_variant_if_exists( $path_info['dirname'], $path_info['filename'], $old_ext );
+            self::delete_unscaled_sibling_if_exists( $path_info['dirname'], $path_info['filename'], $old_ext );
         }
 
         clearstatcache( true, $final_path );
@@ -195,19 +224,22 @@ class TSOIMMA_Optimizer {
         $new_url      = trailingslashit( $upload_dir['baseurl'] ) . self::encode_rel_path_for_url( $rel_new );
         $old_url      = trailingslashit( $upload_dir['baseurl'] ) . self::encode_rel_path_for_url( $rel_old );
 
-        $result['new_size']      = $new_size;
-        $result['savings_bytes'] = max( 0, $original_size - $new_size );
-        $result['savings_pct']   = $original_size > 0 ? round( ( 1 - $new_size / $original_size ) * 100, 1 ) : 0;
-        $result['new_w']         = $new_w;
-        $result['new_h']         = $new_h;
-        $result['replaced']      = true;
-        $result['old_url']       = $old_url;
-        $result['new_url']       = $new_url;
-        $result['new_path']      = $final_path;
-        $result['old_path']      = $old_path;
-        $result['backup_path']   = file_exists( $backup_path ) ? $backup_path : '';
-        $result['has_backup']    = file_exists( $backup_path );
-        $result['backup_size']   = file_exists( $backup_path ) ? filesize( $backup_path ) : 0;
+        $result['format']              = $output_format;
+        $result['new_size']            = $new_size;
+        $result['savings_bytes']       = max( 0, $original_size - $new_size );
+        $result['savings_pct']         = $original_size > 0 ? round( ( 1 - $new_size / $original_size ) * 100, 1 ) : 0;
+        $result['new_w']               = $new_w;
+        $result['new_h']               = $new_h;
+        $result['replaced']            = true;
+        $result['old_url']             = $old_url;
+        $result['new_url']             = $new_url;
+        $result['new_path']            = $final_path;
+        $result['old_path']            = $old_path;
+        $result['backup_path']         = ( $make_backup && file_exists( $backup_path ) ) ? $backup_path : '';
+        $result['has_backup']          = ( $make_backup && file_exists( $backup_path ) );
+        $result['backup_size']         = ( $make_backup && file_exists( $backup_path ) ) ? filesize( $backup_path ) : 0;
+        $result['backup_preserved']    = $backup_preserved;
+        $result['fase2_rollback_path'] = ( $fase2_rollback_path && file_exists( $fase2_rollback_path ) ) ? $fase2_rollback_path : '';
 
         return $result;
     }
@@ -230,12 +262,15 @@ class TSOIMMA_Optimizer {
         $backup_path   = $result['backup_path'];
         $quality       = isset( $result['quality'] ) ? absint( $result['quality'] ) : 82;
 
-        // Desar metes del backup
-        if ( $backup_path && file_exists( $backup_path ) ) {
+        // Desar metes del backup (skip when reusing the first original backup).
+        if ( $backup_path && file_exists( $backup_path ) && empty( $result['backup_preserved'] ) ) {
             tsoimma_update_attachment_meta( $attachment_id, 'backup_file', $backup_path );
             tsoimma_update_attachment_meta( $attachment_id, 'backup_mime', self::ext_to_mime( $old_ext ) );
             tsoimma_update_attachment_meta( $attachment_id, 'backup_size', filesize( $backup_path ) );
             tsoimma_update_attachment_meta( $attachment_id, 'backup_attached_file', self::normalize_attached_file_meta_value( get_post_meta( $attachment_id, '_wp_attached_file', true ) ) );
+            tsoimma_update_attachment_meta( $attachment_id, 'backup_current_name', pathinfo( (string) $new_path, PATHINFO_FILENAME ) );
+        } elseif ( $backup_path && file_exists( $backup_path ) && ! empty( $result['backup_preserved'] ) ) {
+            // Keep original backup meta; refresh only the current basename lock.
             tsoimma_update_attachment_meta( $attachment_id, 'backup_current_name', pathinfo( (string) $new_path, PATHINFO_FILENAME ) );
         }
 
@@ -329,6 +364,12 @@ class TSOIMMA_Optimizer {
 
         clean_attachment_cache( $attachment_id );
         wp_cache_delete( $attachment_id, 'posts' );
+
+        // FASE 2 succeeded — drop mid-pipeline rollback copy (first original backup stays).
+        if ( ! empty( $result['fase2_rollback_path'] ) ) {
+            self::delete_file_if_exists( (string) $result['fase2_rollback_path'] );
+            self::prune_empty_backup_dirs( (string) $result['fase2_rollback_path'] );
+        }
     }
 
     /**
@@ -339,7 +380,7 @@ class TSOIMMA_Optimizer {
     public static function process_thumbnails_background( $attachment_id, $format, $quality ) {
         $attachment_id = absint( $attachment_id );
         $format        = sanitize_key( $format );
-        $quality       = absint( $quality );
+        $quality       = tsoimma_clamp_image_quality( $quality );
 
         // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
         @set_time_limit( 300 );
@@ -404,7 +445,6 @@ class TSOIMMA_Optimizer {
         self::repair_content_urls_for_attachment( $attachment_id, $old_meta );
 
         clean_attachment_cache( $attachment_id );
-        if ( function_exists( 'wp_cache_flush' ) ) wp_cache_flush();
         do_action( 'litespeed_purge_post', $attachment_id );  // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Third-party LiteSpeed Cache integration hook, name is defined by that plugin.
         do_action( 'litespeed_purge_all' );  // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Third-party LiteSpeed Cache integration hook, name is defined by that plugin.
         if ( function_exists( 'rocket_clean_domain' ) ) rocket_clean_domain();
@@ -1003,24 +1043,9 @@ class TSOIMMA_Optimizer {
             $old_ext = strtolower( pathinfo( $old_url, PATHINFO_EXTENSION ) );
             $new_ext = strtolower( pathinfo( $new_url, PATHINFO_EXTENSION ) );
 
-            // Si l'extensió ha canviat, substituir també les variants de nom simple.
+            // Dimension variants (-WxH) from the full URL only — never bare basename
+            // replacements (those can hit unrelated files with the same name).
             if ( ! self::extensions_match( $old_ext, $new_ext ) ) {
-                $basename = pathinfo( $old_url, PATHINFO_FILENAME );
-                $fallback_replacements[] = array(
-                    $basename . '.' . $old_ext,
-                    $basename . '.' . $new_ext,
-                );
-
-                $basename_dec = pathinfo( rawurldecode( $old_url ), PATHINFO_FILENAME );
-                if ( $basename_dec && $basename_dec !== $basename ) {
-                    $fallback_replacements[] = array(
-                        $basename_dec . '.' . $old_ext,
-                        $basename_dec . '.' . $new_ext,
-                    );
-                }
-
-                // Cover -WxH variants not present in attachment metadata.
-                // Example: old "foto.jpg" can appear as "foto-1024x768.jpg" in legacy content.
                 $dimension_replacements[] = array( $old_url, $new_url, $old_ext, $new_ext );
             }
         }
@@ -1073,7 +1098,6 @@ class TSOIMMA_Optimizer {
             self::replace_dimension_variant_urls_in_storage( $dim_pair[0], $dim_pair[1], $dim_pair[2], $dim_pair[3] );
         }
 
-        if ( function_exists( 'wp_cache_flush' ) ) wp_cache_flush();
         do_action( 'litespeed_purge_all' );  // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Third-party LiteSpeed Cache integration hook, name is defined by that plugin.
         if ( function_exists( 'rocket_clean_domain' ) ) rocket_clean_domain();
         if ( function_exists( 'w3tc_flush_all' ) ) w3tc_flush_all();
@@ -1242,10 +1266,19 @@ class TSOIMMA_Optimizer {
         $old_path    = isset( $result['old_path'] ) ? (string) $result['old_path'] : '';
         $new_path    = isset( $result['new_path'] ) ? (string) $result['new_path'] : '';
         $backup_path = isset( $result['backup_path'] ) ? (string) $result['backup_path'] : '';
+        $fase2_path  = isset( $result['fase2_rollback_path'] ) ? (string) $result['fase2_rollback_path'] : '';
 
-        if ( $old_path && $backup_path && self::is_valid_image_file( $backup_path ) ) {
-            if ( ! self::copy_file_validated( $backup_path, $old_path ) ) {
+        // When the first original backup was preserved, restore from the mid-pipeline
+        // copy of the pre-op file — never from the first-original backup.
+        $restore_from = $backup_path;
+        if ( ! empty( $result['backup_preserved'] ) && $fase2_path && self::is_valid_image_file( $fase2_path ) ) {
+            $restore_from = $fase2_path;
+        }
+
+        if ( $old_path && $restore_from && self::is_valid_image_file( $restore_from ) ) {
+            if ( ! self::copy_file_validated( $restore_from, $old_path ) ) {
                 self::delete_file_if_exists( $new_path );
+                self::delete_file_if_exists( $fase2_path );
                 return false;
             }
         }
@@ -1253,6 +1286,9 @@ class TSOIMMA_Optimizer {
         if ( $new_path && ( ! $old_path || wp_normalize_path( $new_path ) !== wp_normalize_path( $old_path ) ) ) {
             self::delete_file_if_exists( $new_path );
         }
+
+        self::delete_file_if_exists( $fase2_path );
+        self::prune_empty_backup_dirs( $fase2_path );
 
         return true;
     }
@@ -1279,9 +1315,10 @@ class TSOIMMA_Optimizer {
         $backup_path = $backup_status['backup_path'];
 
         // Safety guard:
-        // If the current attached file no longer matches the backup context (usually after rename),
-        // block direct revert to prevent restoring over a different file identity.
-        if ( self::is_backup_context_mismatch( $backup_path, $backup_attached_file, $current_attached_file ) ) {
+        // Block revert only when the attachment was renamed (basename changed).
+        // Extension-only changes (JPG→WebP) are expected after optimize and must allow revert.
+        $backup_current_name = (string) tsoimma_get_attachment_meta( $attachment_id, 'backup_current_name' );
+        if ( self::is_backup_context_mismatch( $backup_path, $backup_attached_file, $current_attached_file, $backup_current_name ) ) {
             return new WP_Error(
                 'backup_mismatch_after_rename',
                 'backup_mismatch_after_rename'
@@ -1322,6 +1359,8 @@ class TSOIMMA_Optimizer {
         if ( ! is_wp_error( $generated ) && ! empty( $generated ) ) {
             $new_meta = $generated;
             wp_update_attachment_metadata( $attachment_id, $new_meta );
+            // After new thumbs exist, remove leftover size files from the optimized format.
+            self::delete_orphan_size_files( $pi_current['dirname'], $old_meta, $new_meta );
         }
 
         clean_attachment_cache( $attachment_id );
@@ -1395,7 +1434,7 @@ class TSOIMMA_Optimizer {
     public static function run_optimize_pipeline( $attachment_id, $format, $quality, $replace = true, $defer_thumbnails = false ) {
         $attachment_id = absint( $attachment_id );
         $format        = sanitize_key( $format );
-        $quality       = min( 100, max( 50, absint( $quality ) ) );
+        $quality       = tsoimma_clamp_image_quality( $quality );
 
         $res = self::optimize( $attachment_id, $format, $quality, $replace );
         if ( is_wp_error( $res ) ) {
@@ -1403,10 +1442,11 @@ class TSOIMMA_Optimizer {
         }
 
         if ( ! empty( $res['replaced'] ) ) {
+            $snapshot = self::snapshot_attachment_state( $attachment_id );
             try {
                 self::update_wp_metadata_only( $attachment_id, $res, $format );
             } catch ( \Throwable $ex ) {
-                self::rollback_optimize_files( $res );
+                self::rollback_optimize_state( $attachment_id, $res, $snapshot );
                 return new WP_Error( 'metadata_failed', 'FASE 2: ' . $ex->getMessage() );
             }
 
@@ -1430,6 +1470,7 @@ class TSOIMMA_Optimizer {
                     'savings_pct'   => $res['savings_pct'] ?? 0,
                 )
             );
+            TSOIMMA_History::clear_pending( $attachment_id );
         }
 
         TSOIMMA_Cache_Helper::purge_after_change( $attachment_id );
@@ -1448,9 +1489,26 @@ class TSOIMMA_Optimizer {
     public static function run_optimize_thumbnails_phase( $attachment_id, $format, $quality, $convert_result = array() ) {
         $attachment_id = absint( $attachment_id );
         $format        = sanitize_key( $format );
-        $quality       = min( 100, max( 50, absint( $quality ) ) );
+        $quality       = tsoimma_clamp_image_quality( $quality );
+
+        // Prefer the normalized format actually written during convert (GD fallback).
+        if ( is_array( $convert_result ) ) {
+            if ( ! empty( $convert_result['format'] ) ) {
+                $format = sanitize_key( (string) $convert_result['format'] );
+            } elseif ( ! empty( $convert_result['new_ext'] ) ) {
+                $ext = strtolower( (string) $convert_result['new_ext'] );
+                if ( 'jpeg' === $ext ) {
+                    $ext = 'jpg';
+                }
+                if ( in_array( $ext, array( 'webp', 'jpg', 'avif', 'png' ), true ) ) {
+                    $format = $ext;
+                }
+            }
+        }
+        $format = self::normalize_output_format( $format );
 
         self::process_thumbnails_background( $attachment_id, $format, $quality );
+        TSOIMMA_History::flush_pending( $attachment_id );
     }
 
     /**
@@ -1589,9 +1647,13 @@ class TSOIMMA_Optimizer {
      * @param string $backup_path Absolute backup file path.
      * @return void
      */
-    private static function delete_backup_file( $backup_path ) {
-        self::delete_file_if_exists( $backup_path );
-        self::prune_empty_backup_dirs( $backup_path );
+    public static function delete_backup_file( $backup_path ) {
+        $resolved = self::resolve_backup_path( (string) $backup_path, false );
+        if ( ! $resolved ) {
+            return;
+        }
+        self::delete_file_if_exists( $resolved );
+        self::prune_empty_backup_dirs( $resolved );
     }
 
     /**
@@ -1789,6 +1851,63 @@ class TSOIMMA_Optimizer {
         }
         foreach ( array( 'webp', 'jpg', 'jpeg', 'png', 'gif', 'avif', 'bmp' ) as $ext ) {
             self::delete_file_if_exists( $dir . $basename . '_tso_im_opt.' . $ext );
+        }
+    }
+
+    /**
+     * Public wrapper to purge leftover *_tso_im_opt.* temps for an attachment.
+     *
+     * @param int $attachment_id Attachment ID.
+     * @return void
+     */
+    public static function cleanup_opt_temps_for_attachment( $attachment_id ) {
+        $attachment_id = absint( $attachment_id );
+        $file          = get_attached_file( $attachment_id );
+        if ( ! $file ) {
+            return;
+        }
+        $pi = pathinfo( $file );
+        if ( empty( $pi['dirname'] ) || empty( $pi['filename'] ) ) {
+            return;
+        }
+        self::cleanup_stale_opt_temp_files( $pi['dirname'], $pi['filename'] );
+    }
+
+    /**
+     * Delete size files from previous metadata that are not kept after regenerate/revert.
+     *
+     * @param string               $dir      Upload subdirectory.
+     * @param array<string, mixed> $old_meta Previous attachment metadata.
+     * @param array<string, mixed> $new_meta New attachment metadata.
+     * @return void
+     */
+    private static function delete_orphan_size_files( $dir, $old_meta, $new_meta ) {
+        if ( ! is_array( $old_meta ) || empty( $old_meta['sizes'] ) || ! is_array( $old_meta['sizes'] ) ) {
+            return;
+        }
+
+        $keep = array();
+        if ( is_array( $new_meta ) && ! empty( $new_meta['sizes'] ) && is_array( $new_meta['sizes'] ) ) {
+            foreach ( $new_meta['sizes'] as $sz ) {
+                if ( ! empty( $sz['file'] ) ) {
+                    $keep[ basename( (string) $sz['file'] ) ] = true;
+                }
+            }
+        }
+
+        $dir = trailingslashit( (string) $dir );
+        foreach ( $old_meta['sizes'] as $sz ) {
+            if ( empty( $sz['file'] ) ) {
+                continue;
+            }
+            $base = basename( (string) $sz['file'] );
+            if ( isset( $keep[ $base ] ) ) {
+                continue;
+            }
+            $path = $dir . $base;
+            if ( file_exists( $path ) ) {
+                wp_delete_file( $path );
+            }
         }
     }
 
@@ -2061,6 +2180,30 @@ class TSOIMMA_Optimizer {
         }
     }
 
+    /**
+     * When converting a WP "-scaled" main file, also remove the full-size sibling
+     * still on disk with the old extension (avoids orphaned foto.jpg next to foto-scaled.webp).
+     *
+     * @param string $dir      Directory.
+     * @param string $filename Base filename (may end with -scaled).
+     * @param string $ext      Old extension.
+     * @return void
+     */
+    private static function delete_unscaled_sibling_if_exists( $dir, $filename, $ext ) {
+        $ext      = strtolower( (string) $ext );
+        $filename = (string) $filename;
+        if ( '' === $ext || '' === $filename ) {
+            return;
+        }
+        if ( ! preg_match( '/^(.*)-scaled$/i', $filename, $matches ) || empty( $matches[1] ) ) {
+            return;
+        }
+        $full_path = trailingslashit( (string) $dir ) . $matches[1] . '.' . $ext;
+        if ( file_exists( $full_path ) ) {
+            wp_delete_file( $full_path );
+        }
+    }
+
     private static function save_image( $image, $path, $ext, $quality ) {
         switch ( strtolower( $ext ) ) {
             case 'webp':
@@ -2166,21 +2309,37 @@ class TSOIMMA_Optimizer {
     /**
      * Detects dangerous mismatch between backup context and current file.
      *
-     * New backups: compare stored _wp_attached_file snapshot with current _wp_attached_file.
-     * Legacy backups: fallback to filename heuristic (backup base name vs current base name).
+     * Extension-only changes (e.g. foto.jpg → foto.webp) are NOT a mismatch.
+     * Real renames (basename changed) block revert.
+     *
+     * @param string $backup_path           Absolute backup path.
+     * @param string $stored_attached_file  _wp_attached_file snapshot at backup time.
+     * @param string $current_attached_file Current _wp_attached_file.
+     * @param string $backup_current_name   Basename locked at convert time (no extension).
+     * @return bool
      */
-    private static function is_backup_context_mismatch( $backup_path, $stored_attached_file, $current_attached_file ) {
+    private static function is_backup_context_mismatch( $backup_path, $stored_attached_file, $current_attached_file, $backup_current_name = '' ) {
         $stored_attached_file  = self::normalize_attached_file_meta_value( $stored_attached_file );
         $current_attached_file = self::normalize_attached_file_meta_value( $current_attached_file );
+        $backup_current_name   = (string) $backup_current_name;
+        $current_base          = pathinfo( (string) $current_attached_file, PATHINFO_FILENAME );
 
-        if ( $stored_attached_file !== '' && $current_attached_file !== '' ) {
-            return $stored_attached_file !== $current_attached_file;
+        // Preferred: basename locked when the optimized file was written.
+        if ( '' !== $backup_current_name && '' !== $current_base ) {
+            return $backup_current_name !== $current_base;
+        }
+
+        // Compare basenames only — ignore extension (JPG→WebP is valid).
+        if ( '' !== $stored_attached_file && '' !== $current_attached_file ) {
+            $stored_base = pathinfo( $stored_attached_file, PATHINFO_FILENAME );
+            if ( '' !== $stored_base && '' !== $current_base ) {
+                return $stored_base !== $current_base;
+            }
         }
 
         $backup_base_name = pathinfo( (string) $backup_path, PATHINFO_FILENAME );
-        $current_base_name = pathinfo( (string) $current_attached_file, PATHINFO_FILENAME );
 
-        if ( $backup_base_name === '' || $current_base_name === '' ) {
+        if ( '' === $backup_base_name || '' === $current_base ) {
             return false;
         }
 
@@ -2188,7 +2347,80 @@ class TSOIMMA_Optimizer {
             return false;
         }
 
-        return $matches[1] !== $current_base_name;
+        return $matches[1] !== $current_base;
+    }
+
+    /**
+     * Snapshot attachment DB state before FASE 2 so a failure can restore it.
+     *
+     * @param int $attachment_id Attachment ID.
+     * @return array{attached_file: string, mime: string, metadata: array|false}
+     */
+    public static function snapshot_attachment_state( $attachment_id ) {
+        $attachment_id = absint( $attachment_id );
+        $meta          = wp_get_attachment_metadata( $attachment_id );
+
+        return array(
+            'attached_file' => self::normalize_attached_file_meta_value( get_post_meta( $attachment_id, '_wp_attached_file', true ) ),
+            'mime'          => (string) get_post_mime_type( $attachment_id ),
+            'metadata'      => is_array( $meta ) ? $meta : array(),
+        );
+    }
+
+    /**
+     * Restore files + attachment DB state after a failed FASE 2.
+     * Also reverses URL replacements when old/new URLs are known.
+     *
+     * @param int                  $attachment_id Attachment ID.
+     * @param array<string, mixed> $result        optimize() result.
+     * @param array<string, mixed> $snapshot      From snapshot_attachment_state().
+     * @return bool
+     */
+    public static function rollback_optimize_state( $attachment_id, $result, $snapshot ) {
+        $attachment_id = absint( $attachment_id );
+        $ok            = self::rollback_optimize_files( $result );
+        TSOIMMA_History::clear_pending( $attachment_id );
+
+        if ( $attachment_id <= 0 || ! is_array( $snapshot ) ) {
+            return $ok;
+        }
+
+        $attached = isset( $snapshot['attached_file'] ) ? self::normalize_attached_file_meta_value( $snapshot['attached_file'] ) : '';
+        if ( '' !== $attached ) {
+            update_post_meta( $attachment_id, '_wp_attached_file', $attached );
+        }
+
+        $mime = isset( $snapshot['mime'] ) ? (string) $snapshot['mime'] : '';
+        if ( '' !== $mime ) {
+            global $wpdb;
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+            $wpdb->update(
+                $wpdb->posts,
+                array( 'post_mime_type' => $mime ),
+                array( 'ID' => $attachment_id ),
+                array( '%s' ),
+                array( '%d' )
+            );
+        }
+
+        if ( isset( $snapshot['metadata'] ) && is_array( $snapshot['metadata'] ) ) {
+            wp_update_attachment_metadata( $attachment_id, $snapshot['metadata'] );
+        }
+
+        // Reverse content URL rewrites when FASE 2 already ran REPLACE.
+        $old_url = isset( $result['old_url'] ) ? (string) $result['old_url'] : '';
+        $new_url = isset( $result['new_url'] ) ? (string) $result['new_url'] : '';
+        if ( '' !== $old_url && '' !== $new_url && $old_url !== $new_url ) {
+            self::replace_url_pairs_in_content(
+                array(
+                    array( $new_url, $old_url ),
+                )
+            );
+        }
+
+        clean_attachment_cache( $attachment_id );
+
+        return $ok;
     }
 
     /**
@@ -2221,6 +2453,32 @@ class TSOIMMA_Optimizer {
         }
 
         return wp_normalize_path( $dest_dir . '/' . $filename . '_tso_im_backup.' . strtolower( $ext ) );
+    }
+
+    /**
+     * Temporary copy of the pre-op file for FASE 2 rollback when first backup is preserved.
+     *
+     * @param string $original_path Absolute path of the current (pre-op) file.
+     * @param string $ext           Extension of that file.
+     * @return string Absolute path.
+     */
+    private static function get_fase2_rollback_path( $original_path, $ext ) {
+        $upload_dir   = wp_upload_dir();
+        $backup_base  = trailingslashit( $upload_dir['basedir'] ) . 'tso-image-master';
+        $basedir_norm = wp_normalize_path( $upload_dir['basedir'] );
+        $rel          = ltrim( str_replace( $basedir_norm, '', wp_normalize_path( $original_path ) ), '/' );
+        $rel_dir      = dirname( $rel );
+        $filename     = pathinfo( $original_path, PATHINFO_FILENAME );
+
+        $dest_dir = ( '.' === $rel_dir || '' === $rel_dir )
+            ? $backup_base
+            : $backup_base . '/' . $rel_dir;
+
+        if ( ! file_exists( $dest_dir ) ) {
+            wp_mkdir_p( $dest_dir );
+        }
+
+        return wp_normalize_path( $dest_dir . '/' . $filename . '_tso_im_fase2.' . strtolower( $ext ) );
     }
 
 

@@ -329,6 +329,27 @@ msgstr "Haz clic para seleccionar para eliminar"
 msgid "Overview"
 msgstr "Resumen"
 
+msgid "Optimize"
+msgstr "Optimizar"
+
+msgid "Orphan Images"
+msgstr "Imágenes huérfanas"
+
+msgid "SEO & Names"
+msgstr "SEO y nombres"
+
+msgid "PDFs"
+msgstr "PDFs"
+
+msgid "Auto-optimization"
+msgstr "Auto-optimización"
+
+msgid "URLs"
+msgstr "URLs"
+
+msgid "History"
+msgstr "Historial"
+
 msgid "Site overview"
 msgstr "Resumen del sitio"
 

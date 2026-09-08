@@ -326,6 +326,27 @@ msgstr "🔧 Reparar tipus MIME incorrectes"
 msgid "Overview"
 msgstr "Resum"
 
+msgid "Optimize"
+msgstr "Optimitzar"
+
+msgid "Orphan Images"
+msgstr "Imatges òrfenes"
+
+msgid "SEO & Names"
+msgstr "SEO i noms"
+
+msgid "PDFs"
+msgstr "PDFs"
+
+msgid "Auto-optimization"
+msgstr "Auto-optimització"
+
+msgid "URLs"
+msgstr "URLs"
+
+msgid "History"
+msgstr "Historial"
+
 msgid "Site overview"
 msgstr "Resum del lloc"
 

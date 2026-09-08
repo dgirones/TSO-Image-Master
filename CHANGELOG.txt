@@ -4,6 +4,24 @@ Full release history for TSO Image Master. Recent releases (1.9.5+) are also sum
 
 Versions 1.0.0 through 1.9.3 were moved out of readme.txt to keep the WordPress.org listing shorter.
 
+= 2.0.1 =
+
+* Fixed: Optimize actions appear in History immediately (no longer wait for thumbnails).
+* Fixed: Recover missing History rows from existing TSO backups when a prior deferred log was lost.
+* Fixed: Auto-optimize logs History right after convert/metadata (thumbs failures no longer hide the entry; rollback removes a premature row).
+* Improved: Removed duplicate auto-optimize history/stats from the Auto tab (use History filter instead).
+* Added: Hover preview for History thumbnails (same as optimize modal).
+* Fixed: Attachment optimize locks use ownership tokens; revert takes a lock; queue reclaim no longer double-logs History; thumbs AJAX clears cron only after success; History logs only when the file is replaced.
+* Fixed: Refresh attachment lock TTL during convert/thumbs; removed global `wp_cache_flush()` from thumbnail paths; enqueue reports queued vs skipped; cancel queue also cancels `thumbs_pending` jobs.
+* Fixed: History purge uses WordPress timezone (not MySQL NOW()); auto-optimize enqueues a background job when the attachment lock is busy.
+
+= 2.0.0 =
+
+* Added: Day / night UI themes with Auto mode based on sunrise and sunset (follows WordPress timezone).
+* Improved: Catalan/Spanish UI i18n for tabs and optimize controls.
+* Improved: History legacy table merge — single discovery query, skip when already merged.
+* Fixed: Missing CA translations falling back to English on admin tabs.
+
 = 1.9.8 =
 
 * Improved: WordPress.org compliance — canonical `tsoimma_` AJAX/storage layer, prefixed history table, attachment meta migration, sanitized AJAX inputs.

@@ -100,6 +100,7 @@
     // Init
     // ================================================================
     $(function() {
+        initThemeSwitcher();
         initLanguageSwitcher();
         initImpCustomSelects();
         applyPerPage(readStoredPerPage(), false);
@@ -176,6 +177,10 @@
             action_pdf_compress: 'PDF comprimit',
             action_revert: 'Revertida',
             donate_support: '☕ Dona suport al plugin',
+            theme_day: 'Mode dia',
+            theme_night: 'Mode nit',
+            theme_auto: 'Mode auto',
+            theme_auto_hint: 'Segons alba i ocàs (canvia amb l\'estació)',
             auto_source_formats_label: 'Formats d\'origen per auto-convertir',
             auto_src_jpg: 'JPG/JPEG',
             auto_src_png: 'PNG',
@@ -208,6 +213,102 @@
             retention_saved: 'Desat!',
             retention_invalid: 'Valor invàlid. Usa 0 per desactivar, o entre 1 i 3650 dies.',
             tab_dashboard: 'Resum',
+            tab_optimize: 'Optimitzar',
+            tab_orphans: 'Imatges òrfenes',
+            tab_seo: 'SEO i noms',
+            tab_pdf: 'PDFs',
+            tab_auto: 'Auto-optimització',
+            tab_history: 'Historial',
+            tab_urls: 'URLs',
+            opt_config_title: 'Configuració d\'Optimització',
+            format_label: 'Format de sortida',
+            quality_label: 'Qualitat',
+            search_image_ph: '🔎 Cercar imatge...',
+            select_all: 'Seleccionar tot',
+            deselect: 'Deseleccionar',
+            bulk_optimize: 'Optimitzar seleccionades',
+            bulk_replace_label: 'Reemplaça l\'original i actualitza tots els links',
+            orphans_title: 'Trobar Imatges Òrfenes',
+            orphans_desc: 'Imatges de la biblioteca que <strong>no estan referenciades</strong> a cap article, pàgina, widget ni metadada.',
+            orphan_limit_label: 'Imatges a escanejar per lot',
+            all_slow: 'Totes (lent)',
+            scan_now: '🔍 Escanejar ara',
+            delete_selected: 'Eliminar seleccionades',
+            sort_size: '📦 Ordenar per pes (major primer)',
+            sort_date: '📅 Ordenar per data de creació',
+            sort_modified: '✏️ Ordenar per data de modificació',
+            modal_rename: 'Reanomenar',
+            modal_optimize: 'Optimitzar',
+            seo_title_label: 'Títol',
+            seo_alt_label: 'Text alternatiu (Alt)',
+            seo_caption_label: 'Peu de foto (Caption)',
+            seo_desc_label: 'Descripció',
+            seo_title_ph: 'Títol descriptiu de la imatge',
+            seo_alt_ph: 'Descripció per a accessibilitat i SEO',
+            seo_caption_ph: 'Text visible sota la imatge',
+            seo_desc_ph: 'Descripció llarga...',
+            current_filename: 'Nom actual del fitxer',
+            new_filename: 'Nou nom (sense extensió)',
+            filename_ph: 'p.ex: pastis-de-xocolata-recepta',
+            rename_hint: 'Es manté el text UTF-8 (p. ex. català) i només es netegen caràcters invàlids.',
+            auto_suggest: 'Suggeriment automàtic',
+            use_btn: 'Usar',
+            resize_title: 'Redimensionar imatge',
+            resize_desc: 'Opcional — redueix les mides en píxels',
+            max_width: 'Ample màx',
+            max_height: 'Alt màx',
+            proportions_hint: 'Proporcions preservades. Deixa un camp buit per calcular-lo automàticament.',
+            replace_title: 'Reemplaçar l\'original',
+            replace_desc: 'Actualitza automàticament tots els links a la web',
+            optimize_now: '⚡ Optimitzar ara',
+            pdf_title: 'Comprimir PDFs',
+            pdf_desc: 'Redueix el pes dels PDFs de la biblioteca sense canviar la URL ni trencar enllaços.<br><strong>Requereix:</strong> GhostScript al servidor (recomanat) o extensió Imagick de PHP.',
+            pdf_quality_label: 'Qualitat / DPI',
+            dpi_72: '72 DPI — Molt lleuger (pantalla)',
+            dpi_96: '96 DPI — Recomanat (web)',
+            dpi_150: '150 DPI — Alta qualitat',
+            dpi_300: '300 DPI — Impressió',
+            pdf_replace_label: 'Reemplaça l\'original (la URL no canvia)',
+            search_pdf_ph: '🔎 Cercar PDF...',
+            compress_selected: 'Comprimir seleccionats',
+            auto_title: 'Auto-optimització en pujar imatges',
+            auto_desc: 'En activar aquesta opció, <strong>cada imatge nova que puges</strong> s\'optimitza automàticament amb la configuració triada.',
+            save_config: '💾 Guardar configuració',
+            mime_fix_title: 'Reparació de tipus mime',
+            mime_fix_desc: 'Detecta i repara adjunts amb extensió .webp però mime type incorrecte (image/jpeg). Soluciona imatges invisibles a la Mediateca.',
+            auto_stats_title: 'Estadístiques d\'auto-optimització',
+            auto_history_title: 'Historial d\'auto-optimització',
+            auto_history_hint: 'Les auto-optimitzacions es registren a la pestanya <strong>Historial</strong> (filtre 🤖 Auto-optimitzades).',
+            history_title: 'Historial de canvis',
+            history_filter_label: 'Filtrar per acció',
+            all_actions: 'Totes les accions',
+            filter_optimize: '⚡ Optimitzades',
+            filter_auto: '🤖 Auto-optimitzades',
+            filter_rename: '✏️ Reanomenades',
+            filter_seo: '🏷️ SEO actualitzat',
+            filter_delete: '🗑️ Eliminades',
+            filter_pdf: '📄 PDFs comprimits',
+            date_from: 'Des de',
+            date_to: 'Fins a',
+            search_file: 'Cercar fitxer',
+            search_file_ph: 'nom del fitxer...',
+            history_load: '🔄 Carregar / filtrar',
+            clear_30: '🗑️ Netejar >30 dies',
+            clear_all: '🗑️ Netejar tot',
+            save_btn: '💾 Guardar',
+            url_title: '🔗 Detector d\'URLs inconsistents',
+            url_desc: 'Detecta URLs d\'imatges a entrades i pàgines que <strong>apunten a fitxers que ja no existeixen</strong> al servidor — normalment per conversions de JPG a WebP. Pot actualitzar-les automàticament a tota la base de dades.',
+            url_obsolete: 'URL obsoleta → nova correcta',
+            scan_web: '🔍 Escanejar tot el lloc',
+            select_fixable: 'Seleccionar reparables',
+            fix_selected: '✅ Reparar seleccionades',
+            files_label: 'fitxers',
+            remaining_label: 'restants',
+            open_title: 'Obrir',
+            error_prefix: 'Error: ',
+            ghost_confirm_suffix: 'adjunt(s) fantasma? Això elimina els registres de la base de dades.',
+            post_label: 'Entrada',
+            page_label: 'Pàgina',
             dash_title: 'Resum del lloc',
             dash_desc: 'Visió ràpida de la salut de les imatges, motors disponibles i accions pendents.',
             dash_total_images: 'Imatges a la biblioteca',
@@ -256,7 +357,7 @@
             dash_alt_all_ok: 'Totes les imatges tenen un alt útil.',
             dash_queue_title: 'Cua en segon pla',
             dash_queue_desc: 'Les optimitzacions massives s\'executen en segon pla via WP-Cron (5 imatges per lot).',
-            dash_queue_cancel: 'Cancel·lar jobs pendents',
+            dash_queue_cancel: 'Cancel·lar pendents / miniatures',
             dash_queue_empty: 'La cua és buida.',
             dash_queue_done: 'fetes',
             dash_queue_pending: 'pendents',
@@ -265,6 +366,7 @@
             dash_queue_errors: 'errors',
             dash_queue_queued: 'En cua per processar en segon pla...',
             dash_queue_queued_n: 'imatges en cua.',
+            dash_queue_skipped_n: 'ometudes (ocupades o ja a la cua).',
             dash_backup_title: 'Retenció de còpies de seguretat',
             dash_backup_desc: 'Elimina automàticament les còpies TSO a uploads/tso-image-master/ (0 = desactivat).',
             dash_backup_days: 'Conservar còpies (dies)',
@@ -332,6 +434,7 @@
             select_all: 'Seleccionar todo',
             deselect: 'Deseleccionar',
             bulk_optimize: 'Optimizar seleccionadas',
+            bulk_replace_label: 'Reemplaza el original y actualiza todos los enlaces',
             orphans_title: 'Buscar Imágenes Huérfanas',
             orphans_desc: 'Imágenes de la biblioteca que <strong>no están referenciadas</strong> en ninguna entrada, página, widget ni metadato.',
             orphan_limit_label: 'Imágenes a escanear por lote',
@@ -385,6 +488,7 @@
             mime_fix_desc: 'Detecta y repara adjuntos con extensión .webp pero mime type incorrecto (image/jpeg). Soluciona imágenes invisibles en la biblioteca de medios.',
             auto_stats_title: 'Estadísticas de auto-optimización',
             auto_history_title: 'Historial de auto-optimización',
+            auto_history_hint: 'Las auto-optimizaciones se registran en la pestaña <strong>Historial</strong> (filtro 🤖 Auto-optimizadas).',
             history_title: 'Historial de cambios',
             history_filter_label: 'Filtrar por acción',
             all_actions: 'Todas las acciones',
@@ -470,6 +574,10 @@
             ,history_prompt_load: 'Carga el historial pulsando "Cargar".'
             ,scanning_posts_pages: 'Escaneando contenidos... puede tardar unos segundos.'
             ,donate_support: '☕ Apoya este plugin'
+            ,theme_day: 'Modo día'
+            ,theme_night: 'Modo noche'
+            ,theme_auto: 'Modo auto'
+            ,theme_auto_hint: 'Según amanecer y ocaso (cambia con la estación)'
             ,auto_source_formats_label: 'Formatos de origen para auto-convertir'
             ,auto_src_jpg: 'JPG/JPEG'
             ,auto_src_png: 'PNG'
@@ -540,7 +648,7 @@
             ,dash_alt_all_ok: 'Todas las imágenes tienen un alt útil.'
             ,dash_queue_title: 'Cola en segundo plano'
             ,dash_queue_desc: 'Las optimizaciones masivas se ejecutan en segundo plano vía WP-Cron (5 imágenes por lote).'
-            ,dash_queue_cancel: 'Cancelar trabajos pendientes'
+            ,dash_queue_cancel: 'Cancelar pendientes / miniaturas'
             ,dash_queue_empty: 'La cola está vacía.'
             ,dash_queue_done: 'hechas'
             ,dash_queue_pending: 'pendientes'
@@ -549,6 +657,7 @@
             ,dash_queue_errors: 'errores'
             ,dash_queue_queued: 'En cola para procesar en segundo plano...'
             ,dash_queue_queued_n: 'imágenes en cola.'
+            ,dash_queue_skipped_n: 'omitidas (ocupadas o ya en cola).'
             ,dash_backup_title: 'Retención de copias de seguridad'
             ,dash_backup_desc: 'Elimina automáticamente las copias TSO en uploads/tso-image-master/ (0 = desactivado).'
             ,dash_backup_days: 'Conservar copias (días)'
@@ -613,6 +722,7 @@
             select_all: 'Select all',
             deselect: 'Deselect',
             bulk_optimize: 'Optimize selected',
+            bulk_replace_label: 'Replace the original and update all links',
             orphans_title: 'Find Orphan Images',
             orphans_desc: 'Images in the media library that are <strong>not referenced</strong> in any post, page, widget or metadata.',
             orphan_limit_label: 'Images to scan per batch',
@@ -666,6 +776,7 @@
             mime_fix_desc: 'Detect and repair attachments with .webp extension but incorrect mime type (image/jpeg). Fixes invisible images in Media Library.',
             auto_stats_title: 'Auto-optimization statistics',
             auto_history_title: 'Auto-optimization history',
+            auto_history_hint: 'Auto-optimizations are logged under the <strong>History</strong> tab (filter 🤖 Auto-optimized).',
             history_title: 'Change history',
             history_filter_label: 'Filter by action',
             all_actions: 'All actions',
@@ -751,6 +862,10 @@
             ,history_prompt_load: 'Load history by clicking "Load".'
             ,scanning_posts_pages: 'Scanning content items... this may take a few seconds.'
             ,donate_support: '☕ Support this plugin'
+            ,theme_day: 'Day mode'
+            ,theme_night: 'Night mode'
+            ,theme_auto: 'Auto mode'
+            ,theme_auto_hint: 'Follows sunrise and sunset (changes with the seasons)'
             ,auto_source_formats_label: 'Source formats for auto-conversion'
             ,auto_src_jpg: 'JPG/JPEG'
             ,auto_src_png: 'PNG'
@@ -821,7 +936,7 @@
             ,dash_alt_all_ok: 'All images have useful alt text.'
             ,dash_queue_title: 'Background queue'
             ,dash_queue_desc: 'Bulk optimize jobs run in the background via WP-Cron (5 images per batch).'
-            ,dash_queue_cancel: 'Cancel pending jobs'
+            ,dash_queue_cancel: 'Cancel pending / thumbnails'
             ,dash_queue_empty: 'Queue is empty.'
             ,dash_queue_done: 'done'
             ,dash_queue_pending: 'pending'
@@ -830,6 +945,7 @@
             ,dash_queue_errors: 'errors'
             ,dash_queue_queued: 'Queued for background processing...'
             ,dash_queue_queued_n: 'images queued.'
+            ,dash_queue_skipped_n: 'skipped (already busy or in queue).'
             ,dash_backup_title: 'Backup retention'
             ,dash_backup_desc: 'Auto-delete TSO backups under uploads/tso-image-master/ (0 = disabled).'
             ,dash_backup_days: 'Keep backups (days)'
@@ -1038,7 +1154,7 @@
                 dash_alt_all_ok: 'Todas las imágenes tienen un alt útil.',
                 dash_queue_title: 'Cola en segundo plano',
                 dash_queue_desc: 'Las optimizaciones masivas se ejecutan en segundo plano vía WP-Cron (5 imágenes por lote).',
-                dash_queue_cancel: 'Cancelar trabajos pendientes',
+                dash_queue_cancel: 'Cancelar pendientes / miniaturas',
                 dash_queue_empty: 'La cola está vacía.',
                 dash_queue_done: 'hechas',
                 dash_queue_pending: 'pendientes',
@@ -1046,6 +1162,7 @@
                 dash_queue_errors: 'errores',
                 dash_queue_queued: 'En cola para procesar en segundo plano...',
                 dash_queue_queued_n: 'imágenes en cola.',
+                dash_queue_skipped_n: 'omitidas (ocupadas o ya en cola).',
                 dash_backup_title: 'Retención de copias de seguridad',
                 dash_backup_desc: 'Elimina automáticamente las copias TSO en uploads/tso-image-master/ (0 = desactivado).',
                 dash_backup_days: 'Conservar copias (días)',
@@ -1227,7 +1344,7 @@
                 dash_alt_all_ok: 'All images have useful alt text.',
                 dash_queue_title: 'Background queue',
                 dash_queue_desc: 'Bulk optimize jobs run in the background via WP-Cron (5 images per batch).',
-                dash_queue_cancel: 'Cancel pending jobs',
+                dash_queue_cancel: 'Cancel pending / thumbnails',
                 dash_queue_empty: 'Queue is empty.',
                 dash_queue_done: 'done',
                 dash_queue_pending: 'pending',
@@ -1235,6 +1352,7 @@
                 dash_queue_errors: 'errors',
                 dash_queue_queued: 'Queued for background processing...',
                 dash_queue_queued_n: 'images queued.',
+                dash_queue_skipped_n: 'skipped (already busy or in queue).',
                 dash_backup_title: 'Backup retention',
                 dash_backup_desc: 'Auto-delete TSO backups under uploads/tso-image-master/ (0 = disabled).',
                 dash_backup_days: 'Keep backups (days)',
@@ -1416,7 +1534,7 @@
                 dash_alt_all_ok: 'Totes les imatges tenen un alt útil.',
                 dash_queue_title: 'Cua en segon pla',
                 dash_queue_desc: 'Les optimitzacions massives s\'executen en segon pla via WP-Cron (5 imatges per lot).',
-                dash_queue_cancel: 'Cancel·lar jobs pendents',
+                dash_queue_cancel: 'Cancel·lar pendents / miniatures',
                 dash_queue_empty: 'La cua és buida.',
                 dash_queue_done: 'fetes',
                 dash_queue_pending: 'pendents',
@@ -1425,6 +1543,7 @@
                 dash_queue_errors: 'errors',
                 dash_queue_queued: 'En cua per processar en segon pla...',
                 dash_queue_queued_n: 'imatges en cua.',
+                dash_queue_skipped_n: 'ometudes (ocupades o ja a la cua).',
                 dash_backup_title: 'Retenció de còpies de seguretat',
                 dash_backup_desc: 'Elimina automàticament les còpies TSO a uploads/tso-image-master/ (0 = desactivat).',
                 dash_backup_days: 'Conservar còpies (dies)',
@@ -1480,6 +1599,283 @@
         });
     })();
 
+    // ================================================================
+    // Theme switcher (auto by sunrise/sunset / day / night)
+    // ================================================================
+    var THEME_AUTO_TIMER = null;
+    var THEME_DAY_MS = 86400000;
+    var THEME_J1970 = 2440588;
+    var THEME_J2000 = 2451545;
+    var THEME_RAD = Math.PI / 180;
+    var THEME_E = THEME_RAD * 23.4397;
+
+    // Approximate city coordinates for common WordPress timezones.
+    var THEME_TZ_COORDS = {
+        'Europe/Madrid': [40.42, -3.70],
+        'Europe/Andorra': [42.51, 1.52],
+        'Atlantic/Canary': [28.29, -16.63],
+        'Europe/London': [51.51, -0.13],
+        'Europe/Paris': [48.86, 2.35],
+        'Europe/Berlin': [52.52, 13.41],
+        'Europe/Rome': [41.90, 12.50],
+        'Europe/Lisbon': [38.72, -9.14],
+        'Europe/Brussels': [50.85, 4.35],
+        'Europe/Amsterdam': [52.37, 4.90],
+        'America/Mexico_City': [19.43, -99.13],
+        'America/New_York': [40.71, -74.01],
+        'America/Chicago': [41.88, -87.63],
+        'America/Denver': [39.74, -104.99],
+        'America/Los_Angeles': [34.05, -118.24],
+        'America/Argentina/Buenos_Aires': [-34.60, -58.38],
+        'America/Sao_Paulo': [-23.55, -46.63],
+        'America/Bogota': [4.71, -74.07],
+        'America/Lima': [-12.05, -77.04],
+        'America/Santiago': [-33.45, -70.67],
+        'America/Caracas': [10.48, -66.90],
+        'Asia/Tokyo': [35.68, 139.69],
+        'Australia/Sydney': [-33.87, 151.21],
+        'UTC': [0, 0]
+    };
+
+    function readThemePreference() {
+        var theme = localStorage.getItem('tsoimma_ui_theme');
+        if (theme === 'day' || theme === 'night' || theme === 'auto') {
+            return theme;
+        }
+        return 'auto';
+    }
+
+    function getThemeCoords() {
+        if (typeof TSOIMMA !== 'undefined') {
+            var wpLat = parseFloat(TSOIMMA.lat);
+            var wpLng = parseFloat(TSOIMMA.lng);
+            if (!isNaN(wpLat) && !isNaN(wpLng)) {
+                return { lat: wpLat, lng: wpLng, source: 'wordpress' };
+            }
+        }
+
+        try {
+            var raw = localStorage.getItem('tsoimma_theme_coords');
+            if (raw) {
+                var parsed = JSON.parse(raw);
+                if (parsed && typeof parsed.lat === 'number' && typeof parsed.lng === 'number') {
+                    return parsed;
+                }
+            }
+        } catch (e) { /* ignore */ }
+
+        var tz = '';
+        if (typeof TSOIMMA !== 'undefined' && TSOIMMA.timezone) {
+            tz = String(TSOIMMA.timezone);
+        }
+        if (!tz && typeof Intl !== 'undefined' && Intl.DateTimeFormat) {
+            try {
+                tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+            } catch (e2) { /* ignore */ }
+        }
+
+        if (tz && THEME_TZ_COORDS[tz]) {
+            return { lat: THEME_TZ_COORDS[tz][0], lng: THEME_TZ_COORDS[tz][1], source: 'timezone' };
+        }
+
+        // Default: Iberian Peninsula.
+        return { lat: 41.39, lng: 2.17, source: 'default' };
+    }
+
+    function themeToJulian(date) {
+        return date.valueOf() / THEME_DAY_MS - 0.5 + THEME_J1970;
+    }
+
+    function themeFromJulian(j) {
+        return new Date((j + 0.5 - THEME_J1970) * THEME_DAY_MS);
+    }
+
+    function themeToDays(date) {
+        return themeToJulian(date) - THEME_J2000;
+    }
+
+    function themeRightAscension(l, b) {
+        return Math.atan2(Math.sin(l) * Math.cos(THEME_E) - Math.tan(b) * Math.sin(THEME_E), Math.cos(l));
+    }
+
+    function themeDeclination(l, b) {
+        return Math.asin(Math.sin(b) * Math.cos(THEME_E) + Math.cos(b) * Math.sin(THEME_E) * Math.sin(l));
+    }
+
+    function themeSolarMeanAnomaly(d) {
+        return THEME_RAD * (357.5291 + 0.98560028 * d);
+    }
+
+    function themeEclipticLongitude(M) {
+        var C = THEME_RAD * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M));
+        var P = THEME_RAD * 102.9372;
+        return M + C + P + Math.PI;
+    }
+
+    function themeSunCoords(d) {
+        var M = themeSolarMeanAnomaly(d);
+        var L = themeEclipticLongitude(M);
+        return {
+            dec: themeDeclination(L, 0),
+            ra: themeRightAscension(L, 0)
+        };
+    }
+
+    function themeJulianCycle(d, lw) {
+        return Math.round(d - 0.0009 - lw / (2 * Math.PI));
+    }
+
+    function themeApproxTransit(Ht, lw, n) {
+        return 0.0009 + (Ht + lw) / (2 * Math.PI) + n;
+    }
+
+    function themeSolarTransitJ(ds, M, L) {
+        return THEME_J2000 + ds + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
+    }
+
+    function themeHourAngle(h, phi, d) {
+        return Math.acos((Math.sin(h) - Math.sin(phi) * Math.sin(d)) / (Math.cos(phi) * Math.cos(d)));
+    }
+
+    function themeGetSetJ(h, lw, phi, dec, n, M, L) {
+        var w = themeHourAngle(h, phi, dec);
+        var a = themeApproxTransit(w, lw, n);
+        return themeSolarTransitJ(a, M, L);
+    }
+
+    /**
+     * Official sunrise/sunset (-0.833°) for a local calendar day.
+     *
+     * @param {Date} date
+     * @param {number} lat
+     * @param {number} lng
+     * @return {{sunrise: Date, sunset: Date}|null}
+     */
+    function getSunTimes(date, lat, lng) {
+        try {
+            var lw = THEME_RAD * -lng;
+            var phi = THEME_RAD * lat;
+            var d = themeToDays(date);
+            var n = themeJulianCycle(d, lw);
+            var ds = themeApproxTransit(0, lw, n);
+            var M = themeSolarMeanAnomaly(ds);
+            var L = themeEclipticLongitude(M);
+            var dec = themeSunCoords(ds).dec;
+            var Jnoon = themeSolarTransitJ(ds, M, L);
+            var Jset = themeGetSetJ(-0.833 * THEME_RAD, lw, phi, dec, n, M, L);
+            var Jrise = Jnoon - (Jset - Jnoon);
+            var sunrise = themeFromJulian(Jrise);
+            var sunset = themeFromJulian(Jset);
+            if (isNaN(sunrise.getTime()) || isNaN(sunset.getTime())) {
+                return null;
+            }
+            return { sunrise: sunrise, sunset: sunset };
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function formatThemeClock(date) {
+        try {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } catch (e) {
+            var h = date.getHours();
+            var m = date.getMinutes();
+            return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+        }
+    }
+
+    function themeFromSolar() {
+        var coords = getThemeCoords();
+        var now = new Date();
+        var times = getSunTimes(now, coords.lat, coords.lng);
+        if (!times) {
+            // Polar / calculation edge fallback.
+            var hour = now.getHours();
+            return (hour >= 7 && hour < 20) ? 'day' : 'night';
+        }
+        return (now >= times.sunrise && now < times.sunset) ? 'day' : 'night';
+    }
+
+    function resolveTheme(preference) {
+        if (preference === 'day' || preference === 'night') {
+            return preference;
+        }
+        return themeFromSolar();
+    }
+
+    function applyTheme(preference) {
+        if (preference !== 'day' && preference !== 'night' && preference !== 'auto') {
+            preference = 'auto';
+        }
+        localStorage.setItem('tsoimma_ui_theme', preference);
+
+        var resolved = resolveTheme(preference);
+        $('#imp-app').attr('data-theme', resolved);
+        $('#imp-app').attr('data-theme-pref', preference);
+
+        var $btn = $('#imp-theme-toggle');
+        var labelKey = 'theme_' + preference;
+        var labelFallback = preference === 'auto' ? 'Mode auto' : (preference === 'day' ? 'Mode dia' : 'Mode nit');
+        var icon = preference === 'auto' ? '🌓' : (resolved === 'night' ? '🌙' : '☀️');
+        var label = uiText(labelKey, labelFallback);
+        var title = label;
+        if (preference === 'auto') {
+            title = label + ' — ' + uiText('theme_auto_hint', 'Segons alba i ocàs (canvia amb l\'estació)');
+            var coords = getThemeCoords();
+            var times = getSunTimes(new Date(), coords.lat, coords.lng);
+            if (times) {
+                title += ' · ' + formatThemeClock(times.sunrise) + '–' + formatThemeClock(times.sunset);
+            }
+        }
+
+        $btn.attr('aria-pressed', preference === 'auto' ? 'mixed' : (resolved === 'night' ? 'true' : 'false'));
+        $btn.attr('title', title);
+        $btn.find('.imp-theme-icon').text(icon);
+        $btn.find('.imp-theme-label').attr('data-i18n', labelKey).text(label);
+
+        if (THEME_AUTO_TIMER) {
+            clearInterval(THEME_AUTO_TIMER);
+            THEME_AUTO_TIMER = null;
+        }
+        if (preference === 'auto') {
+            THEME_AUTO_TIMER = setInterval(function() {
+                if (readThemePreference() !== 'auto') {
+                    return;
+                }
+                var nextResolved = themeFromSolar();
+                if ($('#imp-app').attr('data-theme') !== nextResolved) {
+                    applyTheme('auto');
+                }
+            }, 60000);
+        }
+    }
+
+    function nextThemePreference(current) {
+        if (current === 'auto') {
+            return 'day';
+        }
+        if (current === 'day') {
+            return 'night';
+        }
+        return 'auto';
+    }
+
+    function initThemeSwitcher() {
+        applyTheme(readThemePreference());
+        $(document).on('click', '#imp-theme-toggle', function() {
+            applyTheme(nextThemePreference(readThemePreference()));
+        });
+    }
+
+    // Apply stored/auto theme ASAP when the app root is already in the DOM.
+    if (document.getElementById('imp-app')) {
+        document.getElementById('imp-app').setAttribute(
+            'data-theme',
+            resolveTheme(readThemePreference())
+        );
+    }
+
     function initLanguageSwitcher() {
         captureCatalanOriginals();
         var defaultLang = detectDefaultLanguage();
@@ -1509,6 +1905,7 @@
         applyTranslations(lang);
         refreshDynamicI18nBits();
         refreshImpCustomSelects();
+        applyTheme(readThemePreference());
     }
 
     function uiText(key, fallback) {
@@ -1601,10 +1998,6 @@
             loadHistoryStats('#imp-history-stats');
             loadHistory();
         }
-        if ($('#tab-auto').is(':visible')) {
-            loadHistoryStats('#imp-auto-stats');
-            loadAutoHistory();
-        }
     }
 
     function refreshStoredResult(selector) {
@@ -1639,7 +2032,7 @@
         var $pImg  = $preview.find('img');
         var $label = $preview.find('.imp-hover-label');
         var MARGIN = 16;
-        var hoverSelector = '#imp-modal-img, .imp-alt-row-thumb';
+        var hoverSelector = '#imp-modal-img, .imp-alt-row-thumb, .imp-history-table .imp-thumb-sm';
 
         function positionPreview(e) {
             var pw = $preview.outerWidth()  || 300;
@@ -2218,7 +2611,7 @@
                 return '<span>' + escHtml(parts.join(' · ')) + '</span>';
             })()
         );
-        $('#imp-queue-cancel').prop('disabled', !(queue.pending > 0));
+        $('#imp-queue-cancel').prop('disabled', !(queue.pending > 0 || queue.thumbs_pending > 0));
     }
 
     function loadBackupRetention() {
@@ -2953,7 +3346,12 @@
             }, function(data) {
                 $('#imp-bulk-optimize').prop('disabled', false);
                 $('#imp-bulk-progress').hide();
-                addLog('info', '✓ ' + total + ' ' + uiText('dash_queue_queued_n', 'images queued.'));
+                var queued = (typeof data.queued === 'number') ? data.queued : total;
+                var skipped = (typeof data.skipped === 'number') ? data.skipped : 0;
+                addLog('info', '✓ ' + queued + ' ' + uiText('dash_queue_queued_n', 'images queued.'));
+                if (skipped > 0) {
+                    addLog('info', '⚠ ' + skipped + ' ' + uiText('dash_queue_skipped_n', 'skipped (already busy or in queue).'));
+                }
                 renderQueueStatus(data);
                 markDashboardDirty();
                 $('.imp-tab[data-tab="dashboard"]').trigger('click');
@@ -2978,7 +3376,6 @@
                 $('#imp-bulk-progress').hide();
                 addLog('info', '✓ ' + (L.bulk_done || 'Done') + ': ' + done + '/' + total);
                 loadOptImages();
-                refreshHistoryUi();
                 return;
             }
             var id = ids[done];
@@ -3002,7 +3399,7 @@
                 if (data.replaced && data.thumbnails_pending) {
                     ajax('tsoimma_optimize_thumbnails', {
                         attachment_id: id,
-                        format: format,
+                        format: (data.format || format),
                         quality: quality
                     }, function() {
                         finishBulkItem(null);
@@ -3468,11 +3865,10 @@
                     refreshModalImageInfo(id);
                     loadOptImages();
                     loadSeoImages();
-                    refreshHistoryUi();
                     if (data.thumbnails_pending) {
                         runModalThumbnailPass(
                             id,
-                            $('#imp-modal-format').val(),
+                            data.format || $('#imp-modal-format').val(),
                             $('#imp-modal-quality').val(),
                             box
                         );
@@ -3480,7 +3876,6 @@
                 } else {
                     box.removeClass('imp-result-err imp-result-warn').addClass('imp-result-ok imp-result-box').show()
                        .html('✓ ' + (L.optimized_no_replace || 'Optimized (not replaced).') + ' ' + data.savings_pct + '%');
-                    refreshHistoryUi();
                 }
             }, function(err) {
                 btn.prop('disabled', false).text(L.optimize_now || '⚡ Optimize now');
@@ -3980,22 +4375,7 @@
     // ================================================================
     // AUTO-OPTIMIZATION TAB
     // ================================================================
-    var autoHistState = { page: 1, perPage: 20 };
-
     function initAutoTab() {
-        $(document).on('click', '.imp-tab[data-tab="auto"]', function() {
-            loadHistoryStats('#imp-auto-stats');
-            autoHistState.page = 1;
-            loadAutoHistory();
-        });
-        $('#imp-auto-history-clear-30').on('click', function() {
-            if (!confirm(L.confirm_clean_30 || 'Delete entries older than 30 days?')) return;
-            ajax('tsoimma_clear_history', { days: 30, type: 'auto_optimize' }, function() { autoHistState.page = 1; loadAutoHistory(); loadHistoryStats('#imp-auto-stats'); });
-        });
-        $('#imp-auto-history-clear-all').on('click', function() {
-            if (!confirm(L.confirm_clean_all || 'Delete ALL history?')) return;
-            ajax('tsoimma_clear_history', { days: 0, type: 'auto_optimize' }, function() { autoHistState.page = 1; loadAutoHistory(); loadHistoryStats('#imp-auto-stats'); });
-        });
         $('#imp-fix-orphan-meta').on('click', function() {
             var $btn = $(this);
             var $res = $('#imp-fix-orphan-result');
@@ -4147,26 +4527,6 @@
         });
     }
 
-    function loadAutoHistory() {
-        ajax('tsoimma_get_history', { page: autoHistState.page, per_page: autoHistState.perPage, action_type: 'auto_optimize' }, function(data) {
-            var wrap = $('#imp-auto-history-wrap');
-            if (!data.items || !data.items.length) {
-                wrap.html('<div class="imp-loading">' + (L.no_auto_history || 'No auto-optimization entries.') + '</div>');
-                $('#imp-auto-history-pagination').empty();
-                return;
-            }
-            var html = '<table class="imp-history-table"><thead><tr><th style="width:56px"></th><th>' + uiText('hdr_file', 'File') + '</th><th>' + uiText('hdr_size', 'Size') + '</th><th>' + uiText('hdr_savings', 'Savings') + '</th><th>' + uiText('hdr_date', 'Date') + '</th></tr></thead><tbody>';
-            data.items.forEach(function(item) {
-                var d     = item.details || {};
-                var thumb = item.thumb ? '<img src="' + escHtml(item.thumb) + '" style="width:44px;height:44px;object-fit:cover;border-radius:4px;">' : '<div style="width:44px;height:44px;background:var(--imp-surface2);border-radius:4px;"></div>';
-                html += '<tr><td>' + thumb + '</td><td style="font-family:var(--imp-mono);font-size:12px;word-break:break-word;white-space:normal;min-width:160px;">' + escHtml(d.filename || '—') + '</td><td>' + (d.new_size ? formatBytes(d.new_size) : '—') + '</td><td style="color:var(--imp-success);white-space:nowrap;">' + (d.savings_pct ? d.savings_pct.toFixed(1) + '%' : '—') + '</td><td style="color:var(--imp-text-muted);font-size:12px;white-space:nowrap;">' + escHtml(item.created_at_h || '—') + '</td></tr>';
-            });
-            html += '</tbody></table>';
-            wrap.html(html);
-            renderPagination('#imp-auto-history-pagination', autoHistState.page, data.total_pages, function(p) { autoHistState.page = p; loadAutoHistory(); });
-        }, function() { $('#imp-auto-history-wrap').html('<div class="imp-loading">' + (L.auto_hist_error || 'Error loading history.') + '</div>'); });
-    }
-
     function loadAutoSettings() {
         ajax('tsoimma_get_auto_settings', {}, function(data) {
             $('#imp-auto-enabled').prop('checked', !!data.enabled);
@@ -4221,12 +4581,6 @@
             loadHistory();
         });
         $('#imp-history-load').on('click', function() { histState.page = 1; loadHistory(); });
-        $('#imp-history-clear-dates').on('click', function() {
-            $('#imp-history-date-from').val('');
-            $('#imp-history-date-to').val('');
-            histState.page = 1;
-            loadHistory();
-        });
         $('#imp-history-clear-30').on('click', function() {
             if (!confirm(L.confirm_clean_30 || 'Delete entries older than 30 days?')) return;
             ajax('tsoimma_clear_history', { days: 30 }, function() { loadHistory(); loadHistoryStats('#imp-history-stats'); });
@@ -4251,14 +4605,6 @@
             $interval.val(data.interval).trigger('change');
             var api = $interval.closest('.imp-csel').data('impCselApi');
             if (api && api.sync) api.sync();
-        }
-    }
-
-    function refreshHistoryUi() {
-        loadHistoryStats('#imp-history-stats');
-        if ($('#tab-history').hasClass('active')) {
-            histState.page = 1;
-            loadHistory();
         }
     }
 
@@ -4324,8 +4670,10 @@
                 details += '<span style="font-size:11px;color:var(--imp-text-muted)">' + escHtml(String(d.format).toUpperCase()) + '</span>';
             }
             if (!details) details = '<span style="color:var(--imp-text-muted)">—</span>';
-            var thumb = item.thumb ? '<img class="imp-thumb-sm" src="' + escHtml(item.thumb) + '" alt="">' : '<span style="font-size:20px">📄</span>';
             var displayFile = d.filename || (d.new_filename || '—');
+            var thumb = item.thumb
+                ? '<img class="imp-thumb-sm" src="' + escHtml(item.thumb) + '" data-full-url="' + escHtml(item.full_url || item.thumb) + '" data-filename="' + escHtml(displayFile !== '—' ? displayFile : '') + '" alt="">'
+                : '<span style="font-size:20px">📄</span>';
             var actionLabel = actionLabelMap[item.action_type] || item.action_label || item.action_type || '—';
             var userLabel = (item.user_name === 'Sistema') ? uiText('system_user', 'System') : (item.user_name || '');
             html += '<tr><td>' + thumb + '</td><td style="font-family:var(--imp-mono);font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escHtml(displayFile) + '">' + escHtml(displayFile) + '</td><td><span class="imp-history-action ' + escHtml(item.action_type) + '">' + escHtml(actionLabel) + '</span></td><td style="max-width:220px">' + details + '</td><td style="font-size:12px;color:var(--imp-text-muted)">' + escHtml(userLabel) + '</td><td style="font-size:12px;color:var(--imp-text-muted);white-space:nowrap">' + escHtml(item.created_at_h) + '</td></tr>';

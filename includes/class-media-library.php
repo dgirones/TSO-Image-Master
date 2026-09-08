@@ -86,14 +86,20 @@ class TSOIMMA_Media_Library {
 		}
 
 		$auto = TSOIMMA_Auto_Optimizer::get_settings();
-		TSOIMMA_Queue::enqueue_optimize(
+		$result = TSOIMMA_Queue::enqueue_optimize(
 			$image_ids,
 			isset( $auto['format'] ) ? $auto['format'] : 'webp',
 			isset( $auto['quality'] ) ? (int) $auto['quality'] : 82,
 			true
 		);
 
-		return add_query_arg( 'tsoimma_queued', count( $image_ids ), $redirect );
+		$queued  = isset( $result['queued'] ) ? absint( $result['queued'] ) : 0;
+		$skipped = isset( $result['skipped'] ) ? absint( $result['skipped'] ) : 0;
+		$redirect = add_query_arg( 'tsoimma_queued', $queued, $redirect );
+		if ( $skipped > 0 ) {
+			$redirect = add_query_arg( 'tsoimma_skipped', $skipped, $redirect );
+		}
+		return $redirect;
 	}
 
 	/**
@@ -117,20 +123,40 @@ class TSOIMMA_Media_Library {
 		}
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only admin notice flag after capability + screen check.
 		$count = absint( wp_unslash( $_GET['tsoimma_queued'] ) );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only admin notice flag after capability + screen check.
+		$skipped = isset( $_GET['tsoimma_skipped'] ) ? absint( wp_unslash( $_GET['tsoimma_skipped'] ) ) : 0;
 		if ( $count <= 0 ) {
-			echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'No images were queued for optimization.', 'tso-image-master' ) . '</p></div>';
+			$msg = __( 'No images were queued for optimization.', 'tso-image-master' );
+			if ( $skipped > 0 ) {
+				$msg = sprintf(
+					/* translators: %d: number of images skipped because busy/locked */
+					__( 'No images were queued (%d already busy or locked).', 'tso-image-master' ),
+					$skipped
+				);
+			}
+			echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html( $msg ) . '</p></div>';
 			return;
 		}
 		$url = add_query_arg( 'page', 'tso-image-master', admin_url( 'admin.php' ) );
+		$line = sprintf(
+			/* translators: 1: number of images, 2: admin page link */
+			__( '%1$d images queued for background optimization. <a href="%2$s">View queue in Image Master</a>.', 'tso-image-master' ),
+			$count,
+			esc_url( $url )
+		);
+		if ( $skipped > 0 ) {
+			$line .= ' ' . esc_html(
+				sprintf(
+					/* translators: %d: number skipped */
+					__( '(%d skipped — already in queue or being optimized.)', 'tso-image-master' ),
+					$skipped
+				)
+			);
+		}
 		printf(
 			'<div class="notice notice-success is-dismissible"><p>%s</p></div>',
 			wp_kses(
-				sprintf(
-					/* translators: 1: number of images, 2: admin page link */
-					__( '%1$d images queued for background optimization. <a href="%2$s">View queue in Image Master</a>.', 'tso-image-master' ),
-					$count,
-					esc_url( $url )
-				),
+				$line,
 				array( 'a' => array( 'href' => array() ) )
 			)
 		);

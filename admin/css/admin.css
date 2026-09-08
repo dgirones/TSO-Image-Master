@@ -4,7 +4,9 @@
 
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
-:root {
+/* Night (default) — current dark UI */
+.imp-wrap,
+.imp-wrap[data-theme="night"] {
     --imp-bg:         #0f1117;
     --imp-surface:    #1a1d27;
     --imp-surface2:   #232635;
@@ -21,6 +23,40 @@
     --imp-font:       'DM Sans', -apple-system, sans-serif;
     --imp-mono:       'DM Mono', monospace;
     --imp-shadow:     0 4px 24px rgba(0,0,0,.4);
+    --imp-scrim:      rgba(15,17,23,.85);
+    --imp-info-soft:  #a599ff;
+    --imp-tab-glow:   0 2px 12px rgba(108,99,255,.4);
+    --imp-donate-bg:  rgba(255, 209, 102, .12);
+    --imp-donate-border: rgba(255, 209, 102, .35);
+    --imp-donate-hover-bg: rgba(255, 209, 102, .2);
+    --imp-donate-hover-text: #ffe29a;
+    --imp-donate-hover-border: rgba(255, 209, 102, .6);
+    color-scheme: dark;
+}
+
+/* Day — light surfaces, same accent language */
+.imp-wrap[data-theme="day"] {
+    --imp-bg:         #eef1f6;
+    --imp-surface:    #ffffff;
+    --imp-surface2:   #e4e8f0;
+    --imp-border:     #c5ccd8;
+    --imp-accent:     #5046e5;
+    --imp-accent2:    #0b9e84;
+    --imp-danger:     #e11d48;
+    --imp-warn:       #b45309;
+    --imp-success:    #059669;
+    --imp-text:       #151821;
+    --imp-text-muted: #5a6275;
+    --imp-shadow:     0 4px 20px rgba(21,24,33,.08);
+    --imp-scrim:      rgba(21,24,33,.45);
+    --imp-info-soft:  #4338ca;
+    --imp-tab-glow:   0 2px 10px rgba(80,70,229,.25);
+    --imp-donate-bg:  rgba(180, 83, 9, .08);
+    --imp-donate-border: rgba(180, 83, 9, .28);
+    --imp-donate-hover-bg: rgba(180, 83, 9, .14);
+    --imp-donate-hover-text: #92400e;
+    --imp-donate-hover-border: rgba(180, 83, 9, .45);
+    color-scheme: light;
 }
 
 /* Reset: box-sizing only (margin/padding reset broke panel, cards, and toolbar spacing). */
@@ -75,8 +111,8 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: rgba(255, 209, 102, .12);
-    border: 1px solid rgba(255, 209, 102, .35);
+    background: var(--imp-donate-bg);
+    border: 1px solid var(--imp-donate-border);
     color: var(--imp-warn);
     border-radius: 999px;
     padding: 6px 12px;
@@ -86,9 +122,9 @@
     transition: all .2s;
 }
 .imp-donate-btn:hover {
-    background: rgba(255, 209, 102, .2);
-    color: #ffe29a;
-    border-color: rgba(255, 209, 102, .6);
+    background: var(--imp-donate-hover-bg);
+    color: var(--imp-donate-hover-text);
+    border-color: var(--imp-donate-hover-border);
 }
 
 /* ===== TABS ===== */
@@ -111,7 +147,7 @@
     text-overflow: ellipsis;
 }
 .imp-tab:hover  { background: var(--imp-surface2); color: var(--imp-text); }
-.imp-tab.active { background: var(--imp-accent); color: #fff; box-shadow: 0 2px 12px rgba(108,99,255,.4); }
+.imp-tab.active { background: var(--imp-accent); color: #fff; box-shadow: var(--imp-tab-glow); }
 
 /* ===== TAB CONTENT ===== */
 .imp-tab-content { display: none; }
@@ -497,12 +533,12 @@
 .imp-log-entry { font-size: 12px; font-family: var(--imp-mono); padding: 6px 10px; border-radius: 6px; margin-bottom: 4px; }
 .imp-log-ok    { background: rgba(6,214,160,.1);  color: var(--imp-success); border-left: 3px solid var(--imp-success); }
 .imp-log-err   { background: rgba(255,77,109,.1); color: var(--imp-danger);  border-left: 3px solid var(--imp-danger); }
-.imp-log-info  { background: rgba(108,99,255,.1); color: #a599ff;            border-left: 3px solid var(--imp-accent); }
+.imp-log-info  { background: rgba(108,99,255,.1); color: var(--imp-info-soft); border-left: 3px solid var(--imp-accent); }
 
 /* ===== LOADING ===== */
 .imp-loading { color: var(--imp-text-muted); text-align: center; padding: 40px; font-size: 14px; }
 .imp-loading-overlay {
-    position: fixed; inset: 0; background: rgba(15,17,23,.85); z-index: 9999;
+    position: fixed; inset: 0; background: var(--imp-scrim); z-index: 9999;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
 }
 .imp-spinner {
@@ -676,6 +712,10 @@
         margin-left: 0;
     }
 
+    .imp-theme-btn {
+        order: 2;
+    }
+
     .imp-tabs {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -714,14 +754,9 @@
         max-width: 100%;
     }
 
-    #imp-auto-history-wrap,
     #imp-history-table-wrap {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
-    }
-
-    #imp-auto-history-wrap .imp-history-table {
-        min-width: 680px;
     }
 
     .imp-history-table-container {
@@ -1233,7 +1268,7 @@
 }
 .imp-history-table tbody tr:hover { background: var(--imp-surface2); }
 .imp-history-table td { padding: 10px 14px; vertical-align: middle; }
-.imp-history-table .imp-thumb-sm { width: 36px; height: 36px; object-fit: cover; border-radius: 6px; background: var(--imp-surface2); }
+.imp-history-table .imp-thumb-sm { width: 36px; height: 36px; object-fit: cover; border-radius: 6px; background: var(--imp-surface2); cursor: zoom-in; }
 .imp-history-action { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
 .imp-history-action.optimize      { background: rgba(108,99,255,.2); color: #a599ff; }
 .imp-history-action.auto_optimize { background: rgba(0,212,170,.15); color: var(--imp-accent2); }
@@ -1538,6 +1573,30 @@
     gap: 4px;
     align-items: center;
     margin-left: 12px;
+}
+.imp-theme-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--imp-surface2);
+    border: 1px solid var(--imp-border);
+    color: var(--imp-text);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: var(--imp-font);
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+}
+.imp-theme-btn:hover {
+    border-color: var(--imp-accent);
+    color: var(--imp-accent);
+}
+.imp-theme-btn .imp-theme-icon {
+    font-size: 14px;
+    line-height: 1;
 }
 .imp-lang-btn {
     background: var(--imp-surface2);

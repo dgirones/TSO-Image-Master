@@ -13,6 +13,7 @@ class TSOIMMA_Rogue_Scanner {
         '/\.(jpg|jpeg|png|gif|webp)\.(jpg|jpeg|png|gif|webp)$/i' => 'double_extension',
         '/_tso_im_backup\./i'                                     => 'tso_backup',
         '/_tso_im_opt\./i'                                        => 'tso_temp',
+        '/_tso_im_fase2\./i'                                      => 'tso_temp',
         '/_tso_im_compressed\./i'                                 => 'tso_pdf_compressed',
         '/\.(bk|bak)\./i'                                         => 'generic_backup',
     );

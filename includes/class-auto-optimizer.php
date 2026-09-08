@@ -98,7 +98,7 @@ class TSOIMMA_Auto_Optimizer {
         }
 
         $format  = isset( $settings['format'] )  ? $settings['format']  : 'webp';
-        $quality = isset( $settings['quality'] ) ? $settings['quality'] : 82;
+        $quality = tsoimma_clamp_image_quality( isset( $settings['quality'] ) ? $settings['quality'] : 82 );
 
         // "Original" no és aplicable a BMP/TIFF amb el pipeline actual de GD.
         // Comportament robust: no convertir per evitar un "fallback" inesperat a JPG.
@@ -115,17 +115,49 @@ class TSOIMMA_Auto_Optimizer {
             $format = TSOIMMA_Optimizer::webp_supported() ? 'webp' : 'jpg';
         }
 
+        $lock_token = TSOIMMA_Queue::acquire_attachment_lock( $attachment_id );
+        if ( '' === $lock_token ) {
+            // Another optimize owns this file — defer auto-optimize to the background queue.
+            TSOIMMA_Queue::enqueue_optimize( array( $attachment_id ), $format, $quality, true );
+            self::maybe_fill_alt_on_upload( $attachment_id, $settings );
+            return $metadata;
+        }
+
+        try {
         // Optimitzar imatge principal.
-        // $make_backup = false: imatge nova, l'usuari te l'original al seu equip.
-        $result = TSOIMMA_Optimizer::optimize( $attachment_id, $format, $quality, true, 0, 0, false );
+        // Temporary backup always: needed for safe rollback if FASE 2/3 fails.
+        // On success the backup is removed (new upload — user still has the local original).
+        $result = TSOIMMA_Optimizer::optimize( $attachment_id, $format, $quality, true, 0, 0, true );
 
         if ( ! is_wp_error( $result ) && ! empty( $result['replaced'] ) ) {
+            $snapshot = TSOIMMA_Optimizer::snapshot_attachment_state( $attachment_id );
 
             try {
                 // ── FASE 2: Actualitzar metadata principal a la BD ────────────
                 // Ho fem ABANS de generar thumbnails perquè update_wp_metadata_only
                 // escriu el nou path .webp i el nou mime type.
                 TSOIMMA_Optimizer::update_wp_metadata_only( $attachment_id, $result, $format );
+
+                // History as soon as convert + metadata succeed (do not wait for thumbs).
+                $log_file = isset( $result['new_path'] ) ? $result['new_path'] : get_attached_file( $attachment_id );
+                try {
+                    TSOIMMA_History::log(
+                        $attachment_id,
+                        'auto_optimize',
+                        array(
+                            'filename'      => $log_file ? basename( $log_file ) : '',
+                            'format'        => $format,
+                            'quality'       => $quality,
+                            'original_size' => isset( $result['original_size'] ) ? $result['original_size'] : 0,
+                            'new_size'      => isset( $result['new_size'] ) ? $result['new_size'] : 0,
+                            'savings_bytes' => isset( $result['savings_bytes'] ) ? $result['savings_bytes'] : 0,
+                            'savings_pct'   => isset( $result['savings_pct'] ) ? $result['savings_pct'] : 0,
+                        )
+                    );
+                    TSOIMMA_History::clear_pending( $attachment_id );
+                    tsoimma_update_attachment_meta( $attachment_id, 'auto_optimized', time() );
+                } catch ( \Throwable $log_ex ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- History/meta must not roll back a successful convert.
+                }
 
                 // ── FASE 3: Eliminar thumbnails originals (PNG/JPG) ───────────
                 // CRÍTIC: eliminar ABANS de wp_generate_attachment_metadata.
@@ -171,21 +203,21 @@ class TSOIMMA_Auto_Optimizer {
                 TSOIMMA_Optimizer::optimize_thumbnails( $attachment_id, $format, $quality );
                 TSOIMMA_Optimizer::repair_content_urls_for_attachment( $attachment_id, $current_meta );
 
-                // ── Registrar al historial ────────────────────────────────────
-                $log_file = isset( $result['new_path'] ) ? $result['new_path'] : get_attached_file( $attachment_id );
-                TSOIMMA_History::log( $attachment_id, 'auto_optimize', array(
-                    'filename'      => $log_file ? basename( $log_file ) : '',
-                    'format'        => $format,
-                    'quality'       => $quality,
-                    'original_size' => isset( $result['original_size'] ) ? $result['original_size'] : 0,
-                    'new_size'      => isset( $result['new_size'] )      ? $result['new_size']      : 0,
-                    'savings_bytes' => isset( $result['savings_bytes'] ) ? $result['savings_bytes'] : 0,
-                    'savings_pct'   => isset( $result['savings_pct'] )   ? $result['savings_pct']   : 0,
-                ) );
-
-                tsoimma_update_attachment_meta( $attachment_id, 'auto_optimized', time() );
+                // Drop temporary backup after a successful new-upload conversion.
+                // Isolated: cleanup failures must not roll back a completed conversion.
+                try {
+                    if ( ! empty( $result['backup_path'] ) ) {
+                        TSOIMMA_Optimizer::delete_backup_file( $result['backup_path'] );
+                    }
+                    TSOIMMA_Optimizer::clear_backup_meta( $attachment_id );
+                } catch ( \Throwable $cleanup_ex ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Backup cleanup is best-effort.
+                }
             } catch ( \Throwable $ex ) {
-                TSOIMMA_Optimizer::rollback_optimize_files( $result );
+                TSOIMMA_Optimizer::rollback_optimize_state( $attachment_id, $result, $snapshot );
+                // Convert was reverted — drop the early auto_optimize history row + flag.
+                TSOIMMA_History::delete_latest_for_attachment( $attachment_id, 'auto_optimize' );
+                TSOIMMA_History::clear_pending( $attachment_id );
+                tsoimma_delete_attachment_meta( $attachment_id, 'auto_optimized' );
             }
         }
 
@@ -193,6 +225,9 @@ class TSOIMMA_Auto_Optimizer {
 
         $saved = wp_get_attachment_metadata( $attachment_id );
         return ( $saved && is_array( $saved ) ) ? $saved : $metadata;
+        } finally {
+            TSOIMMA_Queue::release_attachment_lock( $attachment_id, $lock_token );
+        }
     }
 
     /**
@@ -229,7 +264,7 @@ class TSOIMMA_Auto_Optimizer {
             'enabled' => ! empty( $settings['enabled'] ),
             'format'  => in_array( $format_raw, array( 'webp', 'jpg', 'avif', 'png', 'original' ), true )
                             ? $format_raw : 'webp',
-            'quality' => min( 100, max( 50, absint( isset( $settings['quality'] ) ? $settings['quality'] : 82 ) ) ),
+            'quality' => tsoimma_clamp_image_quality( isset( $settings['quality'] ) ? $settings['quality'] : 82 ),
             'source_formats' => $source_clean,
             'fill_alt_on_upload' => ! empty( $settings['fill_alt_on_upload'] ),
             'skip_small_kb'      => min( 5120, max( 0, absint( $settings['skip_small_kb'] ?? 0 ) ) ),
