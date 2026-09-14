@@ -8,6 +8,7 @@ class TSOIMMA_History {
     const DB_VER        = '1.2';
     const OPT_VER       = 'tsoimma_db_version';
     const OPT_LEGACY_MERGED = 'tsoimma_history_legacy_merged';
+    const OPT_FILENAME_BACKFILLED = 'tsoimma_history_filename_backfilled';
 
     /**
      * Per-request cache for SHOW TABLES discovery.
@@ -121,6 +122,10 @@ class TSOIMMA_History {
             if ( get_option( self::OPT_VER ) !== self::DB_VER || ! self::table_exists() ) {
                 self::install();
             }
+
+            if ( '1' !== get_option( self::OPT_FILENAME_BACKFILLED, '' ) ) {
+                self::backfill_missing_delete_filenames();
+            }
         } catch ( \Throwable $e ) {
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
                 // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
@@ -183,6 +188,119 @@ class TSOIMMA_History {
         if ( empty( $discovered['legacy'] ) ) {
             update_option( self::OPT_LEGACY_MERGED, '1' );
         }
+    }
+
+    /**
+     * One-time repair for rows logged before merge_group()/delete_if_unused() started
+     * capturing filename/attachment_title BEFORE deleting the attachment. For each
+     * blank-filename dup_merge_delete / dup_delete_unused row, copy the filename and
+     * title from another row logged for the same attachment_id (most often the
+     * matching dup_merge_rewrite row from the same merge, which always logged before
+     * deletion). Rows with no such sibling data anywhere stay blank — there is nothing
+     * to recover them from. Runs once, guarded by OPT_FILENAME_BACKFILLED.
+     *
+     * @return void
+     */
+    private static function backfill_missing_delete_filenames() {
+        global $wpdb;
+
+        if ( ! self::table_exists() ) {
+            return;
+        }
+
+        $table = self::get_canonical_table_name();
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, attachment_id, details FROM %i WHERE action_type IN ('dup_merge_delete', 'dup_delete_unused')",
+                $table
+            ),
+            ARRAY_A
+        );
+
+        if ( empty( $rows ) ) {
+            update_option( self::OPT_FILENAME_BACKFILLED, '1' );
+            return;
+        }
+
+        // Group all rows by attachment_id in one query so each blank row can look for
+        // a sibling with a usable filename without querying per-row.
+        $attachment_ids = array();
+        foreach ( $rows as $row ) {
+            $attachment_ids[ absint( $row['attachment_id'] ) ] = true;
+        }
+        $attachment_ids = array_keys( $attachment_ids );
+
+        $siblings_by_attachment = array();
+        if ( ! empty( $attachment_ids ) ) {
+            $placeholders = implode( ',', array_fill( 0, count( $attachment_ids ), '%d' ) );
+            $args         = $attachment_ids;
+            array_unshift( $args, $table );
+
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+            $sibling_rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT id, attachment_id, details FROM %i WHERE attachment_id IN ({$placeholders}) ORDER BY created_at ASC, id ASC", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                    ...$args
+                ),
+                ARRAY_A
+            );
+
+            foreach ( (array) $sibling_rows as $sibling ) {
+                $decoded = json_decode( (string) $sibling['details'], true );
+                if ( ! is_array( $decoded ) || empty( $decoded['filename'] ) ) {
+                    continue;
+                }
+                $aid = absint( $sibling['attachment_id'] );
+                if ( ! isset( $siblings_by_attachment[ $aid ] ) ) {
+                    $siblings_by_attachment[ $aid ] = array(
+                        'filename'         => (string) $decoded['filename'],
+                        'attachment_title' => isset( $decoded['attachment_title'] ) ? (string) $decoded['attachment_title'] : '',
+                    );
+                }
+            }
+        }
+
+        $repaired = 0;
+        foreach ( $rows as $row ) {
+            $decoded = json_decode( (string) $row['details'], true );
+            if ( ! is_array( $decoded ) ) {
+                $decoded = array();
+            }
+            if ( ! empty( $decoded['filename'] ) ) {
+                continue; // Already has a filename — nothing to repair.
+            }
+
+            $aid = absint( $row['attachment_id'] );
+            if ( empty( $siblings_by_attachment[ $aid ] ) ) {
+                continue; // No donor data anywhere for this attachment — cannot recover.
+            }
+
+            $decoded['filename'] = $siblings_by_attachment[ $aid ]['filename'];
+            if ( empty( $decoded['attachment_title'] ) && ! empty( $siblings_by_attachment[ $aid ]['attachment_title'] ) ) {
+                $decoded['attachment_title'] = $siblings_by_attachment[ $aid ]['attachment_title'];
+            }
+
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+            $updated = $wpdb->update(
+                $table,
+                array( 'details' => wp_json_encode( $decoded ) ),
+                array( 'id' => absint( $row['id'] ) ),
+                array( '%s' ),
+                array( '%d' )
+            );
+            if ( false !== $updated ) {
+                ++$repaired;
+            }
+        }
+
+        if ( $repaired > 0 && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+            error_log( 'TSOIMMA_History::backfill_missing_delete_filenames: repaired ' . $repaired . ' row(s).' );
+        }
+
+        update_option( self::OPT_FILENAME_BACKFILLED, '1' );
     }
 
     /**

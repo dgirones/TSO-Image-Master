@@ -5,7 +5,7 @@ Tags: image optimization, webp, avif, media library, pdf compression
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.0.1
+Stable tag: 2.0.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -136,7 +136,13 @@ On Overview, **Scan duplicates** groups Media Library files with the same MD5 ha
 
 == Changelog ==
 
-For release history from 1.0.0 through 1.9.3, see CHANGELOG.txt in the plugin folder.
+For releases before 2.0.0, see CHANGELOG.txt in the plugin folder.
+
+= 2.0.2 =
+* Fixed: Duplicate entries
+* Fixed: History
+* Fixed: UI multiple corrections, day/night.
+* Fixed: language switcher apply the detected/saved language in wordpress.
 
 = 2.0.1 =
 * Fixed: Optimize actions appear in History immediately (no longer wait for thumbnails).
@@ -144,9 +150,6 @@ For release history from 1.0.0 through 1.9.3, see CHANGELOG.txt in the plugin fo
 * Fixed: Auto-optimize logs History right after convert/metadata (thumbs failures no longer hide the entry; rollback removes a premature row).
 * Improved: Removed duplicate auto-optimize history/stats from the Auto tab (use History filter instead).
 * Added: Hover preview for History thumbnails (same as optimize modal).
-* Fixed: Attachment optimize locks use ownership tokens; revert takes a lock; queue reclaim no longer double-logs History; thumbs AJAX clears cron only after success; History logs only when the file is replaced.
-* Fixed: Refresh attachment lock TTL during convert/thumbs; removed global `wp_cache_flush()` from thumbnail paths; enqueue reports queued vs skipped; cancel queue also cancels `thumbs_pending` jobs.
-* Fixed: History purge uses WordPress timezone (not MySQL NOW()); auto-optimize enqueues a background job when the attachment lock is busy.
 
 = 2.0.0 =
 * Added: Day / night UI themes with Auto mode based on sunrise and sunset (follows WordPress timezone).
@@ -154,30 +157,6 @@ For release history from 1.0.0 through 1.9.3, see CHANGELOG.txt in the plugin fo
 * Improved: SQL table identifiers use `$wpdb->prepare()` `%i` placeholders (Requires at least WordPress 6.2).
 * Fixed: Missing translations.
 
-= 1.9.8 =
-* Improved: WordPress.org compliance — canonical `tsoimma_` AJAX/storage layer, prefixed history table, attachment meta migration, sanitized AJAX inputs.
-* Improved: Overview alt list — manual edit for numeric/camera filenames, accurate missing-alt counter, used-in column, SEO tab weak-alt detection.
-* Improved: Dashboard layout — background queue and backup retention side by side; backup stats cache; queue enqueue mutex.
-* Improved: Bulk optimize limits (25 sync / 100 queued); bulk alt fill no longer overwrites good alts.
-* Fixed: Weak alt detection with spaces; thumbnail AJAX errors surfaced; Requires at least WordPress 6.1.
+For earlier releases, see CHANGELOG.txt in the plugin folder.
 
-= 1.9.7 =
-* Improved: Overview alt list — inline edit (save/cancel), one-click accept (✓) for suggested alt, thumbnail hover preview, row removal without reloading the whole dashboard.
-* Improved: Alt humanization (Spanish accents, fewer bad filename splits); missing-alt counter after bulk fill; dashboard overview cached until data changes.
-* Improved: Search clear (×) buttons; duplicate finder link styling; post editor deep-link highlights attachment in Gutenberg galleries.
-* Improved: Optimize modal collapses the resize section after a successful optimization.
-* Fixed: Alt save button contrast and spacing; hover preview stuck after bulk alt fill; save blocked when browser autocomplete was open.
 
-== Upgrade Notice ==
-
-= 2.0.1 =
-History now records optimizations immediately and recovers missing entries from existing TSO backups.
-
-= 2.0.0 =
-Day/night UI themes (auto sunrise/sunset from WordPress timezone), Catalan/Spanish i18n fixes, faster history table migration. Requires WordPress 6.2+.
-
-= 1.9.8 =
-Overview alt manual edit, WordPress.org prefix/storage hardening, dashboard UX, and queue/backup layout improvements.
-
-= 1.9.7 =
-Overview alt editor UX, hover preview, humanization tweaks, dashboard cache, and optimize modal polish.

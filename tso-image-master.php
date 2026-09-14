@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       TSO Image Master
  * Description:       Complete image optimization suite for WordPress: convert to WebP/JPG, resize, compress PDFs, find orphaned images, scan rogue files, fix broken image URLs, and manage SEO fields. Requires PHP GD library.
- * Version:           2.0.1
+ * Version:           2.0.2
  * Requires at least: 6.2
  * Requires PHP:      7.4
  * Tested up to:      7.1
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // ── Constants ────────────────────────────────────────────────────────
-define( 'TSOIMMA_VERSION',    '2.0.1' );
+define( 'TSOIMMA_VERSION',    '2.0.2' );
 define( 'TSOIMMA_FILE',       __FILE__ );
 define( 'TSOIMMA_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'TSOIMMA_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -117,7 +117,12 @@ function tsoimma_load_textdomain() {
 
     $did_load = true;
 }
-add_action( 'plugins_loaded', 'tsoimma_load_textdomain', 0 );
+// Loaded on init (not plugins_loaded priority 0): calling determine_locale()/get_user_locale()
+// this early forces WordPress to resolve the current user (extra get_user_meta query) before it
+// otherwise would on every admin-ajax.php request. All translated strings in this plugin are only
+// printed from callbacks that fire after init (admin_menu, admin_enqueue_scripts, wp_ajax_*, etc.),
+// so init is early enough.
+add_action( 'init', 'tsoimma_load_textdomain' );
 
 /**
  * Ensure plugin Name/Description use the site locale on the Plugins screen.

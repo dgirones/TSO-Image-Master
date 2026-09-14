@@ -299,6 +299,9 @@ function tsoimma_get_ajax_action_names() {
 		'tsoimma_save_backup_retention',
 		'tsoimma_purge_backups_now',
 		'tsoimma_scan_duplicates',
+		'tsoimma_dup_merge',
+		'tsoimma_dup_delete',
+		'tsoimma_dup_detach',
 	);
 }
 

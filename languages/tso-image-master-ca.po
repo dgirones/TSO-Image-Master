@@ -610,3 +610,6 @@ msgstr "Auto-optimitzada en pujar."
 
 msgid "Backup available for revert."
 msgstr "Còpia de seguretat disponible per revertir."
+
+msgid "No duplicate attachments to merge."
+msgstr "No hi ha cap adjunt duplicat per fusionar."

@@ -31,6 +31,10 @@
     --imp-donate-hover-bg: rgba(255, 209, 102, .2);
     --imp-donate-hover-text: #ffe29a;
     --imp-donate-hover-border: rgba(255, 209, 102, .6);
+    --imp-dup-ref-text:          #b8fff0;
+    --imp-dup-ref-text-visited:  #9ef5e4;
+    --imp-dup-ref-hover-text:    #ffffff;
+    --imp-dup-ref-indirect-text: #ffe29a;
     color-scheme: dark;
 }
 
@@ -56,6 +60,10 @@
     --imp-donate-hover-bg: rgba(180, 83, 9, .14);
     --imp-donate-hover-text: #92400e;
     --imp-donate-hover-border: rgba(180, 83, 9, .45);
+    --imp-dup-ref-text:          #047857;
+    --imp-dup-ref-text-visited:  #065f46;
+    --imp-dup-ref-hover-text:    #04372c;
+    --imp-dup-ref-indirect-text: #92400e;
     color-scheme: light;
 }
 
@@ -82,6 +90,22 @@
     min-height: 100vh;
     box-sizing: border-box;
     overflow-x: hidden;
+    /* Hidden until admin.js resolves and applies the saved/auto theme
+     * (adds .imp-theme-ready), so a page load never flashes the
+     * hardcoded "night" default before switching to the real theme.
+     * The animation is a safety net only: if JS fails to run for any
+     * reason, the page still reveals itself after ~1.2s instead of
+     * staying hidden forever. */
+    opacity: 0;
+    animation: imp-theme-reveal-fallback 0s 1.2s forwards;
+}
+@keyframes imp-theme-reveal-fallback {
+    to { opacity: 1; }
+}
+.imp-wrap.imp-theme-ready {
+    opacity: 1;
+    animation: none;
+    transition: opacity .12s ease;
 }
 
 /* ===== HEADER ===== */
@@ -375,6 +399,7 @@
     padding: 9px 18px; border-radius: var(--imp-radius-sm); border: none;
     font-family: var(--imp-font); font-size: 14px; font-weight: 600;
     cursor: pointer; transition: all .2s; line-height: 1; white-space: nowrap;
+    text-decoration: none;
 }
 .imp-btn-primary { background: var(--imp-accent); color: #fff; }
 .imp-btn-primary:hover { background: #7c74ff; box-shadow: 0 4px 14px rgba(108,99,255,.4); transform: translateY(-1px); }
@@ -459,20 +484,9 @@
 #imp-img-hover-preview img {
     display: block;
     max-width: 480px;
-    max-height: 440px;
+    max-height: 480px;
     width: auto; height: auto;
     object-fit: contain;
-}
-#imp-img-hover-preview .imp-hover-label {
-    padding: 6px 10px;
-    font-size: 11px;
-    color: var(--imp-text-muted);
-    font-family: var(--imp-mono);
-    background: var(--imp-bg);
-    border-top: 1px solid var(--imp-border);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 /* Thumb — alta qualitat, no borrós */
@@ -512,7 +526,7 @@
 .imp-image-card:hover .imp-card-edit-btn { opacity: 1; }
 
 /* ===== PAGINACIÓ ===== */
-.imp-pagination { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.imp-pagination { display: flex; justify-content: center; align-items: center; gap: 6px; margin: 0 0 16px; flex-wrap: wrap; }
 .imp-page-btn {
     background: var(--imp-surface); border: 1px solid var(--imp-border);
     color: var(--imp-text-muted); padding: 6px 12px; border-radius: var(--imp-radius-sm);
@@ -520,6 +534,28 @@
 }
 .imp-page-btn:hover  { background: var(--imp-surface2); color: var(--imp-text); }
 .imp-page-btn.active { background: var(--imp-accent); color: #fff; border-color: var(--imp-accent); }
+
+/* Missing-alt tab pagination: shown both above and below the list, kept
+ * in sync (see renderAltPagination() in admin.js). Gets its own centered,
+ * pill-style look plus an explicit active/hover state, since the generic
+ * .imp-btn-ghost.imp-btn-sm buttons it's built from have no such state. */
+.imp-alt-pagination-bar {
+    display: flex; justify-content: center; align-items: center;
+    gap: 4px; margin: 0 0 14px; flex-wrap: wrap; padding: 10px 0;
+}
+.imp-alt-pagination-bar.imp-pagination-top {
+    margin: 0 0 14px; padding: 0 0 12px; border-bottom: 1px solid var(--imp-border);
+}
+.imp-alt-pagination-bar .imp-btn-ghost.imp-btn-sm {
+    min-width: 30px; text-align: center; padding: 5px 10px;
+    border-radius: var(--imp-radius-sm);
+}
+.imp-alt-pagination-bar .imp-btn-ghost.imp-btn-sm.active {
+    background: var(--imp-accent); color: #fff; border-color: var(--imp-accent);
+}
+.imp-alt-page-ellipsis {
+    color: var(--imp-text-muted); font-size: 13px; padding: 0 4px; user-select: none;
+}
 
 /* ===== PROGRESS BAR ===== */
 .imp-bulk-progress { background: var(--imp-surface); border: 1px solid var(--imp-border); border-radius: var(--imp-radius); padding: 20px; margin-bottom: 20px; }
@@ -904,18 +940,25 @@
     min-height: 108px; text-align: center;
 }
 .imp-stat-card .imp-stat-label {
-    font-size: 10px; color: var(--imp-text-muted); letter-spacing: .04em;
+    /* Bumped up from 10px: on a wide screen these cards have 5 columns of
+       room and the old size looked lost inside them. Reverted back down
+       to the original 10px below 768px, where the grid narrows to 3
+       columns and the smaller, already-tested size is needed again. */
+    font-size: 11px; color: var(--imp-text-muted); letter-spacing: .04em;
     display: flex; align-items: center; justify-content: center;
     min-height: 2.6em; line-height: 1.25; margin-bottom: 6px;
     white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
 }
 .imp-stat-card .imp-stat-val {
-    font-size: 24px; font-weight: 700; color: var(--imp-text);
+    /* Bumped up from 24px for the same reason. overflow-wrap/word-break
+       are a safety net for text values like "ACTIVADO" so a bigger font
+       never overflows a narrow card instead of wrapping. */
+    font-size: 28px; font-weight: 700; color: var(--imp-text);
     display: block; line-height: 1.15; font-variant-numeric: tabular-nums;
-    margin: 0;
+    margin: 0; overflow-wrap: anywhere; word-break: break-word;
 }
 .imp-stat-card .imp-stat-sub {
-    font-size: 11px; color: var(--imp-text-muted); margin-top: auto; padding-top: 6px;
+    font-size: 12px; color: var(--imp-text-muted); margin-top: auto; padding-top: 6px;
     display: block; line-height: 1.3; min-height: 1.3em;
 }
 .imp-stat-card.is-warn .imp-stat-val { color: var(--imp-warn); }
@@ -999,6 +1042,38 @@
     .imp-tabs {
         grid-template-columns: repeat(4, minmax(0, 1fr));
     }
+}
+
+/* Phones: this rule must come after the 1200px block above so it wins the
+   cascade there too (both match on a phone; the 768px .imp-tabs rule earlier
+   in this file was losing to the 1200px one above, leaving 4 truncated tabs
+   per row instead of 2 readable ones). */
+@media (max-width: 768px) {
+    .imp-tabs {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/* Stat card labels ("Imágenes en la biblioteca", etc.): let them wrap onto the
+   two lines the card already reserves (min-height: 2.6em) instead of forcing
+   nowrap + ellipsis, which combined with the flex centering was clipping both
+   ends of the text instead of showing a trailing "…". */
+@media (max-width: 768px) {
+    .imp-stat-card .imp-stat-label {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+    }
+}
+
+/* Cards keep the bigger desktop lettering down to 768px (still a wide
+   3-column grid there), but at phone widths — where #imp-dashboard-stats
+   already sits at 3 narrow columns — go back to the original, smaller
+   sizes that were already fitting comfortably. */
+@media (max-width: 480px) {
+    .imp-stat-card .imp-stat-label { font-size: 10px; }
+    .imp-stat-card .imp-stat-val   { font-size: 24px; }
+    .imp-stat-card .imp-stat-sub   { font-size: 11px; }
 }
 
 .imp-alt-list { display: flex; flex-direction: column; gap: 8px; }
@@ -1132,7 +1207,13 @@
 .imp-dup-group-header { margin-bottom: 4px; }
 .imp-dup-group-header strong { display: block; font-size: 14px; color: var(--imp-text); }
 .imp-dup-group-note { margin-top: 6px; font-size: 12px; color: var(--imp-warn); }
-.imp-dup-group-hash { margin-top: 4px; font-size: 11px; color: var(--imp-text-muted); font-family: ui-monospace, monospace; }
+.imp-dup-group-hash { margin-top: 4px; font-size: 13px; color: var(--imp-text-muted); font-family: ui-monospace, monospace; }
+.imp-dup-merge-row { margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.imp-dup-merge-hint { font-size: 13px; color: var(--imp-text-muted); line-height: 1.5; max-width: 520px; }
+.imp-dup-keep-radio { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--imp-text-muted); font-weight: 600; cursor: pointer; }
+.imp-dup-keep-radio input[type="radio"],
+.imp-dup-keep-radio input[type="checkbox"] { width: 14px; height: 14px; margin: 0; accent-color: var(--imp-success); cursor: pointer; }
+.imp-dup-merge-result { margin-bottom: 10px; padding: 8px 12px; border-radius: var(--imp-radius-sm); background: rgba(6,214,160,.12); border: 1px solid rgba(6,214,160,.35); color: var(--imp-success); font-size: 12px; }
 .imp-dup-item {
     display: grid; grid-template-columns: 56px minmax(0, 1fr) auto;
     gap: 12px; align-items: start; padding: 12px 0;
@@ -1149,36 +1230,36 @@
 .imp-dup-ref-link {
     display: inline-block; margin: 2px 6px 2px 0; padding: 3px 10px;
     background: rgba(0, 212, 170, 0.12); border: 1px solid rgba(0, 212, 170, 0.45);
-    border-radius: 999px; color: #b8fff0; text-decoration: none; font-weight: 600;
+    border-radius: 999px; color: var(--imp-dup-ref-text); text-decoration: none; font-weight: 600;
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 .imp-dup-ref-link:hover {
     border-color: var(--imp-accent2);
     background: rgba(0, 212, 170, 0.22);
-    color: #ffffff;
+    color: var(--imp-dup-ref-hover-text);
 }
 .imp-dup-ref-link:focus,
 .imp-dup-ref-link:focus-visible,
 .imp-dup-ref-link:active {
     outline: none;
-    border-color: #ffffff;
+    border-color: var(--imp-accent);
     background: rgba(108, 99, 255, 0.55);
-    color: #ffffff;
-    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+    color: var(--imp-dup-ref-hover-text);
+    box-shadow: 0 0 0 2px var(--imp-accent);
 }
 .imp-dup-ref-link:visited {
-    color: #9ef5e4;
+    color: var(--imp-dup-ref-text-visited);
 }
 .imp-dup-ref-link:visited:hover,
 .imp-dup-ref-link:visited:focus,
 .imp-dup-ref-link:visited:focus-visible,
 .imp-dup-ref-link:visited:active {
-    color: #ffffff;
+    color: var(--imp-dup-ref-hover-text);
 }
 .imp-dup-ref-indirect {
     border-color: rgba(255, 209, 102, 0.55);
     background: rgba(255, 209, 102, 0.14);
-    color: #ffe29a;
+    color: var(--imp-dup-ref-indirect-text);
 }
 .imp-dup-ref-indirect:hover,
 .imp-dup-ref-indirect:focus,
@@ -1193,6 +1274,7 @@
     font-size: 11px; font-weight: 700;
 }
 .imp-dup-badge-keep { background: rgba(6,214,160,.15); color: var(--imp-success); }
+.imp-dup-badge-attached { background: rgba(108,99,255,.15); color: var(--imp-accent); }
 .imp-dup-badge-delete { background: rgba(255,209,102,.15); color: var(--imp-warn); }
 .imp-dup-refs-direct { margin-top: 8px; }
 .imp-dup-refs-indirect {
@@ -1203,7 +1285,7 @@
 .imp-dup-ref-direct {
     border-color: rgba(6, 214, 160, 0.55);
     background: rgba(6, 214, 160, 0.14);
-    color: #9ef5e4;
+    color: var(--imp-dup-ref-text-visited);
 }
 .imp-dup-indirect-list { margin: 6px 0 0 18px; padding: 0; }
 .imp-dup-indirect-list li { margin-bottom: 4px; }
@@ -1251,9 +1333,22 @@
 }
 
 @media (max-width: 900px) {
+    /* Column header (ARCHIVO / ALT SUGERIDO / USADA EN) still used the old
+       5-column layout here, so it wrapped into a ragged two-line mess; the
+       labels are redundant anyway once each row is stacked below. */
+    .imp-alt-list-head { display: none; }
+
     .imp-alt-row { grid-template-columns: 28px 48px 1fr; }
-    .imp-alt-suggest-cell { grid-column: 2 / -1; }
-    .imp-alt-used { grid-column: 2 / -1; }
+    .imp-alt-suggest-cell {
+        grid-column: 2 / -1;
+        margin-top: 4px;
+    }
+    .imp-alt-used {
+        grid-column: 2 / -1;
+        margin-top: 4px;
+        padding-top: 6px;
+        border-top: 1px dashed var(--imp-border);
+    }
 }
 
 /* ===== HISTORY TABLE ===== */
@@ -1276,6 +1371,10 @@
 .imp-history-action.seo_update    { background: rgba(6,214,160,.15); color: var(--imp-success); }
 .imp-history-action.delete        { background: rgba(255,77,109,.15); color: var(--imp-danger); }
 .imp-history-action.pdf_compress  { background: rgba(255,255,255,.08); color: var(--imp-text-muted); }
+.imp-history-action.dup_merge_rewrite  { background: rgba(108,99,255,.2); color: #a599ff; }
+.imp-history-action.dup_merge_delete   { background: rgba(255,77,109,.15); color: var(--imp-danger); }
+.imp-history-action.dup_delete_unused  { background: rgba(255,77,109,.15); color: var(--imp-danger); }
+.imp-history-action.dup_detach         { background: rgba(255,209,102,.15); color: var(--imp-warn); }
 .imp-history-savings { color: var(--imp-success); font-weight: 600; font-size: 12px; }
 .imp-history-table-container {
     background: var(--imp-surface); border: 1px solid var(--imp-border);
@@ -1393,6 +1492,21 @@
     white-space: nowrap;
 }
 .imp-btn-sm:hover { background: rgba(255,209,102,.1); }
+/* The transparent background above is only meant for a plain outline
+ * small button. It has the same specificity as .imp-btn-primary/-danger/
+ * -success/-ghost and comes later in the file, so on any button combining
+ * one of those with .imp-btn-sm (e.g. "Eliminar seleccionats" on the
+ * ghost-attachments scanner) it was silently winning and leaving the
+ * button with no visible background at all (white text on a near-white
+ * card). Restore the intended color for each variant explicitly. */
+.imp-btn-sm.imp-btn-primary { background: var(--imp-accent); }
+.imp-btn-sm.imp-btn-danger  { background: var(--imp-danger); }
+.imp-btn-sm.imp-btn-success { background: var(--imp-success); }
+.imp-btn-sm.imp-btn-ghost   { background: var(--imp-surface2); }
+.imp-btn-sm.imp-btn-primary:hover { background: var(--imp-accent); }
+.imp-btn-sm.imp-btn-danger:hover  { background: #ff6b85; }
+.imp-btn-sm.imp-btn-success:hover { background: #08e7ad; }
+.imp-btn-sm.imp-btn-ghost:hover   { background: var(--imp-border); }
 
 /* ===== ROGUE FILES GRID ===== */
 .imp-rogue-grid {

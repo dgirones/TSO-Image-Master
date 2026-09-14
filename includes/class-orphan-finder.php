@@ -55,6 +55,52 @@ class TSOIMMA_Orphan_Finder {
         $parent = wp_get_post_parent_id( $attachment_id );
         if ( $parent > 0 ) return false;
 
+        // 1b. Personalitzador / Identitat del lloc: custom_logo i site_icon
+        // guarden l'ID de l'adjunt directament (no una URL ni un valor de
+        // postmeta), així que cap de les cerques d'URL/ID de més avall
+        // (post_content, postmeta, options per URL) no els pot trobar mai.
+        // Sense aquesta comprovació, el logo o la icona del lloc semblen
+        // completament sense referències i es marquen com a orfes.
+        if ( absint( get_theme_mod( 'custom_logo' ) ) === (int) $attachment_id ) return false;
+        if ( absint( get_option( 'site_icon' ) ) === (int) $attachment_id ) return false;
+
+        // 1c. Fitxer escrit directament al codi del tema actiu (per
+        // exemple un logo posat a mà dins de header.php) — cap fila de la
+        // base de dades ho pot revelar mai, així que cal mirar els propis
+        // fitxers de la plantilla. Vegeu
+        // TSOIMMA_Image_Manager::find_filename_in_theme_files().
+        $file_path_for_theme_check = get_attached_file( $attachment_id );
+        $filename_for_theme_check  = $file_path_for_theme_check ? basename( $file_path_for_theme_check ) : '';
+        if ( $filename_for_theme_check
+            && class_exists( 'TSOIMMA_Image_Manager' )
+            && '' !== TSOIMMA_Image_Manager::find_filename_in_theme_files( $filename_for_theme_check )
+        ) {
+            return false;
+        }
+
+        // 1d. Theme/page-builder setting storing this attachment's ID inside
+        // a wp_options row (e.g. Astra/OceanWP/Divi's own logo setting) —
+        // not the core custom_logo/site_icon theme_mods checked above, and
+        // not a URL, so none of the URL-based searches below can find it.
+        if ( class_exists( 'TSOIMMA_Image_Manager' )
+            && '' !== TSOIMMA_Image_Manager::find_attachment_id_in_options( $attachment_id )
+        ) {
+            return false;
+        }
+
+        // 1e. Same idea for a custom "Theme Options" panel storing a
+        // typed/picked URL or path string (not an ID) — the exact stored
+        // path may not match this attachment's current full/relative URL
+        // (no year/month subfolder, no domain, stale after a migration...),
+        // so the filename alone is checked here, before the strict URL
+        // checks in steps 3/4/6 below that require an exact string match.
+        if ( $filename_for_theme_check
+            && class_exists( 'TSOIMMA_Image_Manager' )
+            && '' !== TSOIMMA_Image_Manager::find_filename_in_options( $filename_for_theme_check )
+        ) {
+            return false;
+        }
+
         // 2. Obtenir totes les URLs de l'attachment (inclosos thumbnails)
         $urls = self::get_all_urls( $attachment_id );
         if ( empty( $urls ) ) return true;

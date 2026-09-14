@@ -589,7 +589,22 @@ class TSOIMMA_Ajax_Handler {
         $result = TSOIMMA_PDF_Compressor::compress_background( $id, $quality );
 
         if ( is_wp_error( $result ) ) {
-            TSOIMMA_PDF_Compressor::mark_non_compressible( $id, $result->get_error_code(), $result->get_error_message() );
+            // "already_compressed" and "no_gs" are not intrinsic problems
+            // with THIS file — they're an expected guard (don't re-squeeze
+            // an already-optimized PDF) and a server-wide engine outage,
+            // respectively. Flagging the file itself as permanently
+            // "non compressible" for either would be wrong: an
+            // already-compressed PDF is a success, not a failure, and once
+            // GhostScript/Imagick become available again a "no_gs" file
+            // should be retryable — not stuck disabled forever from one
+            // earlier miss. Every other error code here (invalid file,
+            // wrong mime, encrypted) is a real, stable property of the file
+            // itself and is still worth remembering so we don't keep
+            // retrying it.
+            $code = $result->get_error_code();
+            if ( ! in_array( $code, array( 'already_compressed', 'no_gs' ), true ) ) {
+                TSOIMMA_PDF_Compressor::mark_non_compressible( $id, $code, $result->get_error_message() );
+            }
             wp_send_json_error( $result->get_error_message() );
             return;
         }
@@ -785,26 +800,34 @@ class TSOIMMA_Ajax_Handler {
 
         $backup = TSOIMMA_Optimizer::get_backup_status( $id );
 
+        // Confirmed usage only (direct), plus unconfirmed matches (indirect)
+        // reported separately — the same vetted classification the
+        // Duplicates tab uses, so a bare "id":N JSON hit in an unrelated
+        // block (or a stale attribute after "Replace image") doesn't show
+        // up here as if the image were genuinely embedded in that post.
+        $ref_report = TSOIMMA_Image_Manager::get_attachment_reference_report( $id );
+
         wp_send_json_success( array(
-            'id'          => $id,
-            'title'       => get_the_title( $id ),
-            'alt'         => get_post_meta( $id, '_wp_attachment_image_alt', true ),
-            'caption'     => get_post_field( 'post_excerpt', $id ),
-            'description' => get_post_field( 'post_content', $id ),
-            'filename'    => $file ? basename( $file ) : '',
-            'url'         => wp_get_attachment_url( $id ),
-            'thumb'       => wp_get_attachment_image_url( $id, 'medium' ),
-            'filesize'    => $file && file_exists( $file ) ? filesize( $file ) : 0,
-            'filesize_h'  => $file && file_exists( $file ) ? size_format( filesize( $file ) ) : '—',
-            'mime'        => $real_mime,
-            'ext'         => $real_ext,
-            'width'       => $width,
-            'height'      => $height,
-            'suggested'   => TSOIMMA_Image_Manager::suggest_filename( $id ),
-            'is_orphan'   => TSOIMMA_Orphan_Finder::is_orphan( $id ),
-            'used_in'     => TSOIMMA_Image_Manager::get_used_in_posts( $id ),
-            'has_backup'  => ! empty( $backup['has_backup'] ),
-            'backup_size' => ! empty( $backup['backup_size'] ) ? $backup['backup_size'] : '',
+            'id'               => $id,
+            'title'            => get_the_title( $id ),
+            'alt'              => get_post_meta( $id, '_wp_attachment_image_alt', true ),
+            'caption'          => get_post_field( 'post_excerpt', $id ),
+            'description'      => get_post_field( 'post_content', $id ),
+            'filename'         => $file ? basename( $file ) : '',
+            'url'              => wp_get_attachment_url( $id ),
+            'thumb'            => wp_get_attachment_image_url( $id, 'medium' ),
+            'filesize'         => $file && file_exists( $file ) ? filesize( $file ) : 0,
+            'filesize_h'       => $file && file_exists( $file ) ? size_format( filesize( $file ) ) : '—',
+            'mime'             => $real_mime,
+            'ext'              => $real_ext,
+            'width'            => $width,
+            'height'           => $height,
+            'suggested'        => TSOIMMA_Image_Manager::suggest_filename( $id ),
+            'is_orphan'        => TSOIMMA_Orphan_Finder::is_orphan( $id ),
+            'used_in'          => $ref_report['direct'],
+            'used_in_indirect' => $ref_report['indirect'],
+            'has_backup'       => ! empty( $backup['has_backup'] ),
+            'backup_size'      => ! empty( $backup['backup_size'] ) ? $backup['backup_size'] : '',
         ) );
     }
 
@@ -895,6 +918,7 @@ class TSOIMMA_Ajax_Handler {
         $deleted = 0;
         $errors  = array();
         $rescan_required = false;
+        $deleted_b64     = array();
 
         foreach ( $raw_b64s as $b64 ) {
             // Decodificar el path absolut original (preserva encoding original del filesystem)
@@ -920,6 +944,12 @@ class TSOIMMA_Ajax_Handler {
             wp_delete_file( $safe_path );
             if ( ! file_exists( $safe_path ) ) {
                 $deleted++;
+                // Echo back the exact b64 value the client sent for this
+                // file, so the admin UI can remove only the rows that were
+                // truly deleted from disk — matching by aggregate count
+                // alone made every selected row disappear even when some
+                // were skipped (not on the allowlist, delete failed...).
+                $deleted_b64[] = $b64;
                 TSOIMMA_Optimizer::prune_empty_backup_dirs( $safe_path );
             } else {
                 $errors[] = basename( $safe_path ) . ' (no es pot eliminar)';
@@ -930,6 +960,7 @@ class TSOIMMA_Ajax_Handler {
                 'deleted'         => $deleted,
                 'errors'          => $errors,
                 'rescan_required' => $rescan_required,
+                'deleted_b64'     => $deleted_b64,
             )
         );
     }
@@ -1059,6 +1090,19 @@ class TSOIMMA_Ajax_Handler {
                     'gif'  => 'image/gif',
                 );
                 $real_mime = isset( $mime_map[ $real_ext ] ) ? $mime_map[ $real_ext ] : mime_content_type( $abs_path );
+
+                // mime_content_type() can return false (missing fileinfo
+                // extension, unreadable file, exotic extension not in the
+                // map above). Without this guard, $post_mime !== false is
+                // always true, and the update below would write an empty
+                // string into post_mime_type — blanking a previously-correct
+                // value instead of leaving it alone when we simply don't
+                // know the real type.
+                if ( ! is_string( $real_mime ) || '' === $real_mime ) {
+                    $errors[] = 'ID ' . $id . ': no s\'ha pogut determinar el mime type real (' . basename( $abs_path ) . ')';
+                    clean_attachment_cache( $id );
+                    continue;
+                }
 
                 if ( $post_mime !== $real_mime ) {
                     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -1663,5 +1707,84 @@ class TSOIMMA_Ajax_Handler {
         wp_send_json_success( TSOIMMA_Duplicate_Finder::scan( $limit ) );
     }
 
+    /**
+     * Merge a group of byte-identical duplicate attachments into one: rewrite
+     * every reference we can positively identify to point at the kept
+     * attachment, then delete a retired duplicate only once nothing still
+     * references it.
+     */
+    public static function handle_tso_im_dup_merge() {
+        tsoimma_verify_ajax_nonce();
+        self::require_admin();
+
+        // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
+        @set_time_limit( 120 );
+
+        $keep_id    = self::require_attachment_id( tsoimma_get_ajax_post_int( 'keep_id' ) );
+        $delete_ids = array_values( array_unique( array_filter( array_map( 'absint', tsoimma_get_ajax_post_int_array( 'delete_ids' ) ) ) ) );
+        $delete_ids = array_diff( $delete_ids, array( $keep_id ) );
+
+        if ( empty( $delete_ids ) ) {
+            wp_send_json_error( __( 'No duplicate attachments to merge.', 'tso-image-master' ) );
+        }
+
+        foreach ( $delete_ids as $delete_id ) {
+            if ( 'attachment' !== get_post_type( $delete_id ) ) {
+                wp_send_json_error( __( 'Invalid attachment ID.', 'tso-image-master' ) );
+            }
+        }
+
+        wp_send_json_success( TSOIMMA_Duplicate_Finder::merge_group( $keep_id, $delete_ids ) );
+    }
+
+    /**
+     * Delete one duplicate attachment from the Duplicates tab. Re-checks
+     * server-side that it is still unused before deleting — never trusts
+     * the "safe to delete" badge shown in the browser, which reflects the
+     * state at scan time.
+     */
+    public static function handle_tso_im_dup_delete() {
+        tsoimma_verify_ajax_nonce();
+        self::require_admin();
+
+        $attachment_id = self::require_attachment_id( tsoimma_get_ajax_post_int( 'attachment_id' ) );
+
+        wp_send_json_success( TSOIMMA_Duplicate_Finder::delete_if_unused( $attachment_id ) );
+    }
+
+    /**
+     * Detach a duplicate item from the post it's post_parent-attached to,
+     * without deleting the file — the same "Desvincular"/"Unattach" action
+     * WordPress's own Media Library grid offers, surfaced here for an item
+     * flagged "Only attached" so the user doesn't have to leave this screen
+     * to fix it. Returns the freshly recomputed usage info for that one
+     * item so the Duplicates tab can update its badge/buttons in place.
+     */
+    public static function handle_tso_im_dup_detach() {
+        tsoimma_verify_ajax_nonce();
+        self::require_admin();
+
+        $attachment_id = self::require_attachment_id( tsoimma_get_ajax_post_int( 'attachment_id' ) );
+
+        $old_parent = absint( get_post_field( 'post_parent', $attachment_id ) );
+        if ( $old_parent > 0 ) {
+            $updated = wp_update_post( array( 'ID' => $attachment_id, 'post_parent' => 0 ), true );
+            if ( is_wp_error( $updated ) ) {
+                wp_send_json_error( $updated->get_error_message() );
+            }
+            if ( class_exists( 'TSOIMMA_History' ) ) {
+                TSOIMMA_History::log(
+                    $attachment_id,
+                    'dup_detach',
+                    array(
+                        'old_parent_id'    => $old_parent,
+                        'old_parent_title' => get_the_title( $old_parent ),
+                    )
+                );
+            }
+        }
+
+        wp_send_json_success( array( 'item' => TSOIMMA_Duplicate_Finder::refresh_item_usage( $attachment_id ) ) );
+    }
 
 }

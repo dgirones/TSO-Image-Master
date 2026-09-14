@@ -37,7 +37,10 @@ class TSOIMMA_Admin_Page {
             $css_ver
         );
 
-        $inline_css  = '#wpwrap,#wpcontent,#wpbody,#wpbody-content{background:#0f1117 !important;}';
+        $initial_theme = self::theme_from_cookie();
+        $wrap_bg       = 'day' === $initial_theme ? '#eef1f6' : '#0f1117';
+
+        $inline_css  = '#wpwrap,#wpcontent,#wpbody,#wpbody-content{background:' . $wrap_bg . ' !important;}';
         $inline_css .= '#wpcontent{padding-left:0 !important;}';
         $inline_css .= '#wpbody-content>.wrap,#wpbody-content>div.wrap{';
         $inline_css .= 'max-width:none !important;padding:0 !important;margin:0 !important;}';
@@ -254,6 +257,23 @@ class TSOIMMA_Admin_Page {
      *
      * @return string
      */
+    /**
+     * Last theme admin.js resolved (day/night), mirrored into a cookie on
+     * every change so the very first server-rendered paint can use the
+     * right colors instead of always assuming "night" and letting JS fix
+     * it up a moment later — that gap is what caused a black flash in the
+     * Day theme even after #imp-app was hidden until JS ran.
+     *
+     * @return string 'day' or 'night'
+     */
+    private static function theme_from_cookie() {
+        if ( empty( $_COOKIE['tsoimma_theme_resolved'] ) ) {
+            return 'night';
+        }
+        $theme = sanitize_key( wp_unslash( $_COOKIE['tsoimma_theme_resolved'] ) );
+        return 'day' === $theme ? 'day' : 'night';
+    }
+
     private static function theme_timezone_string() {
         if ( function_exists( 'wp_timezone_string' ) ) {
             return (string) wp_timezone_string();
@@ -545,8 +565,9 @@ class TSOIMMA_Admin_Page {
     }
 
     public static function render_page() {
+        $initial_theme = self::theme_from_cookie();
         ?>
-        <div id="imp-app" class="imp-wrap" data-theme="night" data-theme-pref="auto">
+        <div id="imp-app" class="imp-wrap" data-theme="<?php echo esc_attr( $initial_theme ); ?>" data-theme-pref="auto">
 
             <!-- HEADER -->
             <div class="imp-header">
@@ -565,7 +586,7 @@ class TSOIMMA_Admin_Page {
                         <span class="imp-theme-label" data-i18n="theme_auto">Mode auto</span>
                     </button>
                     <div class="imp-lang-switcher" role="group" aria-label="Idioma">
-                        <button class="imp-lang-btn active" data-lang="ca" title="Català">CA</button>
+                        <button class="imp-lang-btn" data-lang="ca" title="Català">CA</button>
                         <button class="imp-lang-btn" data-lang="es" title="Español">ES</button>
                         <button class="imp-lang-btn" data-lang="en" title="English">EN</button>
                     </div>
@@ -631,13 +652,14 @@ class TSOIMMA_Admin_Page {
                         </div>
                     </div>
                     <p class="imp-panel-desc" data-i18n="dash_alt_desc">Suggereix alt des del títol o nom de fitxer. Clica ✎ per editar una fila; Desar (verd) guarda l'alt. «Omplir alt seleccionades» usa el text editat.</p>
+                    <div id="imp-alt-pagination-top" class="imp-pagination imp-alt-pagination-bar imp-pagination-top"></div>
                     <div class="imp-alt-list-head">
                         <span></span><span></span><span data-i18n="dash_alt_file_col">Fitxer</span><span data-i18n="dash_alt_suggested">Alt suggerit</span><span data-i18n="dash_alt_used_in">Usada a</span>
                     </div>
                     <div id="imp-alt-grid" class="imp-alt-list">
                         <div class="imp-loading" data-i18n="loading_data">Carregant...</div>
                     </div>
-                    <div id="imp-alt-pagination" class="imp-pagination"></div>
+                    <div id="imp-alt-pagination" class="imp-pagination imp-alt-pagination-bar"></div>
                     <div id="imp-alt-bulk-result" style="display:none;margin-top:12px;font-size:13px;"></div>
                 </div>
 

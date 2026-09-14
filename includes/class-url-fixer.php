@@ -424,9 +424,10 @@ class TSOIMMA_URL_Fixer {
 
     public static function fix( $fixes ) {
         global $wpdb;
-        $fixed   = 0;
-        $skipped = 0;
-        $errors  = array();
+        $fixed      = 0;
+        $skipped    = 0;
+        $errors     = array();
+        $fixed_urls = array();
 
         foreach ( $fixes as $fix ) {
             $old = esc_url_raw( $fix['old_url'] );
@@ -451,7 +452,17 @@ class TSOIMMA_URL_Fixer {
             }
 
             $affected = self::replace_in_db( $old, $new );
-            if ( $affected > 0 ) { $fixed++; } else { $skipped++; }
+            if ( $affected > 0 ) {
+                $fixed++;
+                // Report back the exact string the caller sent us (post
+                // esc_url_raw(), same as what class-ajax-handler.php passed
+                // in) so the admin UI can remove only the rows that actually
+                // succeeded from its list — matching by count alone made
+                // every selected row disappear even when some were skipped.
+                $fixed_urls[] = $old;
+            } else {
+                $skipped++;
+            }
         }
 
         if ( $fixed > 0 ) {
@@ -462,7 +473,12 @@ class TSOIMMA_URL_Fixer {
             if ( function_exists( 'wpfc_clear_all_cache' ) ) wpfc_clear_all_cache();
         }
 
-        return array( 'fixed' => $fixed, 'skipped' => $skipped, 'errors' => $errors );
+        return array(
+            'fixed'      => $fixed,
+            'skipped'    => $skipped,
+            'errors'     => $errors,
+            'fixed_urls' => $fixed_urls,
+        );
     }
 
     /**
@@ -472,9 +488,10 @@ class TSOIMMA_URL_Fixer {
      * @return array{removed:int,skipped:int,errors:string[]}
      */
     public static function remove_urls( $urls ) {
-        $removed = 0;
-        $skipped = 0;
-        $errors  = array();
+        $removed      = 0;
+        $skipped      = 0;
+        $errors       = array();
+        $removed_urls = array();
 
         foreach ( (array) $urls as $url ) {
             $url = esc_url_raw( (string) $url );
@@ -499,6 +516,9 @@ class TSOIMMA_URL_Fixer {
             $affected = self::remove_url_from_db( $url );
             if ( $affected > 0 ) {
                 $removed++;
+                // Same reasoning as fix()'s $fixed_urls: let the admin UI
+                // remove only the rows actually cleared from storage.
+                $removed_urls[] = $url;
             } else {
                 $skipped++;
             }
@@ -520,7 +540,12 @@ class TSOIMMA_URL_Fixer {
             }
         }
 
-        return array( 'removed' => $removed, 'skipped' => $skipped, 'errors' => $errors );
+        return array(
+            'removed'      => $removed,
+            'skipped'      => $skipped,
+            'errors'       => $errors,
+            'removed_urls' => $removed_urls,
+        );
     }
 
     /**

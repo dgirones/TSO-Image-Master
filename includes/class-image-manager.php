@@ -11,6 +11,233 @@ class TSOIMMA_Image_Manager {
     private static $referenced_cache = array();
 
     /**
+     * Per-request cache of the active theme's own template file contents
+     * (relative path => content), built once and reused for every
+     * attachment's "is this hardcoded into the theme?" check.
+     *
+     * @var array<string, string>|null
+     */
+    private static $theme_files_cache = null;
+
+    /**
+     * Read every PHP/HTML/CSS/JSON file from the active theme (and its
+     * parent, for a child theme) into memory once per request. Some sites
+     * have a logo, icon, or other image hardcoded straight into a template
+     * file (e.g. header.php) by whoever built the theme, instead of using
+     * the Media Library attachment relationship or the Customizer — there
+     * is no database row anywhere (post_content, postmeta, options,
+     * theme_mods) that could ever reveal that usage, so every other check
+     * in this class is blind to it. This is the only way to catch it.
+     *
+     * @return array<string, string> relative path => file contents.
+     */
+    private static function get_theme_files_cache() {
+        if ( null !== self::$theme_files_cache ) {
+            return self::$theme_files_cache;
+        }
+
+        $files = array();
+        $dirs  = array_unique(
+            array_filter(
+                array(
+                    get_stylesheet_directory(),
+                    get_template_directory(),
+                )
+            )
+        );
+
+        $count      = 0;
+        $max_files  = 400;
+        $max_bytes  = 2 * MB_IN_BYTES;
+        $extensions = array( 'php', 'html', 'css', 'json' );
+
+        foreach ( $dirs as $dir ) {
+            if ( $count >= $max_files || ! is_dir( $dir ) ) {
+                continue;
+            }
+            try {
+                $iterator = new RecursiveIteratorIterator(
+                    new RecursiveDirectoryIterator( $dir, FilesystemIterator::SKIP_DOTS )
+                );
+            } catch ( Exception $e ) {
+                continue;
+            }
+
+            foreach ( $iterator as $file ) {
+                if ( $count >= $max_files ) {
+                    break;
+                }
+                if ( ! $file->isFile() || $file->getSize() > $max_bytes ) {
+                    continue;
+                }
+                if ( ! in_array( strtolower( $file->getExtension() ), $extensions, true ) ) {
+                    continue;
+                }
+                $content = @file_get_contents( $file->getPathname() ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+                if ( false === $content ) {
+                    continue;
+                }
+                $rel = ltrim(
+                    str_replace( wp_normalize_path( $dir ), '', wp_normalize_path( $file->getPathname() ) ),
+                    '/'
+                );
+                $files[ $rel ] = $content;
+                ++$count;
+            }
+        }
+
+        self::$theme_files_cache = $files;
+        return $files;
+    }
+
+    /**
+     * Whether $filename appears in any active-theme template file, and if
+     * so, which one (first match).
+     *
+     * @param string $filename Attachment's base filename, e.g. "logo.png".
+     * @return string Relative file path, or '' if not found.
+     */
+    public static function find_filename_in_theme_files( $filename ) {
+        if ( '' === $filename ) {
+            return '';
+        }
+        foreach ( self::get_theme_files_cache() as $relpath => $content ) {
+            if ( false !== stripos( $content, $filename ) ) {
+                return $relpath;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Find a wp_options row whose (possibly serialized/JSON, possibly
+     * nested) value contains this exact attachment ID as a number — catches
+     * theme/page-builder settings that store "their" logo/icon/header image
+     * as a raw attachment ID inside a single options blob, which no
+     * URL-based or theme_mod-based check above can ever see.
+     *
+     * A plain SQL LIKE on the digits is only a coarse pre-filter (it would
+     * also match e.g. "1130" for ID 113); the real match is verified in PHP
+     * by unserializing/JSON-decoding each candidate and walking it for the
+     * exact integer, so short IDs don't produce false positives.
+     *
+     * @param int $attachment_id Attachment ID.
+     * @return string Matching option_name, or '' if none found.
+     */
+    public static function find_attachment_id_in_options( $attachment_id ) {
+        global $wpdb;
+
+        $id = absint( $attachment_id );
+        if ( $id <= 0 ) {
+            return '';
+        }
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT option_name, option_value FROM {$wpdb->options}
+                 WHERE option_value LIKE %s
+                   AND option_name NOT LIKE %s
+                   AND option_name NOT LIKE %s
+                 LIMIT 200",
+                '%' . $wpdb->esc_like( (string) $id ) . '%',
+                $wpdb->esc_like( '_transient' ) . '%',
+                $wpdb->esc_like( '_site_transient' ) . '%'
+            )
+        );
+
+        if ( empty( $rows ) ) {
+            return '';
+        }
+
+        foreach ( $rows as $row ) {
+            $value = maybe_unserialize( $row->option_value );
+            if ( is_string( $value ) ) {
+                $decoded = json_decode( $value, true );
+                if ( is_array( $decoded ) ) {
+                    $value = $decoded;
+                }
+            }
+            if ( self::value_tree_contains_id( $value, $id ) ) {
+                return (string) $row->option_name;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Find a wp_options row whose value contains this attachment's filename
+     * as a plain substring — catches a custom "Theme Options" style setting
+     * (Options Framework/Redux-style admin panels, common on many themes)
+     * where the site owner typed or picked a logo/image path by hand. That
+     * stored path is not guaranteed to match this attachment's exact
+     * current full or relative URL (no year/month subfolder, no domain,
+     * edited after a migration...), so the ID-based and full/relative-URL
+     * checks elsewhere can all miss it while the filename is still an exact
+     * match — the same reasoning already applied to post_content filename
+     * matches.
+     *
+     * @param string $filename Attachment's base filename, e.g. "logo.png".
+     * @return string Matching option_name, or '' if none found.
+     */
+    public static function find_filename_in_options( $filename ) {
+        global $wpdb;
+
+        $filename = (string) $filename;
+        if ( '' === $filename ) {
+            return '';
+        }
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+        $row = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT option_name FROM {$wpdb->options}
+                 WHERE option_value LIKE %s
+                   AND option_name NOT LIKE %s
+                   AND option_name NOT LIKE %s
+                 LIMIT 1",
+                '%' . $wpdb->esc_like( $filename ) . '%',
+                $wpdb->esc_like( '_transient' ) . '%',
+                $wpdb->esc_like( '_site_transient' ) . '%'
+            )
+        );
+
+        return $row ? (string) $row->option_name : '';
+    }
+
+    /**
+     * Recursively search a decoded option value for an exact attachment ID
+     * match (as an int, or as a numeric string — JSON round-trips ints to
+     * strings depending on how the value was authored).
+     *
+     * @param mixed $data  Value (or sub-value) to search.
+     * @param int   $id    Attachment ID to match exactly.
+     * @param int   $depth Recursion guard.
+     * @return bool
+     */
+    private static function value_tree_contains_id( $data, $id, $depth = 0 ) {
+        if ( $depth > 6 ) {
+            return false;
+        }
+        if ( is_array( $data ) || is_object( $data ) ) {
+            foreach ( (array) $data as $item ) {
+                if ( self::value_tree_contains_id( $item, $id, $depth + 1 ) ) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if ( is_int( $data ) ) {
+            return $data === $id;
+        }
+        if ( is_string( $data ) && ctype_digit( $data ) ) {
+            return ( (int) $data ) === $id;
+        }
+        return false;
+    }
+
+    /**
      * Reanomena el fitxer físic d'un attachment i actualitza totes les metadades
      * i referències a la base de dades.
      *
@@ -475,6 +702,25 @@ class TSOIMMA_Image_Manager {
             '%\"id\":' . $attachment_id . '%'
         ) ), 'bloc Gutenberg' );
 
+        // 4b. Classic [gallery ids="1,2,3"] shortcode (and similar gallery-
+        // plugin shortcodes using the same "ids" attribute convention) — a
+        // comma-separated list inside quotes, not a JSON array, so it isn't
+        // caught by the Gutenberg "id":N check above. LIKE is only a coarse
+        // SQL pre-filter here; the exact digit-boundary match happens in
+        // PHP below so e.g. attachment 56 doesn't match "...,561,...".
+        $ids_candidates = $wpdb->get_results( $wpdb->prepare(  // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+            "SELECT ID, post_title, post_type, post_status, post_content FROM {$wpdb->posts}
+             WHERE post_content LIKE %s AND post_content LIKE %s $base_where LIMIT 40",
+            '%' . $wpdb->esc_like( 'ids' ) . '%',
+            '%' . $wpdb->esc_like( (string) $attachment_id ) . '%'
+        ) );
+        $ids_pattern    = '/\bids\s*=\s*(["\'])[^"\']*(?<!\d)' . preg_quote( (string) $attachment_id, '/' ) . '(?!\d)[^"\']*\1/';
+        foreach ( $ids_candidates as $candidate_row ) {
+            if ( preg_match( $ids_pattern, (string) $candidate_row->post_content ) ) {
+                $add( array( $candidate_row ), 'shortcode ids' );
+            }
+        }
+
         // 5. Featured image (_thumbnail_id)
         $add( $wpdb->get_results( $wpdb->prepare(  // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
             "SELECT p.ID, p.post_title, p.post_type, p.post_status
@@ -510,7 +756,124 @@ class TSOIMMA_Image_Manager {
             ) ), 'meta URL' );
         }
 
-        // phpcs:enable
+        // 9. WordPress Customizer / Site Identity settings. custom_logo and
+        // site_icon store the attachment ID directly (not a URL or a
+        // postmeta value), so none of the URL/filename/ID searches above —
+        // which all look inside post_content or postmeta — can ever find
+        // them. Without this check, a site's own logo or favicon looks
+        // completely unreferenced and gets flagged "safe to delete"/orphan,
+        // even though it's shown on every single page.
+        $custom_logo_id = absint( get_theme_mod( 'custom_logo' ) );
+        if ( $custom_logo_id > 0 && $custom_logo_id === $attachment_id ) {
+            $found['tsoimma_customizer_logo'] = array(
+                'id'       => 0,
+                'title'    => 'Logo del lloc (Personalitzador)',
+                'type'     => 'customizer',
+                'status'   => 'publish',
+                'url'      => admin_url( 'customize.php?autofocus[control]=custom_logo' ),
+                'how'      => 'personalitzador (logo)',
+                'featured' => false,
+            );
+        }
+
+        $site_icon_id = absint( get_option( 'site_icon' ) );
+        if ( $site_icon_id > 0 && $site_icon_id === $attachment_id ) {
+            $found['tsoimma_customizer_icon'] = array(
+                'id'       => 0,
+                'title'    => 'Icona del lloc (Personalitzador)',
+                'type'     => 'customizer',
+                'status'   => 'publish',
+                'url'      => admin_url( 'customize.php?autofocus[control]=site_icon' ),
+                'how'      => 'personalitzador (icona)',
+                'featured' => false,
+            );
+        }
+
+        // header_image / background_image store a URL (not an ID) — match
+        // it against this attachment's own URL/filename the same way
+        // post_content matches are done above.
+        if ( $url ) {
+            $customizer_url_mods = array(
+                'header_image'     => 'Imatge de capçalera (Personalitzador)',
+                'background_image' => 'Imatge de fons (Personalitzador)',
+            );
+            foreach ( $customizer_url_mods as $mod_key => $mod_label ) {
+                $mod_url = (string) get_theme_mod( $mod_key );
+                if ( '' === $mod_url ) {
+                    continue;
+                }
+                if ( $mod_url === $url || ( $filename && false !== strpos( $mod_url, $filename ) ) ) {
+                    $found[ 'tsoimma_customizer_' . $mod_key ] = array(
+                        'id'       => 0,
+                        'title'    => $mod_label,
+                        'type'     => 'customizer',
+                        'status'   => 'publish',
+                        'url'      => admin_url( 'customize.php' ),
+                        'how'      => 'personalitzador (' . $mod_key . ')',
+                        'featured' => false,
+                    );
+                }
+            }
+        }
+
+        // 9b. Hardcoded straight into an active-theme template file (e.g. a
+        // logo written directly into header.php instead of going through
+        // the Customizer or the Media Library relationship) — see
+        // find_filename_in_theme_files(). No database row anywhere reveals
+        // this kind of usage.
+        if ( $filename ) {
+            $theme_file = self::find_filename_in_theme_files( $filename );
+            if ( '' !== $theme_file ) {
+                $found['tsoimma_theme_file'] = array(
+                    'id'         => 0,
+                    'title'      => 'Codi de la plantilla del tema actiu',
+                    'type'       => 'theme_file',
+                    'status'     => 'publish',
+                    'url'        => admin_url( 'theme-editor.php' ),
+                    'how'        => 'fitxer del tema',
+                    'theme_file' => $theme_file,
+                    'featured'   => false,
+                );
+            }
+        }
+
+        // 9c. Any wp_options row storing this attachment's numeric ID
+        // anywhere inside a (possibly nested/serialized/JSON) value — many
+        // themes and page builders keep their OWN logo/favicon/header-image
+        // setting in a single settings option (e.g. Astra's "astra-settings",
+        // OceanWP's "ocean_logo", Divi's theme options, Elementor's global
+        // settings...) instead of the core custom_logo/site_icon theme_mods
+        // checked above. There is no way to know every framework's option
+        // name in advance, so this scans every non-transient option for the
+        // literal ID rather than hardcoding one theme's schema.
+        $option_match = self::find_attachment_id_in_options( $attachment_id );
+
+        // 9d. Same idea, but for a theme option that stores a URL/path
+        // string instead of an ID — e.g. a "Theme Options" panel (Options
+        // Framework/Redux-style admin pages, common on many free/premium
+        // themes) with a plain text or file-upload field for "Custom Logo"
+        // that the site owner typed or picked by hand. That value can be a
+        // relative path without the year/month upload subfolder, or without
+        // the domain — so it won't necessarily match this attachment's
+        // exact current full/relative URL the way post_content matches do,
+        // but the filename itself is still there and is specific enough on
+        // its own (mirrors the existing post_content filename check).
+        if ( '' === $option_match && $filename ) {
+            $option_match = self::find_filename_in_options( $filename );
+        }
+
+        if ( '' !== $option_match ) {
+            $found['tsoimma_option_' . $option_match] = array(
+                'id'          => 0,
+                'title'       => 'Configuració del tema/lloc (opció: ' . $option_match . ')',
+                'type'        => 'site_option',
+                'status'      => 'publish',
+                'url'         => admin_url( 'options-general.php' ),
+                'how'         => 'opció del lloc',
+                'option_name' => $option_match,
+                'featured'    => false,
+            );
+        }
 
         // 8. post_parent (imatge adjunta directament a un post)
         $parent_id = wp_get_post_parent_id( $attachment_id );
@@ -554,9 +917,22 @@ class TSOIMMA_Image_Manager {
         $id = (string) $attachment_id;
         $patterns = array(
             '/\bdata-id="' . preg_quote( $id, '/' ) . '"/',
-            '/(?:"|\\\\")id(?:"|\\\\")\s*:\s*' . preg_quote( $id, '/' ) . '(?=[,\}\s])/',
+            // A bare "id":N JSON attribute is scoped to a known image/media
+            // block name (wp:image, wp:cover, ...), not matched anywhere in
+            // the raw content: plenty of unrelated blocks and third-party
+            // shortcodes use a generic "id" key (a page ID, a form ID, a
+            // product ID...), and a block's declared id can also go stale
+            // after "Replace image" without the rendered markup changing.
+            // See post_content_has_weak_id_match() for the unscoped check
+            // used to flag those cases as indirect instead of direct.
+            '/wp:(?:image|cover|media-text|audio|video|file)[^>]*(?:"|\\\\")id(?:"|\\\\")\s*:\s*' . preg_quote( $id, '/' ) . '\b/',
             '/"ids"\s*:\s*\[[^\]]*(?<![0-9])' . preg_quote( $id, '/' ) . '(?![0-9])[^\]]*\]/',
             '/\bwp-image-' . preg_quote( $id, '/' ) . '\b/',
+            // Classic [gallery ids="1,2,3"] shortcode (and similar
+            // gallery-plugin shortcodes using the same "ids" attribute
+            // convention) — a comma-separated list inside quotes, not a
+            // JSON array, so the "ids":[...] pattern above doesn't catch it.
+            '/\bids\s*=\s*(["\'])[^"\']*(?<!\d)' . preg_quote( $id, '/' ) . '(?!\d)[^"\']*\1/',
         );
 
         foreach ( $patterns as $pattern ) {
@@ -566,6 +942,36 @@ class TSOIMMA_Image_Manager {
         }
 
         return false;
+    }
+
+    /**
+     * Weak evidence only: a bare "id" (or "ids") JSON attribute in the raw
+     * content equals $attachment_id, with nothing else confirming it — no
+     * matching wp-image-N class, data-id, URL, or filename anywhere else in
+     * the post, and (for the singular "id" key) not even scoped to a known
+     * image/media block name. On its own this is NOT proof of an active
+     * image reference: block attributes can go stale after "Replace image",
+     * and unrelated blocks/shortcodes commonly reuse a generic "id" key for
+     * something else entirely (a page ID, a form ID, a product ID...).
+     *
+     * @param int $post_id       Post ID.
+     * @param int $attachment_id Attachment ID.
+     * @return bool
+     */
+    public static function post_content_has_weak_id_match( $post_id, $attachment_id ) {
+        $post_id       = absint( $post_id );
+        $attachment_id = absint( $attachment_id );
+        if ( $post_id <= 0 || $attachment_id <= 0 ) {
+            return false;
+        }
+
+        $content = (string) get_post_field( 'post_content', $post_id );
+        if ( '' === $content ) {
+            return false;
+        }
+
+        $id = (string) $attachment_id;
+        return (bool) preg_match( '/(?:"|\\\\")id(?:"|\\\\")\s*:\s*' . preg_quote( $id, '/' ) . '(?=[,\}\s])/', $content );
     }
 
     /**
@@ -581,27 +987,63 @@ class TSOIMMA_Image_Manager {
         $indirect      = array();
 
         foreach ( $refs as $ref ) {
-            $post_id   = isset( $ref['id'] ) ? absint( $ref['id'] ) : 0;
-            $how       = isset( $ref['how'] ) ? (string) $ref['how'] : '';
-            $is_direct = false;
+            $post_id       = isset( $ref['id'] ) ? absint( $ref['id'] ) : 0;
+            $how           = isset( $ref['how'] ) ? (string) $ref['how'] : '';
+            $is_direct     = false;
+            $weak_only     = false;
+            $parent_only   = false;
+            $is_customizer  = ( 0 === strpos( $how, 'personalitzador' ) );
+            $is_theme_file  = ( 'fitxer del tema' === $how );
+            $is_site_option = ( 'opció del lloc' === $how );
 
             if ( ! empty( $ref['featured'] ) ) {
                 $is_direct = true;
-            } elseif ( 'adjunta' === $how ) {
+            } elseif ( $is_customizer || $is_theme_file || $is_site_option ) {
+                // Site logo/icon/header/background set in the Customizer,
+                // or hardcoded straight into an active-theme template file
+                // — either way, definitely shown on the site.
                 $is_direct = true;
             } elseif ( 'meta (ACF/Elementor)' === $how ) {
                 $is_direct = true;
-            } elseif ( 'bloc Gutenberg' === $how && self::post_content_contains_attachment_id( $post_id, $attachment_id ) ) {
-                $is_direct = true;
             } elseif ( self::post_content_contains_attachment_id( $post_id, $attachment_id ) ) {
                 $is_direct = true;
+            } elseif ( 'adjunta' === $how ) {
+                // post_parent only — see describe_attachment_parent_reference().
+                // Checked after the real content-match above so a post that
+                // both attaches AND actually embeds the image still gets the
+                // accurate "how" description instead of this generic one.
+                $is_direct   = true;
+                $parent_only = true;
+            } elseif ( 'bloc Gutenberg' === $how && self::post_content_has_weak_id_match( $post_id, $attachment_id ) ) {
+                // The only thing we found is a bare "id":N JSON attribute,
+                // not scoped to an image/media block and not corroborated
+                // by a wp-image-N class, data-id, URL or filename anywhere
+                // else in the post. Could be a stale block attribute (after
+                // "Replace image") or an unrelated block reusing "id" for
+                // something else — not confident enough to call it direct.
+                $weak_only = true;
             }
 
-            $ref['edit_url']     = TSOIMMA_Post_Editor_Highlight::get_post_edit_highlight_url( $post_id, $attachment_id );
+            // The Customizer refs above have no real post to edit ($post_id
+            // is 0) — get_post_edit_highlight_url() would just fall back to
+            // edit.php for those, so keep the customize.php deep link built
+            // in get_used_in_posts() instead.
+            $ref['edit_url']     = ( $post_id > 0 )
+                ? TSOIMMA_Post_Editor_Highlight::get_post_edit_highlight_url( $post_id, $attachment_id )
+                : ( isset( $ref['url'] ) ? (string) $ref['url'] : admin_url( 'customize.php' ) );
             $ref['highlight_id'] = $attachment_id;
+            $ref['parent_only']  = $parent_only;
             $ref['detail']       = $is_direct
-                ? self::describe_attachment_usage_in_post( $post_id, $attachment_id )
-                : self::describe_indirect_reference( $post_id, $attachment_id, $how );
+                ? ( $is_customizer
+                    ? self::describe_customizer_reference( $how )
+                    : ( $is_theme_file
+                        ? self::describe_theme_file_reference( isset( $ref['theme_file'] ) ? (string) $ref['theme_file'] : '' )
+                        : ( $is_site_option
+                            ? self::describe_site_option_reference( isset( $ref['option_name'] ) ? (string) $ref['option_name'] : '' )
+                            : ( $parent_only ? self::describe_attachment_parent_reference() : self::describe_attachment_usage_in_post( $post_id, $attachment_id ) ) ) ) )
+                : ( $weak_only
+                    ? self::describe_weak_id_reference()
+                    : self::describe_indirect_reference( $post_id, $attachment_id, $how ) );
 
             if ( $is_direct ) {
                 $ref['match'] = 'direct';
@@ -651,8 +1093,95 @@ class TSOIMMA_Image_Manager {
         if ( preg_match( '/\bwp-image-' . preg_quote( $id, '/' ) . '\b/', $content ) ) {
             return 'Bloc imatge (classe wp-image)';
         }
+        if ( preg_match( '/\bids\s*=\s*(["\'])[^"\']*(?<!\d)' . preg_quote( $id, '/' ) . '(?!\d)[^"\']*\1/', $content ) ) {
+            return 'Shortcode [gallery] · atribut ids=';
+        }
 
         return 'ID al contingut';
+    }
+
+    /**
+     * Explain an unconfirmed "id":N block-attribute match (see
+     * post_content_has_weak_id_match()).
+     *
+     * @return string
+     */
+    private static function describe_weak_id_reference() {
+        return 'ID sense confirmar a un bloc (podria ser un atribut desactualitzat o un bloc no relacionat)';
+    }
+
+    /**
+     * Explain a post_parent-only reference ("adjunta" in get_used_in_posts()):
+     * the attachment record's post_parent points at this post, but nothing
+     * in the post's actual content, featured image, or custom fields refers
+     * to it. This happens whenever an image was ever uploaded through this
+     * post's media uploader (or manually attached) — WordPress never clears
+     * it again, even after the image is removed from a gallery/content or
+     * was never inserted at all. Kept as a confirmed reference (so it isn't
+     * silently deleted without the user seeing it), but described
+     * accurately instead of implying it's visibly embedded.
+     *
+     * @return string
+     */
+    private static function describe_attachment_parent_reference() {
+        return 'Adjunta a aquest article a la Biblioteca de mitjans — no s\'ha trobat cap referència explícita al contingut, imatge destacada ni camps personalitzats';
+    }
+
+    /**
+     * Short label for a WordPress Customizer / Site Identity reference
+     * (custom_logo, site_icon, header_image, background_image) — see the
+     * matching checks in get_used_in_posts().
+     *
+     * @param string $how e.g. 'personalitzador (logo)'.
+     * @return string
+     */
+    private static function describe_customizer_reference( $how ) {
+        if ( false !== strpos( $how, 'icona' ) ) {
+            return 'Icona del lloc, configurada al Personalitzador (Identitat del lloc)';
+        }
+        if ( false !== strpos( $how, 'header_image' ) ) {
+            return 'Imatge de capçalera, configurada al Personalitzador';
+        }
+        if ( false !== strpos( $how, 'background_image' ) ) {
+            return 'Imatge de fons, configurada al Personalitzador';
+        }
+        return 'Logo del lloc, configurat al Personalitzador (Identitat del lloc)';
+    }
+
+    /**
+     * Short label for a generic wp_options-based reference found by
+     * find_attachment_id_in_options() — a theme or page-builder setting
+     * (their own logo/icon/header setting, typically) storing this
+     * attachment's ID outside any of the standard WordPress mechanisms.
+     *
+     * @param string $option_name The wp_options row name where it was found.
+     * @return string
+     */
+    private static function describe_site_option_reference( $option_name ) {
+        if ( '' !== $option_name ) {
+            return sprintf(
+                'Trobat a una opció de configuració del lloc/tema (%s) — probablement el logo o una altra imatge global del tema',
+                $option_name
+            );
+        }
+        return 'Trobat a una opció de configuració del lloc/tema — probablement el logo o una altra imatge global del tema';
+    }
+
+    /**
+     * Short label for a file hardcoded into an active-theme template — see
+     * find_filename_in_theme_files().
+     *
+     * @param string $relpath Relative path within the theme, if known.
+     * @return string
+     */
+    private static function describe_theme_file_reference( $relpath ) {
+        if ( '' !== $relpath ) {
+            return sprintf(
+                'Trobat directament al codi de la plantilla del tema actiu (%s) — no es pot editar des d\'aquí',
+                $relpath
+            );
+        }
+        return 'Trobat directament al codi de la plantilla del tema actiu — no es pot editar des d\'aquí';
     }
 
     /**

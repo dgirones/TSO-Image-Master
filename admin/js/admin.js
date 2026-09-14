@@ -176,6 +176,14 @@
             action_delete: 'Eliminada',
             action_pdf_compress: 'PDF comprimit',
             action_revert: 'Revertida',
+            action_dup_merge_rewrite: 'Fusió: reapuntada',
+            action_dup_merge_delete: 'Fusió: eliminada',
+            action_dup_delete_unused: 'Duplicat eliminat',
+            action_dup_detach: 'Desvinculada',
+            hist_merged_into: 'Fusionada amb',
+            hist_replaced_by: 'Substituïda per',
+            hist_no_refs_found: 'Sense referències trobades',
+            hist_detached_from: 'Desvinculada de',
             donate_support: '☕ Dona suport al plugin',
             theme_day: 'Mode dia',
             theme_night: 'Mode nit',
@@ -379,6 +387,7 @@
             dash_dup_groups: 'grups de duplicats',
             dash_dup_wasted: 'Espai malgastat',
             dash_dup_explain: 'Cada grup són fitxers idèntics (mateix MD5) registrats més d\'una vegada a la Mediateca. Conserva una entrada i elimina la resta des de la Mediateca de WordPress.',
+            dash_dup_rescan_hint: 'Aquestes dades són de l\'últim escaneig. Si acabes d\'editar un article, torna a prémer «Escanejar duplicats» per veure l\'estat actual.',
             dash_dup_group_label: 'Fitxer idèntic',
             dash_dup_entries: 'entrades',
             dash_dup_wasted_in_group: 'malgastats en aquest grup',
@@ -395,11 +404,31 @@
             dash_dup_item_title: 'Títol',
             dash_scanned: 'escanejades',
             dash_dup_keep: 'Conserva aquesta (usada al contingut)',
+            dash_dup_attached_only: 'Només adjuntada (no es mostra al contingut)',
             dash_dup_delete_ok: 'Es pot eliminar (duplicat no usat)',
+            dash_dup_detach: 'Desvincular',
+            dash_dup_detach_confirm: 'Desvincular aquest fitxer de l\'entrada a la qual està adjunt a la Biblioteca de mitjans? Això no esborra el fitxer — podràs eliminar-lo després si resulta que no s\'usa enlloc més.',
+            dash_dup_detaching: 'Desvinculant...',
+            dash_dup_detached_ok: 'Desvinculada.',
             dash_dup_used_direct: 'Usada al contingut',
             dash_dup_used_indirect: 'Només coincidència de nom (aquest ID no és al codi)',
             dash_dup_active_id: 'ID actiu al post',
             dash_dup_open_post: 'Obrir entrada',
+            dash_dup_merge: 'Fusionar duplicats',
+            dash_dup_merge_hint: 'Conserva els fitxers marcats a sota (en pots marcar més d\'un), reapunta tot el contingut que feia servir la resta i esborra els fitxers redundants.',
+            dash_dup_merge_all_kept: 'Tots els fitxers estan marcats per conservar — no hi ha res per fusionar ni esborrar.',
+            dash_dup_merge_none_kept: 'Marca almenys un fitxer per conservar abans de fusionar.',
+            dash_dup_keep_this: 'Conservar aquest',
+            dash_dup_merge_confirm: 'Això reescriurà totes les entrades que fan servir les altres còpies perquè apuntin al fitxer conservat, i després esborrarà els fitxers redundants. No es pot desfer automàticament. Continuar?',
+            dash_dup_merging: 'Fusionant...',
+            dash_dup_posts_updated: 'entrades actualitzades',
+            dash_dup_files_deleted: 'fitxers redundants esborrats',
+            dash_dup_kept_review: 'deixats sense tocar (encara referenciats en algun lloc que l\'eina no pot reescriure amb seguretat — revisa’ls a mà)',
+            dash_dup_delete: 'Eliminar',
+            dash_dup_delete_confirm: 'Eliminar aquest fitxer definitivament? El plugin tornarà a comprovar just abans d\'esborrar que res el referencia. No es pot desfer.',
+            dash_dup_deleting: 'Eliminant...',
+            dash_dup_deleted_ok: 'Fitxer eliminat.',
+            dash_dup_delete_blocked: 'No eliminat: ha aparegut una referència a aquest fitxer des de l\'últim escaneig. Torna a escanejar per veure l\'ús actual.',
             dash_heavy_btn: 'Imatges més pesades',
             auto_skip_kb_label: 'Ometre auto-optimitzar si WebP/AVIF ≤ (KB, 0 = off)',
             auto_fill_alt_label: 'Omplir alt absent en pujar',
@@ -551,6 +580,14 @@
             action_delete: 'Eliminada',
             action_pdf_compress: 'PDF comprimido',
             action_revert: 'Revertida',
+            action_dup_merge_rewrite: 'Fusión: reapuntada',
+            action_dup_merge_delete: 'Fusión: eliminada',
+            action_dup_delete_unused: 'Duplicado eliminado',
+            action_dup_detach: 'Desvinculada',
+            hist_merged_into: 'Fusionada con',
+            hist_replaced_by: 'Sustituida por',
+            hist_no_refs_found: 'Sin referencias encontradas',
+            hist_detached_from: 'Desvinculada de',
             selected_of: 'seleccionados de',
             fixable_label: 'reparables',
             appears_in: 'Aparece en',
@@ -670,6 +707,7 @@
             ,dash_dup_groups: 'grupos de duplicados'
             ,dash_dup_wasted: 'Espacio desperdiciado'
             ,dash_dup_explain: 'Cada grupo son archivos idénticos (mismo MD5) registrados más de una vez en la Biblioteca de medios. Conserva una entrada y elimina el resto desde Medios de WordPress.'
+            ,dash_dup_rescan_hint: 'Estos datos son del último escaneo. Si acabas de editar una entrada, vuelve a pulsar «Escanear duplicados» para ver el estado actual.'
             ,dash_dup_group_label: 'Archivo idéntico'
             ,dash_dup_entries: 'entradas'
             ,dash_dup_wasted_in_group: 'desperdiciados en este grupo'
@@ -686,11 +724,31 @@
             ,dash_dup_item_title: 'Título'
             ,dash_scanned: 'escaneadas'
             ,dash_dup_keep: 'Conserva esta (usada en el contenido)'
+            ,dash_dup_attached_only: 'Solo adjuntada (no se muestra en el contenido)'
             ,dash_dup_delete_ok: 'Se puede eliminar (duplicado no usado)'
+            ,dash_dup_detach: 'Desvincular'
+            ,dash_dup_detach_confirm: '¿Desvincular este archivo de la entrada a la que está adjunto en la Biblioteca de medios? Esto no elimina el archivo — podrás eliminarlo después si resulta que no se usa en ningún otro sitio.'
+            ,dash_dup_detaching: 'Desvinculando...'
+            ,dash_dup_detached_ok: 'Desvinculada.'
             ,dash_dup_used_direct: 'Usada en el contenido'
             ,dash_dup_used_indirect: 'Solo coincidencia de nombre (este ID no está en el código)'
             ,dash_dup_active_id: 'ID activo en la entrada'
             ,dash_dup_open_post: 'Abrir entrada'
+            ,dash_dup_merge: 'Fusionar duplicados'
+            ,dash_dup_merge_hint: 'Conserva los archivos marcados abajo (puedes marcar más de uno), reapunta todo el contenido que usaba el resto y elimina los archivos redundantes.'
+            ,dash_dup_merge_all_kept: 'Todos los archivos están marcados para conservar — no hay nada que fusionar ni eliminar.'
+            ,dash_dup_merge_none_kept: 'Marca al menos un archivo para conservar antes de fusionar.'
+            ,dash_dup_keep_this: 'Conservar este'
+            ,dash_dup_merge_confirm: 'Esto reescribirá todas las entradas que usan las otras copias para que apunten al archivo conservado, y luego eliminará los archivos redundantes. No se puede deshacer automáticamente. ¿Continuar?'
+            ,dash_dup_merging: 'Fusionando...'
+            ,dash_dup_posts_updated: 'entradas actualizadas'
+            ,dash_dup_files_deleted: 'archivos redundantes eliminados'
+            ,dash_dup_kept_review: 'dejados sin tocar (todavía referenciados en algún sitio que la herramienta no puede reescribir con seguridad — revísalos a mano)'
+            ,dash_dup_delete: 'Eliminar'
+            ,dash_dup_delete_confirm: '¿Eliminar este archivo definitivamente? El plugin volverá a comprobar justo antes de borrar que nada lo referencia. No se puede deshacer.'
+            ,dash_dup_deleting: 'Eliminando...'
+            ,dash_dup_deleted_ok: 'Archivo eliminado.'
+            ,dash_dup_delete_blocked: 'No eliminado: ha aparecido una referencia a este archivo desde el último escaneo. Vuelve a escanear para ver el uso actual.'
             ,dash_heavy_btn: 'Imágenes más pesadas'
             ,auto_skip_kb_label: 'Omitir auto-optimizar si WebP/AVIF ≤ (KB, 0 = off)'
             ,auto_fill_alt_label: 'Rellenar alt ausente al subir'
@@ -839,6 +897,14 @@
             action_delete: 'Deleted',
             action_pdf_compress: 'PDF compressed',
             action_revert: 'Reverted',
+            action_dup_merge_rewrite: 'Merge: repointed',
+            action_dup_merge_delete: 'Merge: deleted',
+            action_dup_delete_unused: 'Duplicate deleted',
+            action_dup_detach: 'Unlinked',
+            hist_merged_into: 'Merged into',
+            hist_replaced_by: 'Replaced by',
+            hist_no_refs_found: 'No references found',
+            hist_detached_from: 'Unlinked from',
             selected_of: 'selected of',
             fixable_label: 'fixable',
             appears_in: 'Appears in',
@@ -958,6 +1024,7 @@
             ,dash_dup_groups: 'duplicate groups'
             ,dash_dup_wasted: 'Wasted space'
             ,dash_dup_explain: 'Each group is identical file content (same MD5) registered more than once in the Media Library. Keep one entry and delete the rest from WordPress Media.'
+            ,dash_dup_rescan_hint: 'This data is from the last scan. If you just edited a post, click "Scan duplicates" again to see the current status.'
             ,dash_dup_group_label: 'Identical file'
             ,dash_dup_entries: 'entries'
             ,dash_dup_wasted_in_group: 'wasted in this group'
@@ -974,11 +1041,31 @@
             ,dash_dup_item_title: 'Title'
             ,dash_scanned: 'scanned'
             ,dash_dup_keep: 'Keep this one (used in content)'
+            ,dash_dup_attached_only: 'Only attached (not shown in content)'
             ,dash_dup_delete_ok: 'Safe to delete (unused duplicate)'
+            ,dash_dup_detach: 'Unlink'
+            ,dash_dup_detach_confirm: 'Unlink this file from the post it\'s attached to in the Media Library? This does not delete the file — you\'ll be able to delete it afterwards if it turns out to be unused everywhere else.'
+            ,dash_dup_detaching: 'Unlinking...'
+            ,dash_dup_detached_ok: 'Unlinked.'
             ,dash_dup_used_direct: 'Used in content'
             ,dash_dup_used_indirect: 'Filename match only (this ID is not in the code)'
             ,dash_dup_active_id: 'Active ID in post'
             ,dash_dup_open_post: 'Open post'
+            ,dash_dup_merge: 'Merge duplicates'
+            ,dash_dup_merge_hint: 'Keeps the file(s) checked below (you can check more than one), repoints every post/page that used the rest to the first kept file, then deletes the redundant files.'
+            ,dash_dup_merge_all_kept: 'Every file is marked to keep — there is nothing left to merge or delete.'
+            ,dash_dup_merge_none_kept: 'Check at least one file to keep before merging.'
+            ,dash_dup_keep_this: 'Keep this one'
+            ,dash_dup_merge_confirm: 'This rewrites every post/page that uses the other copies so they point at the kept file instead, then deletes the now-redundant files. This cannot be undone automatically. Continue?'
+            ,dash_dup_merging: 'Merging...'
+            ,dash_dup_posts_updated: 'posts/pages updated'
+            ,dash_dup_files_deleted: 'redundant files deleted'
+            ,dash_dup_kept_review: 'left untouched (still referenced somewhere the tool could not safely rewrite — review manually)'
+            ,dash_dup_delete: 'Delete'
+            ,dash_dup_delete_confirm: 'Delete this file permanently? The plugin will double-check right before deleting that nothing references it. This cannot be undone.'
+            ,dash_dup_deleting: 'Deleting...'
+            ,dash_dup_deleted_ok: 'File deleted.'
+            ,dash_dup_delete_blocked: 'Not deleted: a reference to this file appeared since the last scan. Rescan to see current usage.'
             ,dash_heavy_btn: 'Largest images'
             ,auto_skip_kb_label: 'Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)'
             ,auto_fill_alt_label: 'Fill missing alt text on upload'
@@ -1556,6 +1643,7 @@
             dash_dup_groups: 'grups de duplicats',
             dash_dup_wasted: 'Espai malgastat',
             dash_dup_explain: 'Cada grup són fitxers idèntics (mateix MD5) registrats més d\'una vegada a la Mediateca. Conserva una entrada i elimina la resta des de la Mediateca de WordPress.',
+            dash_dup_rescan_hint: 'Aquestes dades són de l\'últim escaneig. Si acabes d\'editar un article, torna a prémer «Escanejar duplicats» per veure l\'estat actual.',
             dash_dup_group_label: 'Fitxer idèntic',
             dash_dup_entries: 'entrades',
             dash_dup_wasted_in_group: 'malgastats en aquest grup',
@@ -1572,11 +1660,31 @@
             dash_dup_item_title: 'Títol',
             dash_scanned: 'escanejades',
             dash_dup_keep: 'Conserva aquesta (usada al contingut)',
+            dash_dup_attached_only: 'Només adjuntada (no es mostra al contingut)',
             dash_dup_delete_ok: 'Es pot eliminar (duplicat no usat)',
+            dash_dup_detach: 'Desvincular',
+            dash_dup_detach_confirm: 'Desvincular aquest fitxer de l\'entrada a la qual està adjunt a la Biblioteca de mitjans? Això no esborra el fitxer — podràs eliminar-lo després si resulta que no s\'usa enlloc més.',
+            dash_dup_detaching: 'Desvinculant...',
+            dash_dup_detached_ok: 'Desvinculada.',
             dash_dup_used_direct: 'Usada al contingut',
             dash_dup_used_indirect: 'Només coincidència de nom (aquest ID no és al codi)',
             dash_dup_active_id: 'ID actiu al post',
             dash_dup_open_post: 'Obrir entrada',
+            dash_dup_merge: 'Fusionar duplicats',
+            dash_dup_merge_hint: 'Conserva els fitxers marcats a sota (en pots marcar més d\'un), reapunta tot el contingut que feia servir la resta i esborra els fitxers redundants.',
+            dash_dup_merge_all_kept: 'Tots els fitxers estan marcats per conservar — no hi ha res per fusionar ni esborrar.',
+            dash_dup_merge_none_kept: 'Marca almenys un fitxer per conservar abans de fusionar.',
+            dash_dup_keep_this: 'Conservar aquest',
+            dash_dup_merge_confirm: 'Això reescriurà totes les entrades que fan servir les altres còpies perquè apuntin al fitxer conservat, i després esborrarà els fitxers redundants. No es pot desfer automàticament. Continuar?',
+            dash_dup_merging: 'Fusionant...',
+            dash_dup_posts_updated: 'entrades actualitzades',
+            dash_dup_files_deleted: 'fitxers redundants esborrats',
+            dash_dup_kept_review: 'deixats sense tocar (encara referenciats en algun lloc que l\'eina no pot reescriure amb seguretat — revisa’ls a mà)',
+            dash_dup_delete: 'Eliminar',
+            dash_dup_delete_confirm: 'Eliminar aquest fitxer definitivament? El plugin tornarà a comprovar just abans d\'esborrar que res el referencia. No es pot desfer.',
+            dash_dup_deleting: 'Eliminant...',
+            dash_dup_deleted_ok: 'Fitxer eliminat.',
+            dash_dup_delete_blocked: 'No eliminat: ha aparegut una referència a aquest fitxer des de l\'últim escaneig. Torna a escanejar per veure l\'ús actual.',
             dash_heavy_btn: 'Imatges més pesades',
                 auto_skip_kb_label: 'Ometre auto-optimitzar si WebP/AVIF ≤ (KB, 0 = off)',
                 auto_fill_alt_label: 'Omplir alt absent en pujar',
@@ -1804,6 +1912,16 @@
         return themeFromSolar();
     }
 
+    // Mirrors the resolved theme (day/night) into a cookie so the PHP-side
+    // render can pick the right wrapper background and initial data-theme
+    // on the very first paint, before this script has a chance to run —
+    // this is what stops a black flash in the Day theme on page load (F5).
+    function setThemeCookie(resolved) {
+        try {
+            document.cookie = 'tsoimma_theme_resolved=' + resolved + '; path=/; max-age=31536000; SameSite=Lax';
+        } catch (e) {}
+    }
+
     function applyTheme(preference) {
         if (preference !== 'day' && preference !== 'night' && preference !== 'auto') {
             preference = 'auto';
@@ -1813,6 +1931,7 @@
         var resolved = resolveTheme(preference);
         $('#imp-app').attr('data-theme', resolved);
         $('#imp-app').attr('data-theme-pref', preference);
+        setThemeCookie(resolved);
 
         var $btn = $('#imp-theme-toggle');
         var labelKey = 'theme_' + preference;
@@ -1868,13 +1987,22 @@
         });
     }
 
-    // Apply stored/auto theme ASAP when the app root is already in the DOM.
-    if (document.getElementById('imp-app')) {
-        document.getElementById('imp-app').setAttribute(
-            'data-theme',
-            resolveTheme(readThemePreference())
-        );
-    }
+    // Apply stored/auto theme ASAP when the app root is already in the DOM
+    // (this script is enqueued in the footer, so #imp-app already exists),
+    // then reveal the page — it starts hidden via CSS (.imp-wrap has
+    // opacity:0 until .imp-theme-ready is added) precisely so this runs
+    // before anything becomes visible, instead of showing the hardcoded
+    // "night" default first and flashing to the real theme afterwards.
+    (function() {
+        var appEl = document.getElementById('imp-app');
+        if (!appEl) {
+            return;
+        }
+        var resolvedNow = resolveTheme(readThemePreference());
+        appEl.setAttribute('data-theme', resolvedNow);
+        appEl.classList.add('imp-theme-ready');
+        setThemeCookie(resolvedNow);
+    })();
 
     function initLanguageSwitcher() {
         captureCatalanOriginals();
@@ -2026,11 +2154,14 @@
     // ================================================================
     function initHoverPreview() {
         if (!$('#imp-img-hover-preview').length) {
-            $('body').append('<div id="imp-img-hover-preview"><img src="" alt=""><div class="imp-hover-label"></div></div>');
+            // Appended inside .imp-wrap (not body) so it inherits the
+            // --imp-* theme variables; those are scoped to .imp-wrap and
+            // don't reach a sibling under <body>, which is why this popup
+            // rendered with a transparent background in both themes.
+            $('.imp-wrap').first().append('<div id="imp-img-hover-preview"><img src="" alt=""></div>');
         }
         var $preview = $('#imp-img-hover-preview');
         var $pImg  = $preview.find('img');
-        var $label = $preview.find('.imp-hover-label');
         var MARGIN = 16;
         var hoverSelector = '#imp-modal-img, .imp-alt-row-thumb, .imp-history-table .imp-thumb-sm';
 
@@ -2053,10 +2184,6 @@
 
         function showPreviewFromTarget($target, e) {
             var fullUrl = $target.attr('data-full-url') || $target.attr('src') || '';
-            var fname   = $target.attr('data-filename') || '';
-            if (!fname) {
-                fname = $('#imp-modal-title-head .imp-modal-fname').text() || '';
-            }
             if (!fullUrl) {
                 return;
             }
@@ -2065,7 +2192,6 @@
             var sep     = fullUrl.indexOf('?') === -1 ? '?' : '&';
             var noCache = fullUrl + sep + '_hov=' + ts;
             $preview.removeClass('visible').hide();
-            $label.text(fname);
             var tmpImg = new Image();
             tmpImg.onload = function() {
                 if (loadId !== hoverPreviewLoadId) {
@@ -2443,6 +2569,146 @@
             openModal(id, 'optimize');
         });
 
+        $(document).on('click', '.imp-dup-detach-btn', function() {
+            var $btn = $(this);
+            var id = parseInt($btn.data('id'), 10);
+            if (!id) {
+                return;
+            }
+            if (!window.confirm(uiText('dash_dup_detach_confirm', 'Unlink this file from the post it\'s attached to in the Media Library? This does not delete the file — you\'ll be able to delete it afterwards if it turns out to be unused everywhere else.'))) {
+                return;
+            }
+
+            var originalLabel = $btn.text();
+            $btn.prop('disabled', true).text(uiText('dash_dup_detaching', 'Unlinking...'));
+
+            ajax('tsoimma_dup_detach', { attachment_id: id }, function(data) {
+                var updated = data.item || {};
+                var $item = $btn.closest('.imp-dup-item');
+                $item.find('.imp-dup-usedin-wrap').html(renderDuplicateUsedIn(updated));
+                $item.find('.imp-dup-cond-actions').html(renderDuplicateCondActions(updated));
+                $('#imp-duplicates-result').prepend('<div class="imp-dup-merge-result">✓ ' + escHtml(uiText('dash_dup_detached_ok', 'Unlinked.')) + '</div>');
+            }, function(err) {
+                $btn.prop('disabled', false).text(originalLabel);
+                window.alert(err);
+            });
+        });
+
+        $(document).on('click', '.imp-dup-delete-btn', function() {
+            var $btn = $(this);
+            var id = parseInt($btn.data('id'), 10);
+            if (!id) {
+                return;
+            }
+            if (!window.confirm(uiText('dash_dup_delete_confirm', 'Delete this file permanently? The plugin will double-check right before deleting that nothing references it. This cannot be undone.'))) {
+                return;
+            }
+
+            var originalLabel = $btn.text();
+            $btn.prop('disabled', true).text(uiText('dash_dup_deleting', 'Deleting...'));
+
+            ajax('tsoimma_dup_delete', { attachment_id: id }, function(data) {
+                if (data.deleted) {
+                    $('#imp-duplicates-result').prepend('<div class="imp-dup-merge-result">✓ ' + escHtml(uiText('dash_dup_deleted_ok', 'File deleted.')) + '</div>');
+                    // Remove just this item in place instead of a full
+                    // rescan — rebuilding the whole list (and briefly
+                    // showing the "Scanning..." placeholder) shrinks the
+                    // page and jumps the scroll position back to the top,
+                    // which is disruptive when deleting several duplicates
+                    // one after another.
+                    var $item  = $btn.closest('.imp-dup-item');
+                    var $group = $item.closest('.imp-dup-group');
+                    $item.fadeOut(200, function() {
+                        $item.remove();
+                        var remaining = $group.find('.imp-dup-item').length;
+                        if (remaining === 0) {
+                            // Nothing left in this group at all.
+                            $group.fadeOut(200, function() { $group.remove(); });
+                        } else if (remaining === 1) {
+                            // Only one copy left — it's no longer a "duplicate"
+                            // (nothing to merge it with), but it's still a real,
+                            // possibly-unused file that may still need
+                            // deleting/unlinking. Removing the whole group card
+                            // here used to hide that last item along with its
+                            // Delete/Unlink buttons, leaving it stuck until the
+                            // next full rescan. Keep it visible and just drop
+                            // the now-meaningless merge controls.
+                            $group.find('.imp-dup-merge-row').remove();
+                            $group.find('.imp-dup-keep-radio').remove();
+                            $group.find('.imp-dup-group-entries-count').text(remaining);
+                        } else {
+                            $group.find('.imp-dup-group-entries-count').text(remaining);
+                        }
+                    });
+                } else {
+                    $btn.prop('disabled', false).text(originalLabel);
+                    var msg = uiText('dash_dup_delete_blocked', 'Not deleted: a reference to this file appeared since the last scan. Rescan to see current usage.');
+                    $('#imp-duplicates-result').prepend('<div class="imp-error">' + escHtml(msg) + '</div>');
+                }
+            }, function(err) {
+                $btn.prop('disabled', false).text(originalLabel);
+                window.alert(err);
+            });
+        });
+
+        $(document).on('change', '.imp-dup-keep-check', function() {
+            updateDupMergeState($(this).closest('.imp-dup-group'));
+        });
+
+        $(document).on('click', '.imp-dup-merge-btn', function() {
+            var $btn = $(this);
+            var $group = $btn.closest('.imp-dup-group');
+            var groupIndex = $group.data('group-index');
+            // More than one item can be marked "Keep this one" now — e.g. two
+            // identical images deliberately kept because each is genuinely
+            // used in a different post. Every checked item is left untouched;
+            // only the unchecked ones become merge/delete candidates. The
+            // first checked item is still sent as the single "keep_id" the
+            // backend repoints content to — it only matters for an unchecked
+            // item that has real content to rewrite, and any checked item's
+            // file is an identical byte-for-byte copy, so either works.
+            var keepIds = $group.find('input[name="imp-dup-keep-' + groupIndex + '"]:checked').map(function() {
+                return parseInt($(this).val(), 10);
+            }).get().filter(function(v) { return !!v; });
+            var keepId = keepIds[0];
+            var allIds = String($group.data('item-ids') || '').split(',').map(function(v) { return parseInt(v, 10); }).filter(function(v) { return !!v; });
+            var deleteIds = allIds.filter(function(id) { return keepIds.indexOf(id) === -1; });
+
+            // The button is disabled (see updateDupMergeState) whenever this
+            // would happen, but keep an explicit message here too rather
+            // than silently doing nothing if it's ever reached anyway.
+            if (!keepId) {
+                window.alert(uiText('dash_dup_merge_none_kept', 'Check at least one file to keep before merging.'));
+                return;
+            }
+            if (!deleteIds.length) {
+                window.alert(uiText('dash_dup_merge_all_kept', 'Every file is marked to keep — there is nothing left to merge or delete.'));
+                return;
+            }
+            if (!window.confirm(uiText('dash_dup_merge_confirm', 'This rewrites every post/page that uses the other copies so they point at the kept file instead, then deletes the now-redundant files. This cannot be undone automatically. Continue?'))) {
+                return;
+            }
+
+            var originalLabel = $btn.text();
+            $btn.prop('disabled', true).text(uiText('dash_dup_merging', 'Merging...'));
+
+            ajax('tsoimma_dup_merge', { keep_id: keepId, delete_ids: deleteIds }, function(data) {
+                var updatedCount = Object.keys(data.updated_posts || {}).length;
+                var deletedCount = (data.deleted_ids || []).length;
+                var skippedCount = Object.keys(data.skipped || {}).length;
+                var msg = '✓ ' + updatedCount + ' ' + uiText('dash_dup_posts_updated', 'posts/pages updated') +
+                    ' · ' + deletedCount + ' ' + uiText('dash_dup_files_deleted', 'redundant files deleted');
+                if (skippedCount) {
+                    msg += ' · ' + skippedCount + ' ' + uiText('dash_dup_kept_review', 'left untouched (still referenced somewhere the tool could not safely rewrite — review manually)');
+                }
+                $('#imp-duplicates-result').prepend('<div class="imp-dup-merge-result">' + escHtml(msg) + '</div>');
+                scanDuplicatesBatch(0, true);
+            }, function(err) {
+                $btn.prop('disabled', false).text(originalLabel);
+                window.alert(err);
+            }, 180000);
+        });
+
         loadBackupRetention();
     }
 
@@ -2484,7 +2750,8 @@
                 '<p><strong>' + data.group_count + ' ' + uiText('dash_dup_groups', 'duplicate groups') +
                 '</strong> · ' + uiText('dash_dup_wasted', 'Wasted space') + ': ' + escHtml(data.wasted_h || '0 B') +
                 ' · ' + escHtml(data.scanned || 0) + ' ' + uiText('dash_scanned', 'scanned') + '</p>' +
-                '<p class="imp-dup-intro">' + uiText('dash_dup_explain', 'Each group is identical file content registered more than once in the Media Library.') + '</p>'
+                '<p class="imp-dup-intro">' + uiText('dash_dup_explain', 'Each group is identical file content registered more than once in the Media Library.') + '</p>' +
+                '<p class="imp-dup-intro" style="opacity:.75;">' + uiText('dash_dup_rescan_hint', 'This data is from the last scan. If you just edited a post, click "Scan duplicates" again to see the current status.') + '</p>'
             );
             renderDuplicateGroups(data.groups || []);
         }, function(err) {
@@ -2498,6 +2765,11 @@
 
         if (item.keep_recommended) {
             html += '<div class="imp-dup-badge imp-dup-badge-keep">' + escHtml(uiText('dash_dup_keep', 'Keep this one (used in content)')) + '</div>';
+        } else if (item.attached_only) {
+            // Only a post_parent "attached to" link, nothing actually
+            // embeds it — distinct from both "used in content" and "safe
+            // to delete" since a human should still glance at it.
+            html += '<div class="imp-dup-badge imp-dup-badge-attached">' + escHtml(uiText('dash_dup_attached_only', 'Only attached (not shown in content)')) + '</div>';
         } else if (item.safe_to_delete) {
             html += '<div class="imp-dup-badge imp-dup-badge-delete">' + escHtml(uiText('dash_dup_delete_ok', 'Safe to delete (unused duplicate)')) + '</div>';
         }
@@ -2544,6 +2816,56 @@
         return html;
     }
 
+    // An "only attached" item is also "safe to delete" (see
+    // enrich_item_usage() in class-duplicate-finder.php — a bare
+    // post_parent link never blocks deletion), so both buttons can show
+    // together: Unlink just clears the library link and keeps the file;
+    // Delete removes the file outright (detaching first server-side if
+    // needed, same as WordPress's own Media Library).
+    function renderDuplicateCondActions(item) {
+        var html = '';
+        if (item.attached_only) {
+            html += '<button type="button" class="imp-btn imp-btn-sm imp-btn-ghost imp-dup-detach-btn" data-id="' + item.id + '">' + escHtml(uiText('dash_dup_detach', 'Unlink')) + '</button>';
+        }
+        if (item.safe_to_delete) {
+            html += '<button type="button" class="imp-btn imp-btn-sm imp-btn-danger imp-dup-delete-btn" data-id="' + item.id + '">' + escHtml(uiText('dash_dup_delete', 'Delete')) + '</button>';
+        }
+        return html;
+    }
+
+    // Keep the "Merge duplicates" button (and its hint text) in sync with the
+    // "Keep this one" checkboxes: merging only makes sense when at least one
+    // item is kept AND at least one is left to delete. Checking every item
+    // (nothing to remove) or none of them (nothing to repoint to) used to
+    // leave the button clickable but silently do nothing — confusing when a
+    // duplicate is deliberately kept in more than one place. Called once
+    // right after a group renders and again on every checkbox change.
+    function updateDupMergeState($group) {
+        var groupIndex = $group.data('group-index');
+        var $btn = $group.find('.imp-dup-merge-btn');
+        var $hint = $group.find('.imp-dup-merge-hint');
+        if (!$btn.length) {
+            return;
+        }
+        if ($hint.data('imp-default-text') === undefined) {
+            $hint.data('imp-default-text', $hint.text());
+        }
+        var $checks = $group.find('input[name="imp-dup-keep-' + groupIndex + '"]');
+        var total = $checks.length;
+        var checked = $checks.filter(':checked').length;
+
+        if (total > 0 && checked >= total) {
+            $btn.prop('disabled', true);
+            $hint.text(uiText('dash_dup_merge_all_kept', 'Every file is marked to keep — there is nothing left to merge or delete.'));
+        } else if (checked === 0) {
+            $btn.prop('disabled', true);
+            $hint.text(uiText('dash_dup_merge_none_kept', 'Check at least one file to keep before merging.'));
+        } else {
+            $btn.prop('disabled', false);
+            $hint.text($hint.data('imp-default-text'));
+        }
+    }
+
     function renderDuplicateGroups(groups) {
         var $list = $('#imp-duplicates-list');
         $list.empty();
@@ -2551,15 +2873,23 @@
             var itemCount = (group.items || []).length;
             var header = uiText('dash_dup_group_label', 'Identical file') + ' #' + (groupIndex + 1) +
                 ' · ' + escHtml(group.size_h || '') +
-                ' · ' + itemCount + ' ' + uiText('dash_dup_entries', 'entries') +
+                ' · <span class="imp-dup-group-entries-count">' + itemCount + '</span> ' + uiText('dash_dup_entries', 'entries') +
                 ' · ' + escHtml(group.wasted_h || '') + ' ' + uiText('dash_dup_wasted_in_group', 'wasted in this group');
-            var html = '<div class="imp-dup-group">' +
+            var itemIds = (group.items || []).map(function(it) { return it.id; }).join(',');
+            var html = '<div class="imp-dup-group" data-group-index="' + groupIndex + '" data-item-ids="' + escHtml(itemIds) + '">' +
                 '<div class="imp-dup-group-header"><strong>' + header + '</strong>' +
                 (group.same_filename ? '<div class="imp-dup-group-note">' + escHtml(uiText('dash_dup_same_name', 'Same filename but different Media Library IDs.')) + '</div>' : '') +
-                '<div class="imp-dup-group-hash" title="' + escHtml(group.hash || '') + '">MD5: ' + escHtml((group.hash || '').slice(0, 12)) + '…</div></div>';
-            (group.items || []).forEach(function(item) {
+                '<div class="imp-dup-group-hash" title="' + escHtml(group.hash || '') + '">MD5: ' + escHtml((group.hash || '').slice(0, 12)) + '…</div>' +
+                (itemCount > 1 ?
+                    '<div class="imp-dup-merge-row">' +
+                    '<button type="button" class="imp-btn imp-btn-sm imp-btn-success imp-dup-merge-btn">' + escHtml(uiText('dash_dup_merge', 'Merge duplicates')) + '</button>' +
+                    '<span class="imp-dup-merge-hint">' + escHtml(uiText('dash_dup_merge_hint', 'Keeps the file(s) checked below (you can check more than one), repoints every post/page that used the rest to the first kept file, then deletes the redundant files.')) + '</span>' +
+                    '</div>' : '') +
+                '</div>';
+            var groupHasRecommendedKeep = (group.items || []).some(function(it) { return !!it.keep_recommended; });
+            (group.items || []).forEach(function(item, itemIndex) {
                 var dims = (item.width && item.height) ? (item.width + '×' + item.height + 'px') : '—';
-                html += '<div class="imp-dup-item">' +
+                html += '<div class="imp-dup-item" data-item-id="' + item.id + '">' +
                     '<div class="imp-dup-thumb"><img src="' + escHtml(item.thumb || '') + '" alt=""></div>' +
                     '<div class="imp-dup-body">' +
                     '<div class="imp-dup-title"><strong>#' + item.id + '</strong> ' + escHtml(item.filename || '') + '</div>' +
@@ -2571,15 +2901,23 @@
                     '</span>' +
                     (item.title ? '<br><span><strong>' + escHtml(uiText('dash_dup_item_title', 'Title')) + ':</strong> ' + escHtml(item.title) + '</span>' : '') +
                     '</div>' +
-                    renderDuplicateUsedIn(item) +
+                    '<div class="imp-dup-usedin-wrap">' + renderDuplicateUsedIn(item) + '</div>' +
                     '</div>' +
                     '<div class="imp-dup-actions">' +
-                    '<button type="button" class="imp-btn imp-btn-sm imp-dup-open-im" data-id="' + item.id + '">' + escHtml(uiText('dash_dup_open_im', 'Open in Image Master')) + '</button>' +
+                    (itemCount > 1 ?
+                        '<label class="imp-dup-keep-radio"><input type="checkbox" class="imp-dup-keep-check" name="imp-dup-keep-' + groupIndex + '" value="' + item.id + '"' +
+                        ( (item.keep_recommended || (!groupHasRecommendedKeep && itemIndex === 0)) ? ' checked' : '' ) + '> ' +
+                        escHtml(uiText('dash_dup_keep_this', 'Keep this one')) + '</label>' : '') +
+                    '<button type="button" class="imp-btn imp-btn-sm imp-btn-ghost imp-dup-open-im" data-id="' + item.id + '">' + escHtml(uiText('dash_dup_open_im', 'Open in Image Master')) + '</button>' +
                     '<a href="' + escHtml(item.edit_url || '#') + '" target="_blank" rel="noopener" class="imp-btn imp-btn-sm imp-btn-ghost">' + escHtml(uiText('dash_dup_open_wp', 'WP Media')) + '</a>' +
+                    '<span class="imp-dup-cond-actions">' + renderDuplicateCondActions(item) + '</span>' +
                     '</div></div>';
             });
             html += '</div>';
-            $list.append(html);
+            var $appended = $(html).appendTo($list);
+            if (itemCount > 1) {
+                updateDupMergeState($appended);
+            }
         });
     }
 
@@ -2849,8 +3187,14 @@
             $(this).remove();
             var $grid = $('#imp-alt-grid');
             if (!$grid.find('.imp-alt-row').length) {
-                $grid.html('<p class="imp-alt-all-done">\u2713 ' + escHtml(uiText('dash_alt_all_ok', 'All images have useful alt text.')) + '</p>');
-                $('#imp-alt-pagination').empty();
+                // The current page is now empty, but that does NOT mean
+                // there is nothing left overall \u2014 other pages can still
+                // have pending images (this was exactly the "all done"
+                // shown while 6 more pages were still waiting" bug).
+                // Re-fetch from the server instead of assuming: loadMissingAlt()
+                // already knows how to fall back to the last valid page, or
+                // show the real "all done" state when total is actually 0.
+                loadMissingAlt();
             }
         });
         markDashboardDirty();
@@ -3057,11 +3401,24 @@
             state.dashboard.xhrAlt = null;
             $grid.empty();
             if (!data.items || !data.items.length) {
+                // An empty page here can mean two different things: there is
+                // truly nothing left with a missing/generic alt (data.total
+                // is 0), or the page we asked for no longer exists because
+                // filling alt text on a later page shrank total_pages (e.g.
+                // we were on page 7 of 7 and finishing it drops it to 6) —
+                // in that case jump back to the new last page instead of
+                // reporting "all done" while other pages still have work.
+                var lastPage = Math.max(1, data.total_pages || 1);
+                if (data.total > 0 && state.dashboard.altPage > lastPage) {
+                    state.dashboard.altPage = lastPage;
+                    loadMissingAlt();
+                    return;
+                }
                 $grid.html('<p style="color:var(--imp-success);padding:12px;">✓ ' + uiText('dash_alt_all_ok', 'All images have useful alt text.') + '</p>');
-                $('#imp-alt-pagination').empty();
+                $('#imp-alt-pagination, #imp-alt-pagination-top').empty();
                 state.dashboard.altListLoaded = true;
                 state.dashboard.altListCacheKey = dashboardAltCacheKey();
-                setDashboardStatValue('missing_alt', 0);
+                setDashboardStatValue('missing_alt', data.total || 0);
                 return;
             }
             data.items.forEach(function(item) {
@@ -3114,8 +3471,10 @@
     }
 
     function renderAltPagination(page, totalPages) {
-        var $p = $('#imp-alt-pagination');
-        $p.empty();
+        // Rendered twice (top and bottom of the "Missing alt" list) so both
+        // stay in sync \u2014 clicking a page number in either one reloads the list.
+        var $bars = $('#imp-alt-pagination, #imp-alt-pagination-top');
+        $bars.empty();
         if (totalPages <= 1) {
             return;
         }
@@ -3125,20 +3484,23 @@
         var end = Math.min(totalPages, start + maxButtons - 1);
         start = Math.max(1, end - maxButtons + 1);
 
-        if (start > 1) {
-            $p.append('<span class="imp-alt-page-ellipsis">\u2026</span>');
-        }
-        for (var i = start; i <= end; i++) {
-            var $btn = $('<button class="imp-btn imp-btn-ghost imp-btn-sm" data-page="' + i + '"></button>').text(i);
-            if (i === page) {
-                $btn.addClass('active');
+        $bars.each(function() {
+            var $p = $(this);
+            if (start > 1) {
+                $p.append('<span class="imp-alt-page-ellipsis">\u2026</span>');
             }
-            $p.append($btn);
-        }
-        if (end < totalPages) {
-            $p.append('<span class="imp-alt-page-ellipsis">\u2026</span>');
-        }
-        $p.off('click', 'button').on('click', 'button', function() {
+            for (var i = start; i <= end; i++) {
+                var $btn = $('<button class="imp-btn imp-btn-ghost imp-btn-sm" data-page="' + i + '"></button>').text(i);
+                if (i === page) {
+                    $btn.addClass('active');
+                }
+                $p.append($btn);
+            }
+            if (end < totalPages) {
+                $p.append('<span class="imp-alt-page-ellipsis">\u2026</span>');
+            }
+        });
+        $bars.off('click', 'button').on('click', 'button', function() {
             state.dashboard.altPage = parseInt($(this).attr('data-page'), 10);
             loadMissingAlt();
         });
@@ -3458,8 +3820,17 @@
             if (!ids.length) { alert(L.no_selection || 'Select at least one image.'); return; }
             if (!confirm(L.confirm_delete || 'Delete selected images? This cannot be undone.')) return;
             ajax('tsoimma_delete_images', { ids: ids }, function(data) {
-                alert('✓ ' + data.deleted.length + ' ' + (L.images_deleted || 'images deleted.'));
-                state.orphans.found = state.orphans.found.filter(function(o) { return ids.indexOf(o.id) === -1; });
+                var msg = '✓ ' + data.deleted.length + ' ' + (L.images_deleted || 'images deleted.');
+                if (data.errors && data.errors.length) {
+                    msg += '\n' + (L.errors_label || 'Errors:') + '\n' + data.errors.map(function(e) { return 'ID ' + e.id + ': ' + e.error; }).join('\n');
+                }
+                alert(msg);
+                // Only drop the ones the backend actually reports as deleted
+                // — wp_delete_attachment() can fail per-ID, and blindly
+                // removing every attempted ID would hide a still-existing
+                // orphan from the admin as if it had been cleaned up.
+                var deletedIds = data.deleted.map(function(d) { return d.id; });
+                state.orphans.found = state.orphans.found.filter(function(o) { return deletedIds.indexOf(o.id) === -1; });
                 state.orphanSelected.clear();
                 renderOrphansGrid();
                 markDashboardDirty();
@@ -3607,7 +3978,12 @@
                     alert(uiText('rogue_rescan_required', 'Some files were skipped: run Scan again before deleting (allowlist expires after 24 hours).'));
                     rogueAllowlistExpires = 0;
                 }
-                rogueFiles    = rogueFiles.filter(function(f) { return !rogueSelected.has(f.path); });
+                // Only drop files the backend actually deleted from disk —
+                // a selected-but-skipped file (not on the allowlist, delete
+                // failed...) must stay in the list, matched by the exact
+                // path_b64 the server echoes back for each success.
+                var deletedB64 = new Set(data.deleted_b64 || []);
+                rogueFiles    = rogueFiles.filter(function(f) { return !deletedB64.has(f.path_b64); });
                 rogueSelected = new Set();
                 if (data.errors && data.errors.length) {
                     alert(uiText('deleted_msg', 'Deleted') + ' ' + data.deleted + '. ' + uiText('errors_label', 'Errors:') + '\n' + data.errors.join('\n'));
@@ -3954,7 +4330,7 @@
         $('#imp-seo-alt').val(data.alt || '');
         $('#imp-seo-caption').val(data.caption || '');
         $('#imp-seo-description').val(data.description || '');
-        renderUsedIn(data.used_in || [], !!data.is_orphan);
+        renderUsedIn(data.used_in || [], !!data.is_orphan, data.used_in_indirect || []);
         $('#imp-current-filename').val(data.filename);
         $('#imp-new-filename').val('');
         $('#imp-suggested-name').text(data.suggested || '');
@@ -4024,7 +4400,8 @@
         });
     }
 
-    function renderUsedIn(posts, isOrphan) {
+    function renderUsedIn(posts, isOrphan, indirectPosts) {
+        indirectPosts = indirectPosts || [];
         var $block = $('#imp-used-in-block');
         if (!$block.length) {
             $('#mtab-seo').append('<div id="imp-used-in-block" class="imp-used-in"></div>');
@@ -4033,7 +4410,9 @@
         if (!posts || !posts.length) {
             var msg   = isOrphan ? (L.orphan_confirmed || 'Confirmed orphan: not referenced anywhere.') : (L.not_in_content || 'Not found in post_content.');
             var color = isOrphan ? 'var(--imp-danger)' : 'var(--imp-warn)';
-            $block.html('<div class="imp-used-in-title">📎 ' + (L.used_in || 'Used in') + '</div><div class="imp-used-in-empty" style="color:' + color + '">' + msg + '</div>');
+            var html0 = '<div class="imp-used-in-title">📎 ' + (L.used_in || 'Used in') + '</div><div class="imp-used-in-empty" style="color:' + color + '">' + msg + '</div>';
+            html0 += renderUsedInIndirect(indirectPosts);
+            $block.html(html0);
             return;
         }
         var html = '<div class="imp-used-in-title">📎 ' + (L.used_in || 'Used in') + ' (' + posts.length + ')</div><div class="imp-used-in-list">';
@@ -4047,7 +4426,30 @@
                 '</a>';
         });
         html += '</div>';
+        html += renderUsedInIndirect(indirectPosts);
         $block.html(html);
+    }
+
+    // Unconfirmed matches (a bare block-attribute ID with nothing else
+    // corroborating it, or a filename-only coincidence) — shown separately
+    // from confirmed usage so they're not mistaken for a genuine reference.
+    function renderUsedInIndirect(indirectPosts) {
+        if (!indirectPosts || !indirectPosts.length) {
+            return '';
+        }
+        var html = '<div class="imp-used-in-title" style="margin-top:10px;">' +
+            uiText('dash_dup_used_indirect', 'Filename match only (this ID is not in the code)') +
+            ' (' + indirectPosts.length + ')</div><div class="imp-used-in-list">';
+        indirectPosts.forEach(function(p) {
+            var editUrl = p.edit_url || (TSOIMMA.site_url + '/wp-admin/post.php?post=' + p.id + '&action=edit');
+            html += '<a href="' + escHtml(editUrl) + '" target="_blank" rel="noopener" class="imp-used-in-item" style="opacity:.7;">' +
+                '<span class="imp-used-in-type">?</span>' +
+                '<span class="imp-used-in-item-title">' + escHtml(p.title || ('#' + p.id)) + (p.detail ? ' · ' + escHtml(p.detail) : '') + '</span>' +
+                '<span style="color:var(--imp-text-muted);font-size:10px;">↗</span>' +
+                '</a>';
+        });
+        html += '</div>';
+        return html;
     }
 
     function closeModal() {
@@ -4511,13 +4913,28 @@
                 if (data.errors && data.errors.length) msg += ' ' + (L.errors_label || 'Errors:') + ' ' + data.errors.join(', ');
                 $res.data('kind', 'ghost_deleted').data('count', data.deleted || 0);
                 $res.show().css('color', data.errors && data.errors.length ? 'var(--imp-warn)' : 'var(--imp-success)').html(msg);
+
+                // Only rows that were actually deleted should disappear — an
+                // attempted-but-rejected row (e.g. "real file with content,
+                // not deleted for safety") must stay visible, otherwise the
+                // admin thinks it's handled when the DB record is untouched.
+                // ghostSelected must be read BEFORE clearing it, and the
+                // per-ID outcome inferred from the "ID <n>: ..." prefix each
+                // backend error message uses (see handle_tso_im_delete_ghost_attachments()).
+                var attemptedIds = Array.from(ghostSelected);
+                var failedIds = {};
+                (data.errors || []).forEach(function(errMsg) {
+                    var m = /ID\s+(\d+)/.exec(errMsg);
+                    if (m) failedIds[m[1]] = true;
+                });
                 ghostSelected.clear();
-                // Remove deleted rows from list
                 $('#imp-ghost-list .imp-ghost-check').each(function() {
                     var id = parseInt($(this).data('id'), 10);
-                    if (!ghostSelected.has(id)) $(this).closest('.imp-ghost-row').fadeOut(300, function() { $(this).remove(); });
+                    if (attemptedIds.indexOf(id) !== -1 && !failedIds[id]) {
+                        $(this).closest('.imp-ghost-row').fadeOut(300, function() { $(this).remove(); });
+                    }
                 });
-                $('#imp-ghost-scan-result').text(($('#imp-ghost-list .imp-ghost-row').length - data.deleted) + ' ' + (L.remaining_label || 'remaining') + '.');
+                $('#imp-ghost-scan-result').text((($('#imp-ghost-list .imp-ghost-row').length) - data.deleted) + ' ' + (L.remaining_label || 'remaining') + '.');
                 updateGhostToolbar();
                 markDashboardDirty();
             }, function(err) {
@@ -4641,7 +5058,11 @@
                 seo_update: uiText('action_seo_update', 'SEO updated'),
                 delete: uiText('action_delete', 'Deleted'),
                 pdf_compress: uiText('action_pdf_compress', 'PDF compressed'),
-                revert: uiText('action_revert', 'Reverted')
+                revert: uiText('action_revert', 'Reverted'),
+                dup_merge_rewrite: uiText('action_dup_merge_rewrite', 'Merge: repointed'),
+                dup_merge_delete: uiText('action_dup_merge_delete', 'Merge: deleted'),
+                dup_delete_unused: uiText('action_dup_delete_unused', 'Duplicate deleted'),
+                dup_detach: uiText('action_dup_detach', 'Unlinked')
             };
             var d    = item.details || {};
             var details = '';
@@ -4668,6 +5089,23 @@
             if (d.format && (item.action_type === 'optimize' || item.action_type === 'auto_optimize' || item.action_type === 'pdf_compress')) {
                 if (details) details += ' · ';
                 details += '<span style="font-size:11px;color:var(--imp-text-muted)">' + escHtml(String(d.format).toUpperCase()) + '</span>';
+            }
+            if (item.action_type === 'dup_merge_rewrite') {
+                var rewriteBits = [];
+                if (d.post_title) rewriteBits.push('<strong>' + escHtml(d.post_title) + '</strong>' + (d.post_id ? ' #' + d.post_id : ''));
+                if (d.detail) rewriteBits.push(escHtml(d.detail));
+                rewriteBits.push(escHtml(uiText('hist_merged_into', 'Merged into')) + ' ' + escHtml(d.keep_filename || ('#' + d.keep_id)));
+                details += '<span style="display:block;font-size:11px;line-height:1.4">' + rewriteBits.join(' · ') + '</span>';
+            } else if (item.action_type === 'dup_merge_delete') {
+                details += '<span style="display:block;font-size:11px;line-height:1.4">' +
+                    escHtml(uiText('hist_replaced_by', 'Replaced by')) + ' ' + escHtml(d.keep_filename || ('#' + d.keep_id)) +
+                    '</span>';
+            } else if (item.action_type === 'dup_delete_unused') {
+                details += '<span style="font-size:11px;color:var(--imp-text-muted)">' + escHtml(uiText('hist_no_refs_found', 'No references found')) + '</span>';
+            } else if (item.action_type === 'dup_detach') {
+                details += '<span style="font-size:11px;color:var(--imp-text-muted)">' +
+                    escHtml(uiText('hist_detached_from', 'Unlinked from')) + ' ' + escHtml(d.old_parent_title || ('#' + d.old_parent_id)) +
+                    '</span>';
             }
             if (!details) details = '<span style="color:var(--imp-text-muted)">—</span>';
             var displayFile = d.filename || (d.new_filename || '—');
@@ -4811,7 +5249,12 @@
                 if (data.skipped) msg += ' (' + data.skipped + ' ' + uiText('skipped_suffix', 'skipped') + ')';
                 if (data.errors && data.errors.length) msg += '\n' + uiText('errors_label', 'Errors:') + '\n' + data.errors.join('\n');
                 alert(msg);
-                urlIssues    = urlIssues.filter(function(i) { return !urlSelected.has(i.old_url); });
+                // Only drop rows the backend actually fixed — a row that was
+                // selected but skipped (e.g. the target file went missing
+                // meanwhile) must stay in the list, otherwise the admin
+                // thinks it's solved when the content still points nowhere.
+                var fixedUrls = data.fixed_urls || [];
+                urlIssues    = urlIssues.filter(function(i) { return fixedUrls.indexOf(i.old_url) === -1; });
                 urlSelected  = new Set();
                 renderUrlList();
                 updateUrlToolbar();
@@ -4834,7 +5277,10 @@
                 if (data.skipped) msg += ' (' + data.skipped + ' ' + uiText('skipped_suffix', 'skipped') + ')';
                 if (data.errors && data.errors.length) msg += '\n' + uiText('errors_label', 'Errors:') + '\n' + data.errors.join('\n');
                 alert(msg);
-                urlIssues = urlIssues.filter(function(i) { return !urlRemoveSelected.has(i.old_url); });
+                // Same reasoning as the "Fix selected" handler above: only
+                // remove rows the backend actually cleared from storage.
+                var removedUrls = data.removed_urls || [];
+                urlIssues = urlIssues.filter(function(i) { return removedUrls.indexOf(i.old_url) === -1; });
                 urlRemoveSelected = new Set();
                 var summary = $('#imp-url-summary').data('summary') || {};
                 summary.total = urlIssues.length;

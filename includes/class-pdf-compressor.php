@@ -462,6 +462,24 @@ class TSOIMMA_PDF_Compressor {
 
                 // ── Retry automàtic amb /default si el primer intent (/ebook) falla
                 if ( '/ebook' === $gs_settings || '' === $gs_settings ) {
+                    // The block above (lines ~409-417) already deleted ALL
+                    // pdf_bg_* bookkeeping for this job before we knew the
+                    // /ebook output would fail validation. Re-save every key
+                    // the NEXT poll_status() call needs to find and track
+                    // this retry — not just settings/prev_size/status.
+                    // Without pdf_bg_temp/original/size/quality/started, the
+                    // next poll reads them as empty, "elapsed" is computed
+                    // from a missing pdf_bg_started (always 0), the 120s
+                    // timeout can never trigger, and every poll just answers
+                    // "processing" forever until the client's own hard cap
+                    // gives up — silently discarding a retry that may well
+                    // have succeeded.
+                    tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_temp',     $temp_path );
+                    tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_original', $original_path );
+                    tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_size',     $original_size );
+                    tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_quality',  $quality );
+                    tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_started',  time() );
+                    tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_fallback_tried', $fallback_tried );
                     tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_settings', '/default' );
                     tsoimma_update_attachment_meta( $attachment_id, 'pdf_bg_prev_size', 0 );
                     tsoimma_update_attachment_meta( $attachment_id, 'pdf_status', 'processing' );

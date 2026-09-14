@@ -164,7 +164,19 @@ class TSOIMMA_Auto_Optimizer {
                 // Si els thumbnails WebP ja existeixen quan WP els vol crear,
                 // wp_unique_filename() genera noms amb sufix "-1.webp", "-2.webp"...
                 // que trenquen les URLs i fan que la biblioteca no mostri previsualtizació.
-                $current_meta = wp_get_attachment_metadata( $attachment_id );
+                //
+                // IMPORTANT: en una pujada nova, WordPress encara NO ha desat la
+                // metadata a la BD en aquest punt — wp_update_attachment_metadata()
+                // s'executa DESPRÉS que aquest filtre (wp_generate_attachment_metadata)
+                // retorni. Per tant wp_get_attachment_metadata() aquí sempre tornava
+                // buit, aquest bloc mai trobava els thumbnails originals per esborrar,
+                // i quedaven com a fitxers orfes (mai referenciats, mai eliminats) a
+                // uploads/ per a cada pujada auto-optimitzada. El paràmetre $metadata
+                // rebut per aquest mètode SÍ conté els "sizes" que WP acaba de generar
+                // per al fitxer original, així que és la font correcta aquí.
+                $current_meta = ( is_array( $metadata ) && ! empty( $metadata['sizes'] ) )
+                    ? $metadata
+                    : wp_get_attachment_metadata( $attachment_id );
                 if ( ! empty( $current_meta['sizes'] ) ) {
                     $thumb_dir = trailingslashit( dirname( get_attached_file( $attachment_id ) ) );
                     foreach ( $current_meta['sizes'] as $size_data ) {
