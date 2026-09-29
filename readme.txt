@@ -142,6 +142,8 @@ For releases before 2.0.0, see CHANGELOG.txt in the plugin folder.
 * New: "Image Sizes" tab has a "Delete all" button per size and a "View backups" panel listing every saved backup zip with a direct download link, so a full cleanup and finding its backup afterwards each take one click.
 * New: The "View backups" panel now also has a "Delete" button per backup file, to remove one manually without waiting for the retention cleanup.
 * New: The "View backups" panel now shows how many files each backup contains, next to its size.
+* Fixed: The "View backups" panel now refreshes by itself after deleting size files, so the new backup zip appears without reloading the page.
+* Fixed: Backup dates in the "View backups" panel now use the site's timezone instead of UTC.
 
 = 2.0.5 =
 * New: Checkbox below the media uploader (Media > Add New and the media modal) to turn automatic image optimization on or off for each upload; it remembers your last choice as soon as you change it.
