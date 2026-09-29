@@ -21,6 +21,8 @@ class TSOIMMA_Admin_Page {
     }
 
     public static function enqueue_assets( $hook ) {
+        TSOIMMA_Auto_Optimizer::maybe_enqueue_upload_toggle( $hook );
+
         if ( strpos( $hook, 'tso-image-master' ) === false ) {
             return;
         }
@@ -604,6 +606,9 @@ class TSOIMMA_Admin_Page {
                 <button class="imp-tab" data-tab="orphans" role="tab">
                     <span>🔍</span> <span data-i18n="tab_orphans"><?php esc_html_e( 'Orphan Images', 'tso-image-master' ); ?></span>
                 </button>
+                <button class="imp-tab" data-tab="sizes" role="tab">
+                    <span>📐</span> <span data-i18n="tab_sizes"><?php esc_html_e( 'Image Sizes', 'tso-image-master' ); ?></span>
+                </button>
                 <button class="imp-tab" data-tab="seo" role="tab">
                     <span>✏️</span> <span data-i18n="tab_seo"><?php esc_html_e( 'SEO & Names', 'tso-image-master' ); ?></span>
                 </button>
@@ -858,6 +863,71 @@ class TSOIMMA_Admin_Page {
                 <div id="imp-rogue-loading" class="imp-loading-overlay" style="display:none;">
                     <div class="imp-spinner"></div>
                     <p data-i18n="scanning_server_files">Escanejant fitxers del servidor...</p>
+                </div>
+            </div>
+
+            <!-- =====================================================
+                 TAB: MIDES D'IMATGE
+                 ===================================================== -->
+            <div id="tab-sizes" class="imp-tab-content">
+                <div class="imp-panel">
+                    <h2 class="imp-panel-title" data-i18n="sizes_title">Mides òrfenes no registrades</h2>
+                    <p class="imp-panel-desc" data-i18n-html="sizes_desc">Agrupa tots els fitxers generats per antics plugins/temes que ja no estan registrats ni en ús actualment a WordPress. Mai toca el fitxer original ni les altres mides.</p>
+                    <button id="imp-scan-sizes" class="imp-btn imp-btn-primary" data-i18n="scan_sizes">📐 Escanejar mides</button>
+                    <button id="imp-show-backups" class="imp-btn imp-btn-ghost" data-i18n="sizes_show_backups">🗂 Veure còpies de seguretat</button>
+                </div>
+
+                <!-- Llistat de fitxers de backup existents (còpies individuals
+                     de l'optimitzador + zips de neteja de mides), amb enllaç
+                     de descàrrega directa — perquè es puguin trobar sense
+                     haver d'anar per FTP. -->
+                <div id="imp-backups-panel" class="imp-panel" style="display:none;margin-bottom:24px;">
+                    <h2 class="imp-panel-title" data-i18n="sizes_backups_title">Còpies de seguretat desades</h2>
+                    <p class="imp-panel-desc" data-i18n="sizes_backups_desc">Es desen dins uploads/tso-image-master/ i es netegen soles segons la retenció configurada al Resum.</p>
+                    <div id="imp-backups-summary" class="imp-text-muted" style="margin-bottom:10px;"></div>
+                    <div id="imp-backups-list-wrap"></div>
+                </div>
+
+                <div id="imp-sizes-loading" class="imp-loading-overlay" style="display:none;">
+                    <div class="imp-spinner"></div>
+                    <p data-i18n="sizes_scanning_msg">Escanejant la biblioteca de mitjans...</p>
+                </div>
+
+                <div id="imp-sizes-result" style="display:none;">
+                    <div class="imp-toolbar">
+                        <div class="imp-toolbar-left">
+                            <span id="imp-sizes-summary" class="imp-text-muted"></span>
+                        </div>
+                    </div>
+                    <div id="imp-sizes-table-wrap"></div>
+                </div>
+
+                <!-- Vista de detall: fitxers d'una mida concreta -->
+                <div id="imp-sizes-detail" class="imp-panel" style="display:none;margin-top:24px;">
+                    <button id="imp-sizes-back" class="imp-btn imp-btn-ghost" data-i18n="sizes_back">← Tornar a la llista de mides</button>
+                    <h2 class="imp-panel-title" id="imp-sizes-detail-title" style="margin-top:12px;"></h2>
+                    <p id="imp-sizes-detail-warning" class="imp-panel-desc" data-i18n-html="sizes_irreversible_note">⚠️ Eliminar fitxers de mida és <strong>irreversible</strong>. Si no n'estàs segur, prova primer amb una mostra petita i revisa el lloc abans de continuar amb la resta.</p>
+                    <div class="imp-toolbar">
+                        <div class="imp-toolbar-left">
+                            <button id="imp-sizes-select-all" class="imp-btn imp-btn-ghost" data-i18n="select_all">Seleccionar tot</button>
+                            <button id="imp-sizes-deselect" class="imp-btn imp-btn-ghost" data-i18n="deselect">Deseleccionar</button>
+                            <button id="imp-sizes-select-sample" class="imp-btn imp-btn-ghost" data-i18n="sizes_select_sample">Seleccionar mostra (3)</button>
+                        </div>
+                        <div class="imp-toolbar-right">
+                            <span id="imp-sizes-detail-count" class="imp-count-badge"></span>
+                            <button id="imp-sizes-delete-selected" class="imp-btn imp-btn-danger" disabled>
+                                🗑️ <span data-i18n="delete_selected">Eliminar seleccionades</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="imp-sizes-grid" class="imp-images-grid"></div>
+                    <div style="text-align:center;margin-top:16px;">
+                        <button id="imp-sizes-load-more" class="imp-btn imp-btn-ghost" style="display:none;" data-i18n="sizes_load_more">Carregar més</button>
+                    </div>
+                    <div id="imp-sizes-detail-loading" class="imp-loading-overlay" style="display:none;">
+                        <div class="imp-spinner"></div>
+                        <p data-i18n="loading_images">Carregant imatges...</p>
+                    </div>
                 </div>
             </div>
 
@@ -1236,6 +1306,7 @@ class TSOIMMA_Admin_Page {
                                         array( 'value' => 'seo_update', 'label' => '🏷️ SEO actualitzat', 'i18n' => 'filter_seo' ),
                                         array( 'value' => 'delete', 'label' => '🗑️ Eliminades', 'i18n' => 'filter_delete' ),
                                         array( 'value' => 'pdf_compress', 'label' => '📄 PDFs comprimits', 'i18n' => 'filter_pdf' ),
+                                        array( 'value' => 'size_deleted', 'label' => '📐 Mides eliminades', 'i18n' => 'filter_size_deleted' ),
                                     ),
                                 )
                             );

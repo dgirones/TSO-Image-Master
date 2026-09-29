@@ -21,22 +21,163 @@ class TSOIMMA_Auto_Optimizer {
         // regeneracions. La comprovació del transient garanteix que NOMÉS processa
         // pujades reals de l'usuari.
         add_action( 'wp_generate_attachment_metadata', array( __CLASS__, 'on_upload' ), 20, 2 );
+
+        // Per-upload checkbox under the media uploader (Media > Add New + media modal).
+        add_action( 'post-plupload-upload-ui', array( __CLASS__, 'render_upload_toggle' ) );
+        add_action( 'wp_enqueue_media', array( __CLASS__, 'enqueue_upload_toggle_media' ) );
+        add_action( 'wp_ajax_tsoimma_save_upload_auto_pref', array( __CLASS__, 'ajax_save_upload_toggle' ) );
+    }
+
+    /**
+     * AJAX: remember the upload checkbox state as soon as the user changes it.
+     *
+     * @return void
+     */
+    public static function ajax_save_upload_toggle() {
+        tsoimma_verify_ajax_nonce();
+        if ( ! self::user_can_toggle_upload() ) {
+            wp_send_json_error( __( 'You do not have permission to perform this action.', 'tso-image-master' ), 403 );
+        }
+        $choice = tsoimma_get_ajax_post_bool( 'enabled' ) ? 'on' : 'off';
+        tsoimma_set_upload_auto_pref( $choice );
+        wp_send_json_success( array( 'enabled' => 'on' === $choice ) );
+    }
+
+    /**
+     * Whether the current user sees (and may use) the upload checkbox.
+     *
+     * @return bool
+     */
+    private static function user_can_toggle_upload() {
+        return current_user_can( 'manage_options' );
+    }
+
+    /**
+     * Default state of the upload checkbox: last choice of the user, else the global setting.
+     *
+     * @return bool
+     */
+    private static function upload_toggle_default() {
+        $pref = tsoimma_get_upload_auto_pref();
+        if ( '' !== $pref ) {
+            return 'on' === $pref;
+        }
+        $settings = self::get_settings();
+        return ! empty( $settings['enabled'] );
+    }
+
+    /**
+     * Print the "optimize on upload" checkbox below the drop zone.
+     * No name attribute: the value travels only through the uploader JS (multipart_params).
+     *
+     * @return void
+     */
+    public static function render_upload_toggle() {
+        if ( ! self::user_can_toggle_upload() ) {
+            return;
+        }
+        $settings = self::get_settings();
+        $format   = isset( $settings['format'] ) ? (string) $settings['format'] : 'webp';
+        $label    = 'original' === $format ? __( 'original format', 'tso-image-master' ) : strtoupper( $format );
+        $quality  = tsoimma_clamp_image_quality( isset( $settings['quality'] ) ? $settings['quality'] : 82 );
+        ?>
+        <p class="tsoimma-upload-auto hide-if-no-js">
+            <label>
+                <input type="checkbox" class="tsoimma-upload-auto-cb" value="1" <?php checked( self::upload_toggle_default() ); ?> />
+                <?php esc_html_e( 'Optimize images automatically on upload', 'tso-image-master' ); ?>
+            </label>
+            <span class="description">
+                <?php
+                printf(
+                    /* translators: 1: output format (e.g. WEBP), 2: quality percentage */
+                    esc_html__( '(TSO Image Master: %1$s, quality %2$d%%)', 'tso-image-master' ),
+                    esc_html( $label ),
+                    absint( $quality )
+                );
+                ?>
+            </span>
+        </p>
+        <?php
+    }
+
+    /**
+     * Enqueue the uploader checkbox JS on Media > Add New (called from the admin enqueue callback).
+     *
+     * @param string $hook Admin page hook.
+     * @return void
+     */
+    public static function maybe_enqueue_upload_toggle( $hook ) {
+        if ( 'media-new.php' !== $hook ) {
+            return;
+        }
+        self::enqueue_upload_toggle( array( 'jquery', 'plupload-handlers' ) );
+    }
+
+    /**
+     * Enqueue the uploader checkbox JS wherever the media modal is loaded.
+     *
+     * @return void
+     */
+    public static function enqueue_upload_toggle_media() {
+        self::enqueue_upload_toggle( array( 'jquery', 'wp-plupload', 'media-views' ) );
+    }
+
+    /**
+     * Enqueue and localize the uploader checkbox script once.
+     *
+     * @param string[] $deps Script dependencies.
+     * @return void
+     */
+    private static function enqueue_upload_toggle( $deps ) {
+        if ( ! self::user_can_toggle_upload() || wp_script_is( 'tsoimma-upload-toggle', 'enqueued' ) ) {
+            return;
+        }
+        $js_file = TSOIMMA_PATH . 'admin/js/upload-toggle.js';
+        $js_ver  = TSOIMMA_VERSION . '.' . ( file_exists( $js_file ) ? (string) filemtime( $js_file ) : '0' );
+        wp_enqueue_script( 'tsoimma-upload-toggle', TSOIMMA_URL . 'admin/js/upload-toggle.js', $deps, $js_ver, true );
+        wp_localize_script(
+            'tsoimma-upload-toggle',
+            'tsoimmaUploadConfig',
+            array(
+                'enabled'  => self::upload_toggle_default() ? '1' : '0',
+                'ajax_url' => admin_url( 'admin-ajax.php' ),
+                'nonce'    => wp_create_nonce( TSOIMMA_NONCE_AJAX ),
+            )
+        );
     }
 
     /**
      * Marca un attachment com a "pujada nova real".
      * Cridat des de add_attachment, que WordPress dispara UNA SOLA vegada
      * quan l'usuari puja un fitxer nou. Mai es crida en regeneracions.
+     *
+     * @param int $attachment_id Attachment ID.
+     * @return void
      */
     public static function mark_new_upload( $attachment_id ) {
+        // Valor del transient: '1' = seguir l'ajust global; 'on' / 'off' = decisió
+        // de la casella del carregador de mitjans per a aquesta pujada.
+        $flag   = '1';
+        $choice = tsoimma_get_upload_auto_choice();
+        if ( '' !== $choice && self::user_can_toggle_upload() ) {
+            $flag = $choice;
+            tsoimma_set_upload_auto_pref( $choice );
+        } elseif ( 'off' === $choice ) {
+            $flag = 'off';
+        }
+
         // TTL 5 minuts: suficient per cobrir la generació de metadata posterior.
-        set_transient( self::upload_transient_key( $attachment_id ), '1', 300 );
+        set_transient( self::upload_transient_key( $attachment_id ), $flag, 300 );
     }
 
     /**
      * S'executa quan WordPress genera la metadata d'un attachment.
      * Gracies al transient, NOMES optimitza si és una pujada nova real.
      * Qualsevol regeneració interna o externa és ignorada completament.
+     *
+     * @param array $metadata      Attachment metadata.
+     * @param int   $attachment_id Attachment ID.
+     * @return array
      */
     public static function on_upload( $metadata, $attachment_id ) {
         // FILTRE PRINCIPAL: és una pujada nova real?
@@ -44,7 +185,8 @@ class TSOIMMA_Auto_Optimizer {
         // sino una regeneració interna/externa. Retornar sense fer res.
         // Cobreix: regeneració de thumbnails, fix_mime_mismatch,
         // process_thumbnails_background, revert, plugins externs, etc.
-        if ( ! get_transient( self::upload_transient_key( $attachment_id ) ) ) {
+        $upload_flag = get_transient( self::upload_transient_key( $attachment_id ) );
+        if ( ! $upload_flag ) {
             return $metadata;
         }
 
@@ -52,6 +194,13 @@ class TSOIMMA_Auto_Optimizer {
         delete_transient( self::upload_transient_key( $attachment_id ) );
 
         $settings = self::get_settings();
+
+        // La casella del carregador mana sobre l'ajust global per a aquesta pujada.
+        if ( 'on' === $upload_flag ) {
+            $settings['enabled'] = true;
+        } elseif ( 'off' === $upload_flag ) {
+            $settings['enabled'] = false;
+        }
 
         // Fill-alt can run even when auto-optimize is disabled.
         if ( empty( $settings['enabled'] ) ) {

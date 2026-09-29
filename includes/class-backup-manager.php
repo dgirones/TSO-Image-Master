@@ -149,6 +149,89 @@ class TSOIMMA_Backup_Manager {
 	}
 
 	/**
+	 * Public, admin-facing listing of every backup file under
+	 * uploads/tso-image-master/ (per-original backups made by the
+	 * optimizer, AND the size-cleanup zips made by the "Mides" tab —
+	 * anything matching the shared `_tso_im_backup.<ext>` suffix), newest
+	 * first, so the admin has one place to actually find and download
+	 * them instead of only seeing an aggregate count.
+	 *
+	 * @param int $limit Max rows to return.
+	 * @return array{items: array, total_count: int, total_bytes: int, total_bytes_h: string}
+	 */
+	public static function list_backups_for_admin( $limit = 100 ) {
+		$files = self::list_backup_files();
+
+		usort(
+			$files,
+			static function ( $a, $b ) {
+				return $b['mtime'] <=> $a['mtime'];
+			}
+		);
+
+		$total_count = count( $files );
+		$total_bytes = 0;
+		foreach ( $files as $f ) {
+			$total_bytes += (int) $f['size'];
+		}
+
+		$upload_dir = wp_upload_dir();
+		$basedir    = wp_normalize_path( trailingslashit( $upload_dir['basedir'] ) );
+		$baseurl    = trailingslashit( $upload_dir['baseurl'] );
+
+		$items = array();
+		foreach ( array_slice( $files, 0, max( 1, (int) $limit ) ) as $f ) {
+			$norm_path = wp_normalize_path( $f['path'] );
+			$rel       = ltrim( str_replace( $basedir, '', $norm_path ), '/' );
+			$is_batch  = ( false !== strpos( $rel, 'size-backups/' ) );
+
+			$items[] = array(
+				'name'          => wp_basename( $f['path'] ),
+				'relative_path' => $rel,
+				'url'           => $baseurl . $rel,
+				'bytes'         => (int) $f['size'],
+				'bytes_h'       => size_format( (int) $f['size'] ),
+				'date'          => date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), (int) $f['mtime'] ),
+				'is_size_batch' => $is_batch,
+				// A size-cleanup backup is a zip bundling one file per
+				// deleted attachment; a regular optimizer backup is always
+				// a single original file. Count the zip entries instead of
+				// assuming, so it stays correct even if that ever changes.
+				'file_count'    => $is_batch ? self::count_zip_entries( $f['path'] ) : 1,
+			);
+		}
+
+		return array(
+			'items'         => $items,
+			'total_count'   => $total_count,
+			'total_bytes'   => $total_bytes,
+			'total_bytes_h' => size_format( $total_bytes ),
+		);
+	}
+
+	/**
+	 * Number of files bundled inside a size-cleanup backup zip.
+	 *
+	 * @param string $zip_path Absolute path to the zip file.
+	 * @return int
+	 */
+	private static function count_zip_entries( $zip_path ) {
+		if ( ! class_exists( 'ZipArchive' ) ) {
+			return 0;
+		}
+
+		$zip = new ZipArchive();
+		if ( true !== $zip->open( $zip_path ) ) {
+			return 0;
+		}
+
+		$count = $zip->numFiles;
+		$zip->close();
+
+		return (int) $count;
+	}
+
+	/**
 	 * @return array<int, array<string, mixed>>
 	 */
 	private static function list_backup_files() {

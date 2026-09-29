@@ -302,6 +302,11 @@ function tsoimma_get_ajax_action_names() {
 		'tsoimma_dup_merge',
 		'tsoimma_dup_delete',
 		'tsoimma_dup_detach',
+		'tsoimma_scan_sizes',
+		'tsoimma_list_size_files',
+		'tsoimma_delete_size_files',
+		'tsoimma_list_backups',
+		'tsoimma_delete_backup_file',
 	);
 }
 
@@ -313,4 +318,103 @@ function tsoimma_get_ajax_action_names() {
  */
 function tsoimma_get_ajax_action_legacy( $canonical ) {
 	return str_replace( 'tsoimma_', 'tso_im_', $canonical );
+}
+
+/**
+ * Short-lived cache of the orphan-scan reference index (built once at the
+ * start of a scan, reused by the following batches).
+ *
+ * @return array|false
+ */
+function tsoimma_get_orphan_index_cache() {
+	return get_transient( 'tsoimma_orphan_index' );
+}
+
+/**
+ * Store the orphan-scan reference index.
+ *
+ * @param array $index Index built by TSOIMMA_Orphan_Finder.
+ * @return void
+ */
+function tsoimma_set_orphan_index_cache( $index ) {
+	set_transient( 'tsoimma_orphan_index', $index, 15 * MINUTE_IN_SECONDS );
+}
+
+/**
+ * Drop the orphan-scan reference index.
+ *
+ * @return void
+ */
+function tsoimma_delete_orphan_index_cache() {
+	delete_transient( 'tsoimma_orphan_index' );
+}
+
+/**
+ * User meta key that remembers the last "auto-optimize on upload" choice.
+ *
+ * @return string
+ */
+function tsoimma_upload_auto_pref_meta_key() {
+	return 'tsoimma_upload_auto_choice';
+}
+
+/**
+ * Last upload-checkbox choice for a user.
+ *
+ * @param int $user_id User ID (0 = current user).
+ * @return string 'on', 'off' or '' when never chosen.
+ */
+function tsoimma_get_upload_auto_pref( $user_id = 0 ) {
+	$user_id = $user_id ? absint( $user_id ) : get_current_user_id();
+	if ( ! $user_id ) {
+		return '';
+	}
+	$value = (string) get_user_meta( $user_id, tsoimma_upload_auto_pref_meta_key(), true );
+	return in_array( $value, array( 'on', 'off' ), true ) ? $value : '';
+}
+
+/**
+ * Remember the upload-checkbox choice for a user.
+ *
+ * @param string $choice  'on' or 'off'.
+ * @param int    $user_id User ID (0 = current user).
+ * @return void
+ */
+function tsoimma_set_upload_auto_pref( $choice, $user_id = 0 ) {
+	$user_id = $user_id ? absint( $user_id ) : get_current_user_id();
+	if ( ! $user_id || ! in_array( $choice, array( 'on', 'off' ), true ) ) {
+		return;
+	}
+	if ( tsoimma_get_upload_auto_pref( $user_id ) !== $choice ) {
+		update_user_meta( $user_id, tsoimma_upload_auto_pref_meta_key(), $choice );
+	}
+}
+
+/**
+ * Per-upload auto-optimize choice sent by the media uploader checkbox.
+ *
+ * Only read from async-upload requests carrying a valid core "media-form" nonce
+ * (the same nonce async-upload.php verifies). Uploads without the field (REST /
+ * block editor, sideloads, WP-CLI…) return '' and follow the global setting.
+ *
+ * @return string 'on', 'off' or ''.
+ */
+function tsoimma_get_upload_auto_choice() {
+	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Presence check only; nonce verified right below.
+	if ( ! isset( $_POST['tsoimma_auto'], $_POST['_wpnonce'] ) ) {
+		return '';
+	}
+	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Value being verified here.
+	$nonce = sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) );
+	if ( ! wp_verify_nonce( $nonce, 'media-form' ) ) {
+		return '';
+	}
+	$raw = sanitize_key( wp_unslash( $_POST['tsoimma_auto'] ) );
+	if ( '1' === $raw ) {
+		return 'on';
+	}
+	if ( '0' === $raw ) {
+		return 'off';
+	}
+	return '';
 }

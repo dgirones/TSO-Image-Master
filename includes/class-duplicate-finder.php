@@ -760,7 +760,11 @@ class TSOIMMA_Duplicate_Finder {
 		$updated = wp_update_post(
 			array(
 				'ID'           => $post_id,
-				'post_content' => $content,
+				// wp_update_post() expects slashed data and unslashes it: without
+				// wp_slash() every backslash in the content (block attribute JSON
+				// such as \u002d, \" ...) is stripped and Gutenberg reports
+				// "unexpected or invalid content".
+				'post_content' => wp_slash( $content ),
 			),
 			true
 		);

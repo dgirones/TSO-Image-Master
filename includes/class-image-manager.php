@@ -51,6 +51,16 @@ class TSOIMMA_Image_Manager {
         $max_bytes  = 2 * MB_IN_BYTES;
         $extensions = array( 'php', 'html', 'css', 'json' );
 
+        if ( ! function_exists( 'WP_Filesystem' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+        global $wp_filesystem;
+        WP_Filesystem();
+        if ( ! is_object( $wp_filesystem ) || ! method_exists( $wp_filesystem, 'get_contents' ) ) {
+            self::$theme_files_cache = $files;
+            return self::$theme_files_cache;
+        }
+
         foreach ( $dirs as $dir ) {
             if ( $count >= $max_files || ! is_dir( $dir ) ) {
                 continue;
@@ -73,7 +83,7 @@ class TSOIMMA_Image_Manager {
                 if ( ! in_array( strtolower( $file->getExtension() ), $extensions, true ) ) {
                     continue;
                 }
-                $content = @file_get_contents( $file->getPathname() ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+                $content = $wp_filesystem->get_contents( $file->getPathname() );
                 if ( false === $content ) {
                     continue;
                 }
@@ -110,6 +120,49 @@ class TSOIMMA_Image_Manager {
     }
 
     /**
+     * Whether an option never holds a real image reference but DOES contain file
+     * names: our own options, transients, logs, caches, histories, queues, stats
+     * and other TSO / Media Cleaner data (e.g. tsosk_slow_query_log records every
+     * query run while scanning, so it "mentions" every image).
+     *
+     * @param string $name Option name.
+     * @return bool
+     */
+    public static function is_excluded_option( $name ) {
+        $name = (string) $name;
+
+        foreach ( array( '_transient', '_site_transient', 'tsoimma_', 'tso_image_master_', 'tsosk_', 'tso_', 'wpmc_' ) as $prefix ) {
+            if ( 0 === stripos( $name, $prefix ) ) {
+                return true;
+            }
+        }
+        foreach ( array( 'cache', 'history', 'stats', '_queue', '_log_' ) as $needle ) {
+            if ( false !== stripos( $name, $needle ) ) {
+                return true;
+            }
+        }
+        return (bool) preg_match( '/_logs?$/i', $name );
+    }
+
+    /**
+     * [ integer found in an option value => option_name ] (per request).
+     *
+     * @return array<int, string>
+     */
+    public static function get_option_ids_map() {
+        return self::get_option_id_map();
+    }
+
+    /**
+     * Contents of the active theme's template files (cached per request).
+     *
+     * @return array<string, string>
+     */
+    public static function get_theme_files_contents() {
+        return self::get_theme_files_cache();
+    }
+
+    /**
      * Find a wp_options row whose (possibly serialized/JSON, possibly
      * nested) value contains this exact attachment ID as a number — catches
      * theme/page-builder settings that store "their" logo/icon/header image
@@ -125,32 +178,45 @@ class TSOIMMA_Image_Manager {
      * @return string Matching option_name, or '' if none found.
      */
     public static function find_attachment_id_in_options( $attachment_id ) {
-        global $wpdb;
-
         $id = absint( $attachment_id );
         if ( $id <= 0 ) {
             return '';
         }
 
+        $map = self::get_option_id_map();
+        return isset( $map[ $id ] ) ? (string) $map[ $id ] : '';
+    }
+
+    /**
+     * Per-request map [ integer found in an option value => option_name ].
+     *
+     * Built with ONE query and one pass over the options table, instead of
+     * one LIKE scan + unserialize of up to 200 rows for every attachment
+     * checked — that per-image cost made the orphan scan hang once every
+     * image (not only unattached ones) had to go through it.
+     *
+     * @return array<int, string>
+     */
+    private static function get_option_id_map() {
+        global $wpdb;
+
+        static $map = null;
+        if ( null !== $map ) {
+            return $map;
+        }
+        $map = array();
+
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $rows = $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT option_name, option_value FROM {$wpdb->options}
-                 WHERE option_value LIKE %s
-                   AND option_name NOT LIKE %s
-                   AND option_name NOT LIKE %s
-                 LIMIT 200",
-                '%' . $wpdb->esc_like( (string) $id ) . '%',
-                $wpdb->esc_like( '_transient' ) . '%',
-                $wpdb->esc_like( '_site_transient' ) . '%'
-            )
+            "SELECT option_name, option_value FROM {$wpdb->options}
+             WHERE LENGTH(option_value) < 200000
+             AND option_value REGEXP '[0-9]'"
         );
 
-        if ( empty( $rows ) ) {
-            return '';
-        }
-
-        foreach ( $rows as $row ) {
+        foreach ( (array) $rows as $row ) {
+            if ( self::is_excluded_option( $row->option_name ) ) {
+                continue;
+            }
             $value = maybe_unserialize( $row->option_value );
             if ( is_string( $value ) ) {
                 $decoded = json_decode( $value, true );
@@ -158,12 +224,42 @@ class TSOIMMA_Image_Manager {
                     $value = $decoded;
                 }
             }
-            if ( self::value_tree_contains_id( $value, $id ) ) {
-                return (string) $row->option_name;
-            }
+            self::collect_ids_from_tree( $value, (string) $row->option_name, $map );
         }
 
-        return '';
+        return $map;
+    }
+
+    /**
+     * Walk a decoded option value and record every integer / numeric string
+     * (first option_name wins) — same matching rules as the old
+     * value_tree_contains_id().
+     *
+     * @param mixed                $data  Value (or sub-value).
+     * @param string               $name  Option name.
+     * @param array<int, string>   $map   Output map.
+     * @param int                  $depth Recursion guard.
+     * @return void
+     */
+    private static function collect_ids_from_tree( $data, $name, array &$map, $depth = 0 ) {
+        if ( $depth > 6 ) {
+            return;
+        }
+        if ( is_array( $data ) || is_object( $data ) ) {
+            foreach ( (array) $data as $item ) {
+                self::collect_ids_from_tree( $item, $name, $map, $depth + 1 );
+            }
+            return;
+        }
+        $int = null;
+        if ( is_int( $data ) ) {
+            $int = $data;
+        } elseif ( is_string( $data ) && ctype_digit( $data ) && strlen( $data ) < 12 ) {
+            $int = (int) $data;
+        }
+        if ( null !== $int && $int > 0 && ! isset( $map[ $int ] ) ) {
+            $map[ $int ] = $name;
+        }
     }
 
     /**
@@ -190,20 +286,18 @@ class TSOIMMA_Image_Manager {
         }
 
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-        $row = $wpdb->get_row(
+        $names = $wpdb->get_col(
             $wpdb->prepare(
-                "SELECT option_name FROM {$wpdb->options}
-                 WHERE option_value LIKE %s
-                   AND option_name NOT LIKE %s
-                   AND option_name NOT LIKE %s
-                 LIMIT 1",
-                '%' . $wpdb->esc_like( $filename ) . '%',
-                $wpdb->esc_like( '_transient' ) . '%',
-                $wpdb->esc_like( '_site_transient' ) . '%'
+                "SELECT option_name FROM {$wpdb->options} WHERE option_value LIKE %s LIMIT 200",
+                '%' . $wpdb->esc_like( $filename ) . '%'
             )
         );
-
-        return $row ? (string) $row->option_name : '';
+        foreach ( (array) $names as $name ) {
+            if ( ! self::is_excluded_option( $name ) ) {
+                return (string) $name;
+            }
+        }
+        return '';
     }
 
     /**
@@ -392,9 +486,20 @@ class TSOIMMA_Image_Manager {
             $url_pairs[ md5( $old_url ) ] = array( $old_url, $new_url );
         }
 
-        // Actualitzar guid
+        // Actualitzar el post_name (slug) de l'attachment ABANS del guid: wp_update_post()
+        // rellegeix el post amb get_post() (pot venir de la cache d'objectes, encara amb
+        // el guid antic) i reescriu TOTA la fila — si el guid ja s'hagués actualitzat,
+        // aquesta crida el tornaria a sobreescriure amb el valor vell de la cache.
+        wp_update_post( [
+            'ID'        => $attachment_id,
+            'post_name' => sanitize_title( $target_name ),
+        ] );
+
+        // Actualitzar guid. clean_post_cache() evita que una lectura posterior del post
+        // (per exemple via get_post()) serveixi el guid antic des de la cache d'objectes.
         global $wpdb;
         $wpdb->update( $wpdb->posts, array( 'guid' => $new_url ), array( 'ID' => $attachment_id ) );  // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+        clean_post_cache( $attachment_id );
 
         // Reemplaçar URLs a posts, postmeta i options (pares exactes + variants -WxH/-scaled).
         if ( ! empty( $url_pairs ) ) {
@@ -407,12 +512,6 @@ class TSOIMMA_Image_Manager {
             $target_name,
             $ext
         );
-
-        // Actualitzar el post_name (slug) de l'attachment
-        wp_update_post( [
-            'ID'        => $attachment_id,
-            'post_name' => sanitize_title( $target_name ),
-        ] );
 
         return [
             'attachment_id' => $attachment_id,
@@ -558,7 +657,7 @@ class TSOIMMA_Image_Manager {
             $file_path   = get_attached_file( $post->ID );
             $raw_size    = ( $file_path && file_exists( $file_path ) ) ? filesize( $file_path ) : 0;
             // Llegir mime directament del fitxer per tenir-lo actualitzat (fix bug WebP)
-            $real_mime   = ( $file_path && file_exists( $file_path ) ) ? mime_content_type( $file_path ) : $post->post_mime_type;
+            $real_mime   = ( $file_path && file_exists( $file_path ) ) ? TSOIMMA_Optimizer::detect_mime( $file_path ) : $post->post_mime_type;
             $real_ext    = self::mime_to_ext( $real_mime );
             $alt_text    = (string) get_post_meta( $post->ID, '_wp_attachment_image_alt', true );
 
@@ -585,7 +684,7 @@ class TSOIMMA_Image_Manager {
         if ( $search !== '' ) {
             $items = array_values( array_filter( $items, function( $item ) use ( $search ) {
                 $base_filename = pathinfo( (string) $item['filename'], PATHINFO_FILENAME );
-                return self::starts_with_utf8( $base_filename, $search );
+                return self::matches_search_words( $base_filename . ' ' . (string) $item['title'], $search );
             } ) );
         }
 
@@ -609,6 +708,47 @@ class TSOIMMA_Image_Manager {
             'total_pages' => $total_pages,
             'page'        => $page,
         ];
+    }
+
+    /**
+     * Word-start search: every word typed must be the beginning of some word in
+     * the file name or title ("root" finds "despues-del-root", "curas" finds
+     * "chiste-curas-pederastas") — but "ar" still does not match "mar".
+     * Case-insensitive, no accent folding ("ñ" stays different from "n").
+     *
+     * @param string $haystack File name (no extension) + title.
+     * @param string $search   Text typed by the user.
+     * @return bool
+     */
+    private static function matches_search_words( $haystack, $search ) {
+        $split = static function ( $text ) {
+            $text  = function_exists( 'mb_strtolower' ) ? mb_strtolower( (string) $text, 'UTF-8' ) : strtolower( (string) $text );
+            $parts = preg_split( '/[^\p{L}\p{N}]+/u', $text, -1, PREG_SPLIT_NO_EMPTY );
+            if ( false === $parts ) {
+                $parts = preg_split( '/[^a-z0-9]+/i', $text, -1, PREG_SPLIT_NO_EMPTY );
+            }
+            return is_array( $parts ) ? $parts : array();
+        };
+
+        $needles = $split( $search );
+        if ( empty( $needles ) ) {
+            return true;
+        }
+        $tokens = $split( $haystack );
+
+        foreach ( $needles as $needle ) {
+            $hit = false;
+            foreach ( $tokens as $token ) {
+                if ( 0 === strncmp( $token, $needle, strlen( $needle ) ) ) {
+                    $hit = true;
+                    break;
+                }
+            }
+            if ( ! $hit ) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -737,9 +877,9 @@ class TSOIMMA_Image_Manager {
              FROM {$wpdb->posts} p
              INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID
              WHERE pm.meta_value = %s
-               AND pm.meta_key NOT IN ('_thumbnail_id','_wp_attachment_metadata','_wp_attached_file')
+               AND pm.meta_key NOT IN ('_thumbnail_id','_wp_attachment_metadata','_wp_attached_file','_edit_last','_edit_lock','_menu_item_object_id')
                AND p.post_status NOT IN ('trash','auto-draft')
-               AND p.post_type NOT IN ('attachment','revision') LIMIT 10",
+               AND p.post_type NOT IN ('attachment','revision','nav_menu_item','gal_display_source','displayed_gallery','display_type','lightbox_library','ngg_album','ngg_gallery','ngg_pictures','saved_displayed_gallery','attached_gallery') LIMIT 10",
             $attachment_id
         ) ), 'meta (ACF/Elementor)' );
 

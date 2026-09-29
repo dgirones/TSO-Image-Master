@@ -5,7 +5,7 @@ Tags: image optimization, webp, avif, media library, pdf compression
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.0.2
+Stable tag: 2.0.6
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -17,7 +17,7 @@ TSO Image Master is a complete media management and image optimization plugin fo
 
 **Overview** — Site health metrics (image count, missing alt, TSO backups, space saved, server engines). Bulk-fill missing or weak alt text. Scan for duplicate image files. Configure backup retention and watch the background optimize queue.
 
-**Image Optimizer** — Convert images to WebP, AVIF (when GD supports it), JPG, or PNG. Set quality and dimensions, replace originals, and update content links. Bulk optimize runs in the background via WP-Cron (5 images per batch). Choose how many images to show per page (21–105). Requires PHP GD (WebP strongly recommended).
+**Image Optimizer** — Convert images to WebP, AVIF (when GD supports it), JPG, or PNG. Set quality and dimensions, replace originals, and update content links (posts, custom fields, options, widgets and Elementor pages). Bulk optimize runs in the background via WP-Cron (5 images per batch). Choose how many images to show per page (21–105). Requires PHP GD (WebP strongly recommended).
 
 **Orphaned Image Finder** — Detects Media Library images that are not referenced in posts, pages, widgets, meta, theme Customizer settings, FSE templates/parts/patterns, term meta, or menu items. Paginated batch scanning helps avoid timeouts on large sites.
 
@@ -138,25 +138,32 @@ On Overview, **Scan duplicates** groups Media Library files with the same MD5 ha
 
 For releases before 2.0.0, see CHANGELOG.txt in the plugin folder.
 
-= 2.0.2 =
-* Fixed: Duplicate entries
-* Fixed: History
-* Fixed: UI multiple corrections, day/night.
-* Fixed: language switcher apply the detected/saved language in wordpress.
+= 2.0.6 =
+* New: "Image Sizes" tab has a "Delete all" button per size and a "View backups" panel listing every saved backup zip with a direct download link, so a full cleanup and finding its backup afterwards each take one click.
+* New: The "View backups" panel now also has a "Delete" button per backup file, to remove one manually without waiting for the retention cleanup.
+* New: The "View backups" panel now shows how many files each backup contains, next to its size.
 
-= 2.0.1 =
-* Fixed: Optimize actions appear in History immediately (no longer wait for thumbnails).
-* Fixed: Recover missing History rows from existing TSO backups when a prior deferred log was lost.
-* Fixed: Auto-optimize logs History right after convert/metadata (thumbs failures no longer hide the entry; rollback removes a premature row).
-* Improved: Removed duplicate auto-optimize history/stats from the Auto tab (use History filter instead).
-* Added: Hover preview for History thumbnails (same as optimize modal).
+= 2.0.5 =
+* New: Checkbox below the media uploader (Media > Add New and the media modal) to turn automatic image optimization on or off for each upload; it remembers your last choice as soon as you change it.
+* New: "Image Sizes" tab: scans the media library and groups every generated size file (thumbnail, medium, wp_review...) by size name, flagging which ones are no longer registered by any active theme/plugin, so you can review and bulk-delete just those size files (never the original) with a sample-first safety flow.
+* Fixed: "Image Sizes" tab now only lists sizes that are actually safe to delete (still-registered sizes and WordPress's own site-icon sizes are excluded), instead of showing every unregistered size and requiring the admin to tell them apart.
+* New: "Image Sizes" tab now backs up every file into a single zip (under uploads/tso-image-master/, reusing the existing backup retention settings) right before deleting a batch, so a size cleanup of hundreds of files is never a one-way trip.
+* Fixed: Renaming a file (SEO & File Names) could silently revert the attachment's guid back to the old URL right after saving, due to a stale object-cache read; the new filename/URL now stick correctly.
+* Fixed: Optimize/convert responses (single and bulk) no longer include the server's absolute file paths, avoiding unnecessary disclosure of server/hosting directory structure.
 
-= 2.0.0 =
-* Added: Day / night UI themes with Auto mode based on sunrise and sunset (follows WordPress timezone).
-* Improved: History legacy table merge — single discovery query, skip when already merged.
-* Improved: SQL table identifiers use `$wpdb->prepare()` `%i` placeholders (Requires at least WordPress 6.2).
-* Fixed: Missing translations.
+= 2.0.4 =
+* Fixed: Image URL rewriting after conversion no longer corrupts or loses serialized custom fields/options (e.g. block widgets) and now also updates Elementor/JSON-escaped URLs.
 
-For earlier releases, see CHANGELOG.txt in the plugin folder.
-
+= 2.0.3 =
+* Fixed: Merging duplicate images no longer strips backslashes from post content (could trigger "unexpected or invalid content" in the block editor).
+* Fixed: Image search (Optimize / SEO) now matches the start of any word in the file name or title, not only the start of the name.
+* Fixed: Orphan scan now detects images used via [gallery ids] shortcodes, image blocks and wp-image classes, and scans much faster (one reference index per scan instead of several queries per image); logs, caches and other plugins' data no longer count as image usage.
+* Fixed: Orphan detection no longer counts post_parent, revisions, trashed/auto-draft posts, internal meta keys or the plugin's own options as image usage.
+* Fixed: Image detail no longer lists 'attached only' posts as usage; shown separately.
+* Fixed: Converting or restoring an image no longer overwrites another file that already has the target file name (e.g. foo.png and foo.jpg both converted to foo.webp).
+* Fixed: JPEG photos keep their orientation (EXIF) when converted, resized or regenerated.
+* Fixed: File type detection no longer causes a fatal error on servers without the PHP fileinfo extension.
+* Fixed: Broken-link repair after optimizing no longer redirects same-named files from other folders to the wrong image.
+* Fixed: A failed restore (e.g. no backup available) no longer leaves the image locked for 15 minutes.
+* Fixed: PDF compression no longer stays in 'processing' forever when the compressed file is smaller than 10 KB.
 

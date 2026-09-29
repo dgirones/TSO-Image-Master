@@ -19,7 +19,7 @@ class TSOIMMA_PDF_Compressor {
             return new WP_Error( 'not_found', 'Fitxer PDF no trobat.' );
         }
 
-        $mime = mime_content_type( $file_path );
+        $mime = TSOIMMA_Optimizer::detect_mime( $file_path );
         if ( $mime !== 'application/pdf' ) {
             return new WP_Error( 'not_pdf', 'El fitxer no és un PDF.' );
         }
@@ -267,7 +267,7 @@ class TSOIMMA_PDF_Compressor {
         if ( ! $file_path || ! file_exists( $file_path ) ) {
             return new WP_Error( 'not_found', 'Fitxer PDF no trobat.' );
         }
-        if ( mime_content_type( $file_path ) !== 'application/pdf' ) {
+        if ( TSOIMMA_Optimizer::detect_mime( $file_path ) !== 'application/pdf' ) {
             return new WP_Error( 'not_pdf', 'El fitxer no és un PDF.' );
         }
         if ( self::is_pdf_encrypted( $file_path ) ) {
@@ -391,7 +391,10 @@ class TSOIMMA_PDF_Compressor {
         clearstatcache( true, $temp_path );
         $current_size = filesize( $temp_path );
 
-        if ( $current_size < 10240 ) {
+        // Small outputs (< 10 KB) are only trusted after 30 s, otherwise a PDF that
+        // legitimately compresses below 10 KB would stay in "processing" forever.
+        $elapsed_small = $started_at > 0 ? ( time() - $started_at ) : 0;
+        if ( $current_size <= 0 || ( $current_size < 10240 && $elapsed_small < 30 ) ) {
             return array( 'status' => 'processing' );
         }
 

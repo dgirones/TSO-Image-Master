@@ -61,6 +61,7 @@ delete_option( 'tsoimma_version' );
 delete_option( 'tsoimma_job_queue' );
 delete_option( 'tsoimma_backup_retention' );
 delete_option( 'tsoimma_queue_lock' );
+delete_transient( 'tsoimma_orphan_index' );
 
 // ── Clear scheduled cron events ───────────────────────────────────
 wp_clear_scheduled_hook( 'tsoimma_history_purge' );
@@ -104,6 +105,9 @@ foreach ( $tsoimma_meta_keys as $tsoimma_meta_key ) {
 	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.SlowDBQuery.slow_db_query_meta_key
 	$wpdb->delete( $wpdb->postmeta, array( 'meta_key' => $tsoimma_meta_key ), array( '%s' ) );
 }
+
+// ── Remove per-user upload checkbox preference ────────────────────
+delete_metadata( 'user', 0, 'tsoimma_upload_auto_choice', '', true );
 
 // ── Delete any remaining upload transients ────────────────────────
 // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching

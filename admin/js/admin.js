@@ -112,6 +112,7 @@
         initSearch();
         initOptimizeTab();
         initOrphansTab();
+        initSizesTab();
         initSeoTab();
         initModal();
         initPdfTab();
@@ -1272,7 +1273,53 @@
                 per_page_70: '📄 70 / página',
                 per_page_105: '📄 105 / página',
                 hist_seo_bulk: 'Rellenado masivo',
-                hist_seo_auto: 'Al subir'
+                hist_seo_auto: 'Al subir',
+                tab_sizes: 'Tamaños',
+                sizes_title: 'Tamaños huérfanos no registrados',
+                sizes_show_backups: 'Ver copias de seguridad',
+                sizes_backups_title: 'Copias de seguridad guardadas',
+                sizes_backups_desc: 'Se guardan dentro de uploads/tso-image-master/ y se limpian solas según la retención configurada en el Resumen.',
+                sizes_backups_loading: 'Cargando...',
+                sizes_no_backups: 'No se han encontrado copias de seguridad.',
+                sizes_backups_count_label: 'copia(s) de seguridad',
+                sizes_backups_col_date: 'Fecha',
+                sizes_backups_col_count: 'Ficheros',
+                sizes_backups_batch_tag: 'lote de tamaño',
+                sizes_backups_download: 'Descargar',
+                sizes_backups_delete: 'Eliminar',
+                confirm_delete_backup: 'Eliminar permanentemente la copia de seguridad "{name}"? Esta acción NO se puede deshacer.',
+                sizes_desc: 'Agrupa todos los ficheros generados por plugins/temas antiguos que ya no están registrados ni en uso actualmente en WordPress. Nunca toca el fichero original ni los demás tamaños.',
+                scan_sizes: '📐 Escanear tamaños',
+                sizes_scanning_msg: 'Escaneando la biblioteca de medios...',
+                sizes_none_found: 'No se han encontrado ficheros de tamaño generados.',
+                sizes_all_clean: 'Nada que eliminar — todos los tamaños generados están en uso o protegidos por WordPress.',
+                sizes_names_label: 'nombres de tamaño',
+                sizes_images_scanned: 'imágenes escaneadas',
+                sizes_col_name: 'Nombre de tamaño',
+                sizes_col_dimensions: 'Dimensiones',
+                sizes_col_count: 'Ficheros',
+                sizes_col_space: 'Espacio',
+                sizes_col_registered: '¿Registrado ahora?',
+                sizes_registered_yes: 'Sí',
+                sizes_registered_no: 'No — huérfano',
+                sizes_view_files: 'Ver ficheros',
+                sizes_delete_all: 'Eliminar todas',
+                sizes_delete_all_tip: 'Se guardará automáticamente una copia de seguridad zip de todos los ficheros antes de eliminarlos.',
+                sizes_back: '← Volver a la lista de tamaños',
+                sizes_irreversible_note: '⚠️ Eliminar ficheros de tamaño es <strong>irreversible</strong>. Si no estás seguro, prueba primero con una muestra pequeña y revisa el sitio antes de continuar con el resto.',
+                sizes_select_sample: 'Seleccionar muestra (3)',
+                sizes_detail_title_prefix: 'Tamaño:',
+                sizes_load_more: 'Cargar más',
+                sizes_deleted_msg: 'fichero(s) de tamaño eliminados',
+                sizes_backup_made: 'Copia de seguridad guardada en: {path}',
+                sizes_backup_failed: 'No se pudo hacer copia de seguridad antes de eliminar',
+                confirm_delete_size_sample: '¿Eliminar estos {n} ficheros de "{size}" como prueba? Comprueba que tu sitio sigue funcionando bien antes de eliminar el resto.',
+                confirm_delete_size_all: 'Esto eliminará permanentemente {n} ficheros de tamaño "{size}" ({bytes}). Esta acción NO se puede deshacer. ¿Continuar?',
+                action_size_deleted: 'Tamaño eliminado',
+                filter_size_deleted: '📐 Tamaños eliminados',
+                hist_size_deleted_detail: 'Tamaño',
+                sizes_protected_core: '🔒 Protegida (WP)',
+                sizes_protected_core_tip: 'Generada por el propio WordPress para el icono del sitio/favicon, fuera del registro normal de tamaños — no es un resto, consérvala.'
             },
             en: {
                 confirm_delete: 'Delete selected images? This cannot be undone.',
@@ -1462,7 +1509,53 @@
                 per_page_70: '📄 70 per page',
                 per_page_105: '📄 105 per page',
                 hist_seo_bulk: 'Bulk fill',
-                hist_seo_auto: 'On upload'
+                hist_seo_auto: 'On upload',
+                tab_sizes: 'Image Sizes',
+                sizes_title: 'Orphaned, unregistered sizes',
+                sizes_show_backups: 'View backups',
+                sizes_backups_title: 'Saved backups',
+                sizes_backups_desc: 'Saved inside uploads/tso-image-master/ and cleaned up automatically per the retention settings on the Overview tab.',
+                sizes_backups_loading: 'Loading...',
+                sizes_no_backups: 'No backup files found.',
+                sizes_backups_count_label: 'backup file(s)',
+                sizes_backups_col_date: 'Date',
+                sizes_backups_col_count: 'Files',
+                sizes_backups_batch_tag: 'size batch',
+                sizes_backups_download: 'Download',
+                sizes_backups_delete: 'Delete',
+                confirm_delete_backup: 'Permanently delete backup "{name}"? This CANNOT be undone.',
+                sizes_desc: 'Groups every file generated by old plugins/themes that is no longer registered or in use in WordPress. Never touches the original file or the other sizes.',
+                scan_sizes: '📐 Scan sizes',
+                sizes_scanning_msg: 'Scanning the media library...',
+                sizes_none_found: 'No generated size files found.',
+                sizes_all_clean: 'Nothing to delete — every generated size is either still in use or protected by WordPress.',
+                sizes_names_label: 'size names',
+                sizes_images_scanned: 'images scanned',
+                sizes_col_name: 'Size name',
+                sizes_col_dimensions: 'Dimensions',
+                sizes_col_count: 'Files',
+                sizes_col_space: 'Space',
+                sizes_col_registered: 'Registered now?',
+                sizes_registered_yes: 'Yes',
+                sizes_registered_no: 'No — orphaned',
+                sizes_view_files: 'View files',
+                sizes_delete_all: 'Delete all',
+                sizes_delete_all_tip: 'A backup zip of every file will be saved automatically before deleting.',
+                sizes_back: '← Back to size list',
+                sizes_irreversible_note: '⚠️ Deleting size files is <strong>irreversible</strong>. If unsure, try a small sample first and check your site before deleting the rest.',
+                sizes_select_sample: 'Select sample (3)',
+                sizes_detail_title_prefix: 'Size:',
+                sizes_load_more: 'Load more',
+                sizes_deleted_msg: 'size file(s) deleted',
+                sizes_backup_made: 'Backup saved to: {path}',
+                sizes_backup_failed: 'No backup could be made before deleting',
+                confirm_delete_size_sample: 'Delete these {n} "{size}" files as a test? Check that your site still works before deleting the rest.',
+                confirm_delete_size_all: 'This will permanently delete {n} "{size}" size files ({bytes}). This CANNOT be undone. Continue?',
+                action_size_deleted: 'Size deleted',
+                filter_size_deleted: '📐 Sizes deleted',
+                hist_size_deleted_detail: 'Size',
+                sizes_protected_core: '🔒 Protected (WP)',
+                sizes_protected_core_tip: 'Generated by WordPress itself for the site icon/favicon, outside the normal size registry — not a leftover, keep it.'
             },
             ca: {
                 confirm_delete: 'Eliminar les imatges seleccionades? Aquesta acció és irreversible.',
@@ -1699,7 +1792,53 @@
                 per_page_70: '📄 70 / pàgina',
                 per_page_105: '📄 105 / pàgina',
                 hist_seo_bulk: 'Omplerta en bloc',
-                hist_seo_auto: 'En pujar'
+                hist_seo_auto: 'En pujar',
+                tab_sizes: 'Mides',
+                sizes_title: 'Mides òrfenes no registrades',
+                sizes_show_backups: 'Veure còpies de seguretat',
+                sizes_backups_title: 'Còpies de seguretat desades',
+                sizes_backups_desc: 'Es desen dins uploads/tso-image-master/ i es netegen soles segons la retenció configurada al Resum.',
+                sizes_backups_loading: 'Carregant...',
+                sizes_no_backups: 'No s\'han trobat còpies de seguretat.',
+                sizes_backups_count_label: 'còpia(es) de seguretat',
+                sizes_backups_col_date: 'Data',
+                sizes_backups_col_count: 'Fitxers',
+                sizes_backups_batch_tag: 'lot de mida',
+                sizes_backups_download: 'Descarregar',
+                sizes_backups_delete: 'Eliminar',
+                confirm_delete_backup: 'Eliminar permanentment la còpia de seguretat "{name}"? Aquesta acció NO es pot desfer.',
+                sizes_desc: 'Agrupa tots els fitxers generats per antics plugins/temes que ja no estan registrats ni en ús actualment a WordPress. Mai toca el fitxer original ni les altres mides.',
+                scan_sizes: '📐 Escanejar mides',
+                sizes_scanning_msg: 'Escanejant la biblioteca de mitjans...',
+                sizes_none_found: 'No s\'han trobat fitxers de mida generats.',
+                sizes_all_clean: 'Res per eliminar — totes les mides generades estan en ús o protegides per WordPress.',
+                sizes_names_label: 'noms de mida',
+                sizes_images_scanned: 'imatges escanejades',
+                sizes_col_name: 'Nom de mida',
+                sizes_col_dimensions: 'Dimensions',
+                sizes_col_count: 'Fitxers',
+                sizes_col_space: 'Espai',
+                sizes_col_registered: 'Registrada ara?',
+                sizes_registered_yes: 'Sí',
+                sizes_registered_no: 'No — òrfena',
+                sizes_view_files: 'Veure fitxers',
+                sizes_delete_all: 'Eliminar totes',
+                sizes_delete_all_tip: 'Es desarà automàticament una còpia de seguretat zip de tots els fitxers abans d\'eliminar-los.',
+                sizes_back: '← Tornar a la llista de mides',
+                sizes_irreversible_note: '⚠️ Eliminar fitxers de mida és <strong>irreversible</strong>. Si no n\'estàs segur, prova primer amb una mostra petita i revisa el lloc abans de continuar amb la resta.',
+                sizes_select_sample: 'Seleccionar mostra (3)',
+                sizes_detail_title_prefix: 'Mida:',
+                sizes_load_more: 'Carregar més',
+                sizes_deleted_msg: 'fitxer(s) de mida eliminats',
+                sizes_backup_made: 'Còpia de seguretat desada a: {path}',
+                sizes_backup_failed: 'No s\'ha pogut fer còpia de seguretat abans d\'eliminar',
+                confirm_delete_size_sample: 'Eliminar aquests {n} fitxers de "{size}" com a prova? Comprova que el teu lloc segueix funcionant bé abans d\'eliminar la resta.',
+                confirm_delete_size_all: 'Això eliminarà permanentment {n} fitxers de mida "{size}" ({bytes}). Aquesta acció NO es pot desfer. Continuar?',
+                action_size_deleted: 'Mida eliminada',
+                filter_size_deleted: '📐 Mides eliminades',
+                hist_size_deleted_detail: 'Mida',
+                sizes_protected_core: '🔒 Protegida (WP)',
+                sizes_protected_core_tip: 'Generada pel propi WordPress per a la icona del lloc/favicon, fora del registre normal de mides — no és una resta, conserva-la.'
             }
         };
         [ 'ca', 'es', 'en' ].forEach(function(l) {
@@ -3785,7 +3924,10 @@
     // ================================================================
     function initOrphansTab() {
         $('#imp-scan-orphans').on('click', function() {
+            // Requests stay small (max 200 images) so a slow host never hits its
+            // PHP/proxy timeout (503); the selected value only caps the batch size.
             var limit = parseInt($('#imp-orphan-limit').val(), 10);
+            if (!limit || limit > 200) { limit = 200; }
             scanOrphans(limit, 0, []);
         });
         $(document).on('click', '#imp-orphans-grid .imp-image-card', function(e) {
@@ -4050,6 +4192,373 @@
             updateRogueToolbar();
         };
     })();
+
+    // ================================================================
+    // IMAGE SIZES TAB
+    // ================================================================
+    function initSizesTab() {
+        var sizesFound      = [];
+        var lastTotalImages = 0;
+        var detailSizeName  = '';
+        var detailItems     = [];
+        var detailTotal     = 0;
+        var detailOffset    = 0;
+        var detailLimit     = 60;
+        var detailSelected  = new Set();
+
+        $('#imp-scan-sizes').on('click', function() {
+            var btn = $(this);
+            btn.prop('disabled', true);
+            $('#imp-sizes-result, #imp-sizes-detail').hide();
+            $('#imp-sizes-loading').show();
+            ajax('tsoimma_scan_sizes', {}, function(data) {
+                btn.prop('disabled', false);
+                $('#imp-sizes-loading').hide();
+                sizesFound      = data.sizes || [];
+                lastTotalImages = data.total_images || 0;
+                renderSizesTable();
+                $('#imp-sizes-result').show();
+            }, function(err) {
+                btn.prop('disabled', false);
+                $('#imp-sizes-loading').hide();
+                alert((L.error_prefix || 'Error: ') + err);
+            });
+        });
+
+        // Toggle + (lazy) load the "where are my backups" panel — the
+        // question kept coming up because until now the only way to find
+        // a size-cleanup backup zip was to remember the path shown in an
+        // alert right after deleting. This lists every backup on disk
+        // (per-original copies AND size zips) with a direct download link.
+        var backupsLoaded = false;
+        $('#imp-show-backups').on('click', function() {
+            var panel = $('#imp-backups-panel');
+            if (panel.is(':visible')) {
+                panel.hide();
+                return;
+            }
+            panel.show();
+            if (backupsLoaded) return;
+            $('#imp-backups-list-wrap').html('<div class="imp-loading">' + escHtml(uiText('sizes_backups_loading', 'Loading...')) + '</div>');
+            ajax('tsoimma_list_backups', {}, function(data) {
+                backupsLoaded = true;
+                renderBackupsList(data);
+            }, function(err) {
+                $('#imp-backups-list-wrap').html('<div class="imp-loading">' + (L.error_prefix || 'Error: ') + escHtml(err) + '</div>');
+            });
+        });
+
+        function renderBackupsList(data) {
+            var items = data.items || [];
+            if (!items.length) {
+                $('#imp-backups-summary').text('');
+                $('#imp-backups-list-wrap').html('<div class="imp-loading" style="color:var(--imp-success)">✓ ' + escHtml(uiText('sizes_no_backups', 'No backup files found.')) + '</div>');
+                return;
+            }
+
+            $('#imp-backups-summary').text(
+                data.total_count + ' ' + uiText('sizes_backups_count_label', 'backup file(s)') + ' · ' + (data.total_bytes_h || '')
+            );
+
+            var html = '<div class="imp-history-table-container"><table class="imp-history-table"><thead><tr>' +
+                '<th>' + uiText('sizes_col_name', 'Size name') + '</th>' +
+                '<th>' + uiText('sizes_backups_col_date', 'Date') + '</th>' +
+                '<th>' + uiText('sizes_backups_col_count', 'Files') + '</th>' +
+                '<th>' + uiText('sizes_col_space', 'Space') + '</th>' +
+                '<th></th>' +
+                '</tr></thead><tbody>';
+            items.forEach(function(item) {
+                html += '<tr>' +
+                    '<td style="font-family:var(--imp-mono);font-size:12px">' + escHtml(item.name) + (item.is_size_batch ? ' <span class="imp-badge-orphan" style="background:var(--imp-accent2)">' + escHtml(uiText('sizes_backups_batch_tag', 'size batch')) + '</span>' : '') + '</td>' +
+                    '<td>' + escHtml(item.date) + '</td>' +
+                    '<td>' + (item.file_count || 0) + '</td>' +
+                    '<td>' + escHtml(item.bytes_h) + '</td>' +
+                    '<td>' +
+                        '<a href="' + escHtml(item.url) + '" class="imp-btn imp-btn-sm imp-btn-ghost" target="_blank" rel="noopener">' + escHtml(uiText('sizes_backups_download', 'Download')) + '</a> ' +
+                        '<button type="button" class="imp-btn imp-btn-sm imp-btn-danger imp-backups-delete-btn" data-path="' + escHtml(item.relative_path) + '" data-name="' + escHtml(item.name) + '">' + escHtml(uiText('sizes_backups_delete', 'Delete')) + '</button>' +
+                    '</td>' +
+                    '</tr>';
+            });
+            html += '</tbody></table></div>';
+            $('#imp-backups-list-wrap').html(html);
+        }
+
+        $(document).on('click', '.imp-backups-delete-btn', function() {
+            var btn  = $(this);
+            var path = btn.data('path');
+            var name = btn.data('name');
+            var msg = uiText('confirm_delete_backup', 'Permanently delete backup "{name}"? This CANNOT be undone.').replace('{name}', name);
+            if (!confirm(msg)) return;
+
+            btn.prop('disabled', true);
+            ajax('tsoimma_delete_backup_file', { relative_path: path }, function() {
+                btn.closest('tr').remove();
+                // Re-fetch instead of just decrementing locally, so the
+                // count/total-size line above the table always matches
+                // what's actually left on disk.
+                backupsLoaded = false;
+                ajax('tsoimma_list_backups', {}, function(data) {
+                    backupsLoaded = true;
+                    renderBackupsList(data);
+                }, function() {});
+            }, function(err) {
+                btn.prop('disabled', false);
+                alert((L.error_prefix || 'Error: ') + err);
+            });
+        });
+
+        function renderSizesTable() {
+            var wrap = $('#imp-sizes-table-wrap');
+            if (!sizesFound.length) {
+                wrap.html('<div class="imp-loading" style="color:var(--imp-success)">✓ ' + escHtml(uiText('sizes_none_found', 'No generated size files found.')) + '</div>');
+                $('#imp-sizes-summary').text('');
+                return;
+            }
+
+            // Only show sizes that are actually safe to delete: still
+            // registered (in active use) or core-protected (site icon)
+            // sizes are never shown here, so every row on screen can be
+            // deleted with no further judgment call from the admin.
+            var deletable = sizesFound.filter(function(row) {
+                return !row.registered && !row.protected;
+            });
+
+            if (!deletable.length) {
+                wrap.html('<div class="imp-loading" style="color:var(--imp-success)">✓ ' + escHtml(uiText('sizes_all_clean', 'Nothing to delete — every generated size is either still in use or protected by WordPress.')) + '</div>');
+                $('#imp-sizes-summary').text('');
+                return;
+            }
+
+            var totalBytes = deletable.reduce(function(sum, s) { return sum + (s.bytes || 0); }, 0);
+            $('#imp-sizes-summary').text(
+                deletable.length + ' ' + uiText('sizes_names_label', 'size names') + ' · ' +
+                formatBytes(totalBytes) + ' · ' + lastTotalImages + ' ' + uiText('sizes_images_scanned', 'images scanned')
+            );
+
+            var html = '<div class="imp-history-table-container"><table class="imp-history-table"><thead><tr>' +
+                '<th>' + uiText('sizes_col_name', 'Size name') + '</th>' +
+                '<th>' + uiText('sizes_col_dimensions', 'Dimensions') + '</th>' +
+                '<th>' + uiText('sizes_col_count', 'Files') + '</th>' +
+                '<th>' + uiText('sizes_col_space', 'Space') + '</th>' +
+                '<th></th>' +
+                '</tr></thead><tbody>';
+            deletable.forEach(function(row) {
+                html += '<tr>' +
+                    '<td style="font-family:var(--imp-mono);font-size:12px">' + escHtml(row.name) + '</td>' +
+                    '<td>' + (row.width || row.height ? (row.width + '×' + row.height) : '—') + '</td>' +
+                    '<td>' + row.count + '</td>' +
+                    '<td>' + escHtml(row.bytes_h) + '</td>' +
+                    '<td>' +
+                        '<button type="button" class="imp-btn imp-btn-sm imp-btn-ghost imp-sizes-view-btn" data-size="' + escHtml(row.name) + '">' + escHtml(uiText('sizes_view_files', 'View files')) + '</button> ' +
+                        '<button type="button" class="imp-btn imp-btn-sm imp-btn-danger imp-sizes-delete-all-btn" data-size="' + escHtml(row.name) + '" data-count="' + row.count + '" data-bytes-h="' + escHtml(row.bytes_h) + '" title="' + escHtml(uiText('sizes_delete_all_tip', 'A backup zip of every file will be saved automatically before deleting.')) + '">' + escHtml(uiText('sizes_delete_all', 'Delete all')) + '</button>' +
+                    '</td>' +
+                    '</tr>';
+            });
+            html += '</tbody></table></div>';
+            wrap.html(html);
+        }
+
+        $(document).on('click', '.imp-sizes-view-btn', function() {
+            detailSizeName = $(this).data('size');
+            detailItems    = [];
+            detailTotal    = 0;
+            detailOffset   = 0;
+            detailSelected.clear();
+            $('#imp-sizes-detail-title').text(uiText('sizes_detail_title_prefix', 'Size:') + ' ' + detailSizeName);
+            $('#imp-sizes-detail').show();
+            $('html, body').animate({ scrollTop: $('#imp-sizes-detail').offset().top - 40 }, 200);
+            loadSizeFiles(true);
+        });
+
+        // One-click "delete every file of this size" straight from the
+        // summary row, without going through the "View files" grid first.
+        // A backup zip is always attempted before deleting (see
+        // TSOIMMA_Size_Scanner::delete_size_files()); if it fails, nothing
+        // is deleted and the error is shown instead.
+        $(document).on('click', '.imp-sizes-delete-all-btn', function() {
+            var btn     = $(this);
+            var size    = btn.data('size');
+            var count   = btn.data('count');
+            var bytesH  = btn.data('bytes-h');
+            var msg = uiText('confirm_delete_size_all', 'This will permanently delete {n} "{size}" size files ({bytes}). This CANNOT be undone. Continue?')
+                .replace('{n}', count).replace('{size}', size).replace('{bytes}', bytesH);
+            if (!confirm(msg)) return;
+
+            btn.prop('disabled', true);
+            ajax('tsoimma_delete_size_files', { size: size, all: 1 }, function(data) {
+                btn.prop('disabled', false);
+                var deletedCount = (data.deleted || []).length;
+
+                sizesFound = sizesFound.filter(function(s) { return s.name !== size; });
+                renderSizesTable();
+
+                if (detailSizeName === size) {
+                    $('#imp-sizes-detail').hide();
+                }
+
+                var msg2 = '✓ ' + deletedCount + ' ' + uiText('sizes_deleted_msg', 'size file(s) deleted') + ' (' + (data.bytes_freed_h || formatBytes(data.bytes_freed || 0)) + ').';
+                if (data.backup_ok && data.backup_zip) {
+                    msg2 += '\n' + uiText('sizes_backup_made', 'Backup saved to: {path}').replace('{path}', 'wp-content/uploads/' + data.backup_zip);
+                } else if (data.backup_error) {
+                    msg2 += '\n⚠ ' + uiText('sizes_backup_failed', 'No backup could be made before deleting') + ': ' + data.backup_error;
+                }
+                if (data.errors && data.errors.length) {
+                    msg2 += '\n' + (L.errors_label || 'Errors:') + '\n' + data.errors.map(function(e) { return 'ID ' + e.id + ': ' + e.error; }).join('\n');
+                }
+                alert(msg2);
+            }, function(err) {
+                btn.prop('disabled', false);
+                alert((L.error_prefix || 'Error: ') + err);
+            });
+        });
+
+        $('#imp-sizes-back').on('click', function() {
+            $('#imp-sizes-detail').hide();
+        });
+
+        function loadSizeFiles(reset) {
+            $('#imp-sizes-detail-loading').show();
+            ajax('tsoimma_list_size_files', { size: detailSizeName, limit: detailLimit, offset: detailOffset }, function(data) {
+                $('#imp-sizes-detail-loading').hide();
+                detailTotal = data.total || 0;
+                detailItems = reset ? (data.items || []) : detailItems.concat(data.items || []);
+                // Nothing left for this size (e.g. everything was just deleted):
+                // close the detail view instead of leaving an empty grid open.
+                if (reset && 0 === detailTotal) {
+                    $('#imp-sizes-detail').hide();
+                    return;
+                }
+                renderSizesGrid();
+                $('#imp-sizes-load-more').toggle(detailItems.length < detailTotal);
+            }, function(err) {
+                $('#imp-sizes-detail-loading').hide();
+                alert((L.error_prefix || 'Error: ') + err);
+            });
+        }
+
+        $('#imp-sizes-load-more').on('click', function() {
+            detailOffset += detailLimit;
+            loadSizeFiles(false);
+        });
+
+        function renderSizesGrid() {
+            var grid = $('#imp-sizes-grid');
+            grid.empty();
+            if (!detailItems.length) {
+                grid.html('<div class="imp-loading">' + escHtml(uiText('sizes_none_found', 'No generated size files found.')) + '</div>');
+                updateSizesToolbar();
+                return;
+            }
+            detailItems.forEach(function(item) {
+                var sel  = detailSelected.has(item.id) ? ' selected' : '';
+                var card = $('<div class="imp-image-card' + sel + '" data-id="' + item.id + '"></div>');
+                card.append('<div class="imp-card-checkbox' + (detailSelected.has(item.id) ? ' checked' : '') + '"></div>');
+                card.append('<img class="imp-card-thumb" src="' + escHtml(item.url) + '" alt="" loading="lazy">');
+                card.append(
+                    '<div class="imp-card-info">' +
+                    '<div class="imp-card-name">' + escHtml(item.filename) + '</div>' +
+                    '<div class="imp-card-meta">' +
+                    '<span class="imp-card-size">' + escHtml(item.bytes_h) + '</span>' +
+                    (item.width ? '<span class="imp-card-format">' + item.width + '×' + item.height + '</span>' : '') +
+                    '</div></div>'
+                );
+                grid.append(card);
+            });
+            updateSizesToolbar();
+        }
+
+        $(document).on('click', '#imp-sizes-grid .imp-image-card', function() {
+            var id = $(this).data('id');
+            if (detailSelected.has(id)) {
+                detailSelected.delete(id);
+                $(this).removeClass('selected').find('.imp-card-checkbox').removeClass('checked');
+            } else {
+                detailSelected.add(id);
+                $(this).addClass('selected').find('.imp-card-checkbox').addClass('checked');
+            }
+            updateSizesToolbar();
+        });
+
+        $('#imp-sizes-select-all').on('click', function() {
+            detailItems.forEach(function(i) { detailSelected.add(i.id); });
+            $('#imp-sizes-grid .imp-image-card').addClass('selected').find('.imp-card-checkbox').addClass('checked');
+            updateSizesToolbar();
+        });
+        $('#imp-sizes-deselect').on('click', function() {
+            detailSelected.clear();
+            $('#imp-sizes-grid .imp-image-card').removeClass('selected').find('.imp-card-checkbox').removeClass('checked');
+            updateSizesToolbar();
+        });
+        $('#imp-sizes-select-sample').on('click', function() {
+            var n = 3;
+            for (var i = 0; i < detailItems.length && detailSelected.size < n; i++) {
+                detailSelected.add(detailItems[i].id);
+            }
+            renderSizesGrid();
+        });
+
+        function updateSizesToolbar() {
+            var n = detailSelected.size;
+            $('#imp-sizes-detail-count').text(detailTotal + ' | ' + n + ' ' + (L.n_selected || 'selected'));
+            $('#imp-sizes-delete-selected').prop('disabled', n === 0);
+        }
+
+        $('#imp-sizes-delete-selected').on('click', function() {
+            var ids = Array.from(detailSelected);
+            if (!ids.length) return;
+            var isAll = (detailSelected.size >= detailTotal);
+            var msg;
+            if (isAll) {
+                var bytesSel = detailItems.reduce(function(s, i) { return detailSelected.has(i.id) ? s + (i.bytes || 0) : s; }, 0);
+                msg = uiText('confirm_delete_size_all', 'This will permanently delete {n} "{size}" size files ({bytes}). This CANNOT be undone. Continue?')
+                    .replace('{n}', ids.length).replace('{size}', detailSizeName).replace('{bytes}', formatBytes(bytesSel));
+            } else {
+                msg = uiText('confirm_delete_size_sample', 'Delete these {n} "{size}" files as a test? Check that your site still works before deleting the rest.')
+                    .replace('{n}', ids.length).replace('{size}', detailSizeName);
+            }
+            if (!confirm(msg)) return;
+            var btn = $(this);
+            btn.prop('disabled', true);
+            ajax('tsoimma_delete_size_files', { size: detailSizeName, ids: ids }, function(data) {
+                btn.prop('disabled', false);
+                var deletedIds = (data.deleted || []).map(function(d) { return d.id; });
+                detailSelected.clear();
+
+                var sizeRow = sizesFound.filter(function(s) { return s.name === detailSizeName; })[0];
+                if (sizeRow) {
+                    sizeRow.count -= deletedIds.length;
+                    sizeRow.bytes  = Math.max(0, sizeRow.bytes - (data.bytes_freed || 0));
+                    sizeRow.bytes_h = formatBytes(sizeRow.bytes);
+                    if (sizeRow.count <= 0) {
+                        sizesFound = sizesFound.filter(function(s) { return s.name !== detailSizeName; });
+                    }
+                    renderSizesTable();
+                }
+
+                var msg2 = '✓ ' + deletedIds.length + ' ' + uiText('sizes_deleted_msg', 'size file(s) deleted') + ' (' + (data.bytes_freed_h || formatBytes(data.bytes_freed || 0)) + ').';
+                if (data.backup_ok && data.backup_zip) {
+                    msg2 += '\n' + uiText('sizes_backup_made', 'Backup saved to: {path}').replace('{path}', 'wp-content/uploads/' + data.backup_zip);
+                } else if (data.backup_error) {
+                    msg2 += '\n⚠ ' + uiText('sizes_backup_failed', 'No backup could be made before deleting') + ': ' + data.backup_error;
+                }
+                if (data.errors && data.errors.length) {
+                    msg2 += '\n' + (L.errors_label || 'Errors:') + '\n' + data.errors.map(function(e) { return 'ID ' + e.id + ': ' + e.error; }).join('\n');
+                }
+                alert(msg2);
+
+                // Re-fetch this size from the server instead of just
+                // splicing the deleted rows out of the local page: this is
+                // what makes the grid keep showing whatever files remain
+                // (continuing into the next batch on its own) rather than
+                // going blank and forcing the admin to re-open "View files".
+                detailOffset = 0;
+                loadSizeFiles(true);
+            }, function(err) {
+                btn.prop('disabled', false);
+                alert((L.error_prefix || 'Error: ') + err);
+            });
+        });
+    }
 
     // ================================================================
     // SEO TAB
@@ -4437,8 +4946,11 @@
         if (!indirectPosts || !indirectPosts.length) {
             return '';
         }
+        var allParentOnly = indirectPosts.every(function(p) { return !!p.parent_only; });
         var html = '<div class="imp-used-in-title" style="margin-top:10px;">' +
-            uiText('dash_dup_used_indirect', 'Filename match only (this ID is not in the code)') +
+            (allParentOnly
+                ? uiText('dash_dup_attached_only', 'Only attached (not shown in content)')
+                : uiText('dash_dup_used_indirect', 'Filename match only (this ID is not in the code)')) +
             ' (' + indirectPosts.length + ')</div><div class="imp-used-in-list">';
         indirectPosts.forEach(function(p) {
             var editUrl = p.edit_url || (TSOIMMA.site_url + '/wp-admin/post.php?post=' + p.id + '&action=edit');
@@ -5062,7 +5574,8 @@
                 dup_merge_rewrite: uiText('action_dup_merge_rewrite', 'Merge: repointed'),
                 dup_merge_delete: uiText('action_dup_merge_delete', 'Merge: deleted'),
                 dup_delete_unused: uiText('action_dup_delete_unused', 'Duplicate deleted'),
-                dup_detach: uiText('action_dup_detach', 'Unlinked')
+                dup_detach: uiText('action_dup_detach', 'Unlinked'),
+                size_deleted: uiText('action_size_deleted', 'Size deleted')
             };
             var d    = item.details || {};
             var details = '';
@@ -5105,6 +5618,11 @@
             } else if (item.action_type === 'dup_detach') {
                 details += '<span style="font-size:11px;color:var(--imp-text-muted)">' +
                     escHtml(uiText('hist_detached_from', 'Unlinked from')) + ' ' + escHtml(d.old_parent_title || ('#' + d.old_parent_id)) +
+                    '</span>';
+            } else if (item.action_type === 'size_deleted') {
+                details += '<span style="font-size:11px;color:var(--imp-text-muted)">' +
+                    escHtml(uiText('hist_size_deleted_detail', 'Size')) + ': ' + escHtml(d.size || '') +
+                    (d.bytes ? ' · ' + formatBytes(d.bytes) : '') +
                     '</span>';
             }
             if (!details) details = '<span style="color:var(--imp-text-muted)">—</span>';

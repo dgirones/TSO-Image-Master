@@ -2,6 +2,27 @@
 
 Full release history for TSO Image Master. readme.txt (for WordPress.org) keeps only the 3 most recent versions in its own Changelog section; older versions live only here.
 
+= 2.0.5 =
+* New: Checkbox below the media uploader (Media > Add New and the media modal) to turn automatic image optimization on or off for each upload; it remembers your last choice as soon as you change it.
+* Fixed: Renaming a file (SEO & File Names) could silently revert the attachment's guid back to the old URL right after saving, due to a stale object-cache read; the new filename/URL now stick correctly.
+* Fixed: Optimize/convert responses (single and bulk) no longer include the server's absolute file paths, avoiding unnecessary disclosure of server/hosting directory structure.
+
+= 2.0.4 =
+* Fixed: Image URL rewriting after conversion no longer corrupts or loses serialized custom fields/options (e.g. block widgets) and now also updates Elementor/JSON-escaped URLs.
+
+= 2.0.3 =
+* Fixed: Merging duplicate images no longer strips backslashes from post content (could trigger "unexpected or invalid content" in the block editor).
+* Fixed: Image search (Optimize / SEO) now matches the start of any word in the file name or title, not only the start of the name.
+* Fixed: Orphan scan now detects images used via [gallery ids] shortcodes, image blocks and wp-image classes, and scans much faster (one reference index per scan instead of several queries per image); logs, caches and other plugins' data no longer count as image usage.
+* Fixed: Orphan detection no longer counts post_parent, revisions, trashed/auto-draft posts, internal meta keys or the plugin's own options as image usage.
+* Fixed: Image detail no longer lists 'attached only' posts as usage; shown separately.
+* Fixed: Converting or restoring an image no longer overwrites another file that already has the target file name (e.g. foo.png and foo.jpg both converted to foo.webp).
+* Fixed: JPEG photos keep their orientation (EXIF) when converted, resized or regenerated.
+* Fixed: File type detection no longer causes a fatal error on servers without the PHP fileinfo extension.
+* Fixed: Broken-link repair after optimizing no longer redirects same-named files from other folders to the wrong image.
+* Fixed: A failed restore (e.g. no backup available) no longer leaves the image locked for 15 minutes.
+* Fixed: PDF compression no longer stays in 'processing' forever when the compressed file is smaller than 10 KB.
+
 = 2.0.2 =
 * Fixed: Duplicate entries
 * Fixed: History

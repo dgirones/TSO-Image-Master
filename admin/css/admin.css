@@ -153,17 +153,18 @@
 
 /* ===== TABS ===== */
 .imp-tabs {
-    display: grid;
-    grid-template-columns: repeat(8, minmax(0, 1fr));
-    gap: 2px; padding: 4px;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 4px; padding: 4px;
     background: var(--imp-surface); border: 1px solid var(--imp-border);
     border-radius: var(--imp-radius); margin-bottom: 20px;
 }
 .imp-tab {
-    min-width: 0; width: 100%; padding: 9px 3px; border: none; background: transparent;
-    color: var(--imp-text-muted); font-family: var(--imp-font); font-size: 14px;
+    flex: 0 0 auto; min-width: 0; padding: 9px 16px; border: none; background: transparent;
+    color: var(--imp-text-muted); font-family: var(--imp-font); font-size: 15px;
     font-weight: 600; border-radius: var(--imp-radius-sm); cursor: pointer;
-    transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 3px;
+    transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 5px;
     white-space: nowrap; letter-spacing: -0.01em;
 }
 .imp-tab span:last-child {
@@ -1040,6 +1041,7 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
     .imp-tabs {
+        display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 }
@@ -1050,6 +1052,7 @@
    per row instead of 2 readable ones). */
 @media (max-width: 768px) {
     .imp-tabs {
+        display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }

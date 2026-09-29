@@ -169,6 +169,11 @@ class TSOIMMA_Ajax_Handler {
             $lock_token = '';
         }
 
+        // No exposar rutes absolutes de disc del servidor a la resposta JSON
+        // (el JS de l'admin no les fa servir; evitem revelar l'estructura del
+        // filesystem/hosting a qualsevol resposta AJAX capturable al navegador).
+        unset( $result['optimized_path'], $result['new_path'], $result['old_path'], $result['backup_path'], $result['fase2_rollback_path'] );
+
         wp_send_json_success( $result );
     }
 
@@ -377,6 +382,16 @@ class TSOIMMA_Ajax_Handler {
                 TSOIMMA_Queue::release_attachment_lock( $id, $lock_token );
             }
         }
+
+        // No exposar rutes absolutes de disc del servidor a la resposta JSON
+        // (mateixa raco que a l'optimize individual: el JS de l'admin no les fa servir).
+        foreach ( $results as &$one_result ) {
+            if ( is_array( $one_result ) ) {
+                unset( $one_result['optimized_path'], $one_result['new_path'], $one_result['old_path'], $one_result['backup_path'], $one_result['fase2_rollback_path'] );
+            }
+        }
+        unset( $one_result );
+
         wp_send_json_success( $results );
     }
 
@@ -806,6 +821,19 @@ class TSOIMMA_Ajax_Handler {
         // block (or a stale attribute after "Replace image") doesn't show
         // up here as if the image were genuinely embedded in that post.
         $ref_report = TSOIMMA_Image_Manager::get_attachment_reference_report( $id );
+        // A post_parent-only link ("attached" in the Media Library) is not real
+        // usage: show it apart from confirmed references, like the orphan finder.
+        $ref_direct   = array();
+        $ref_indirect = (array) $ref_report['indirect'];
+        foreach ( (array) $ref_report['direct'] as $ref_item ) {
+            if ( ! empty( $ref_item['parent_only'] ) ) {
+                array_unshift( $ref_indirect, $ref_item );
+            } else {
+                $ref_direct[] = $ref_item;
+            }
+        }
+        $ref_report['direct']   = $ref_direct;
+        $ref_report['indirect'] = $ref_indirect;
 
         wp_send_json_success( array(
             'id'               => $id,
@@ -846,23 +874,26 @@ class TSOIMMA_Ajax_Handler {
         if ( '' === $lock_token ) {
             wp_send_json_error( __( 'This image is already being optimized (queue or another request).', 'tso-image-master' ) );
         }
+        // wp_send_json_*() exits, so `finally` would never run: release the lock first, then respond.
         try {
             $result = TSOIMMA_Optimizer::revert( $id );
-            if ( is_wp_error( $result ) ) {
-                wp_send_json_error( $result->get_error_message() );
+            if ( ! is_wp_error( $result ) ) {
+                TSOIMMA_History::log(
+                    $id,
+                    'revert',
+                    array(
+                        'restored_ext'  => $result['restored_ext'],
+                        'restored_size' => $result['restored_size'],
+                    )
+                );
             }
-            TSOIMMA_History::log(
-                $id,
-                'revert',
-                array(
-                    'restored_ext'  => $result['restored_ext'],
-                    'restored_size' => $result['restored_size'],
-                )
-            );
-            wp_send_json_success( $result );
         } finally {
             TSOIMMA_Queue::release_attachment_lock( $id, $lock_token );
         }
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( $result->get_error_message() );
+        }
+        wp_send_json_success( $result );
     }
 
     // ----------------------------------------------------------------
@@ -1089,7 +1120,7 @@ class TSOIMMA_Ajax_Handler {
                     'png'  => 'image/png',
                     'gif'  => 'image/gif',
                 );
-                $real_mime = isset( $mime_map[ $real_ext ] ) ? $mime_map[ $real_ext ] : mime_content_type( $abs_path );
+                $real_mime = isset( $mime_map[ $real_ext ] ) ? $mime_map[ $real_ext ] : TSOIMMA_Optimizer::detect_mime( $abs_path );
 
                 // mime_content_type() can return false (missing fileinfo
                 // extension, unreadable file, exotic extension not in the
@@ -1682,6 +1713,55 @@ class TSOIMMA_Ajax_Handler {
         wp_send_json_success( $result );
     }
 
+    /**
+     * Llista, per a l'admin, tots els fitxers de backup existents sota
+     * uploads/tso-image-master/ (còpies individuals de l'optimitzador i
+     * zips de neteja de mides), amb URL de descàrrega directa.
+     */
+    public static function handle_tso_im_list_backups() {
+        tsoimma_verify_ajax_nonce();
+        self::require_admin();
+
+        wp_send_json_success( TSOIMMA_Backup_Manager::list_backups_for_admin( 100 ) );
+    }
+
+    /**
+     * Elimina un únic fitxer de backup (una còpia individual o un zip de
+     * neteja de mides) que l'admin ha triat esborrar manualment des del
+     * llistat de "Còpies de seguretat". La ruta es valida sempre contra
+     * uploads/tso-image-master/ i el sufix _tso_im_backup.<ext> abans
+     * d'esborrar res (TSOIMMA_Optimizer::resolve_backup_path()).
+     */
+    public static function handle_tso_im_delete_backup_file() {
+        tsoimma_verify_ajax_nonce();
+        self::require_admin();
+
+        $relative = tsoimma_get_ajax_post_text( 'relative_path' );
+        if ( '' === $relative ) {
+            wp_send_json_error( __( 'No backup file was specified.', 'tso-image-master' ) );
+        }
+
+        $upload_dir = wp_upload_dir();
+        $absolute   = trailingslashit( $upload_dir['basedir'] ) . ltrim( $relative, '/' );
+
+        $resolved = TSOIMMA_Optimizer::resolve_backup_path( $absolute, true );
+        if ( ! $resolved ) {
+            wp_send_json_error( __( 'This does not look like a valid backup file.', 'tso-image-master' ) );
+        }
+
+        TSOIMMA_Optimizer::delete_backup_file( $resolved );
+
+        if ( file_exists( $resolved ) ) {
+            wp_send_json_error( __( 'Could not delete the backup file.', 'tso-image-master' ) );
+        }
+
+        if ( class_exists( 'TSOIMMA_Dashboard' ) ) {
+            TSOIMMA_Dashboard::flush_backup_stats_cache();
+        }
+
+        wp_send_json_success( array( 'deleted' => true ) );
+    }
+
     public static function handle_tso_im_scan_duplicates() {
         tsoimma_verify_ajax_nonce();
         self::require_admin();
@@ -1785,6 +1865,90 @@ class TSOIMMA_Ajax_Handler {
         }
 
         wp_send_json_success( array( 'item' => TSOIMMA_Duplicate_Finder::refresh_item_usage( $attachment_id ) ) );
+    }
+
+    // ----------------------------------------------------------------
+    // Mides d'imatge: escanejar, llistar fitxers d'una mida i eliminar-los
+    // ----------------------------------------------------------------
+
+    /**
+     * Escaneja tota la biblioteca i agrupa els fitxers de mida generats
+     * per nom de mida (comptador, espai, si està registrada actualment).
+     */
+    public static function handle_tso_im_scan_sizes() {
+        tsoimma_verify_ajax_nonce();
+        self::require_admin();
+
+        wp_send_json_success( TSOIMMA_Size_Scanner::scan() );
+    }
+
+    /**
+     * Llista paginada d'attachments que tenen generada una mida concreta,
+     * per mostrar-los i deixar-ne triar una mostra o tots abans d'esborrar.
+     */
+    public static function handle_tso_im_list_size_files() {
+        tsoimma_verify_ajax_nonce();
+        self::require_admin();
+
+        $size  = tsoimma_get_ajax_post_key( 'size' );
+        $limit = tsoimma_get_ajax_post_int( 'limit', 60 );
+        $offset = tsoimma_get_ajax_post_int( 'offset' );
+
+        if ( '' === $size ) {
+            wp_send_json_error( __( 'No size name was specified.', 'tso-image-master' ) );
+        }
+
+        wp_send_json_success( TSOIMMA_Size_Scanner::list_for_size( $size, $limit, $offset ) );
+    }
+
+    /**
+     * Elimina, per als attachments indicats, únicament el fitxer generat
+     * d'una mida concreta (mai l'original ni les altres mides). Pensat
+     * per provar amb una mostra petita abans d'eliminar-ho tot.
+     */
+    public static function handle_tso_im_delete_size_files() {
+        tsoimma_verify_ajax_nonce();
+        self::require_admin();
+
+        $size     = tsoimma_get_ajax_post_key( 'size' );
+        $delete_all = tsoimma_get_ajax_post_bool( 'all' );
+
+        if ( '' === $size ) {
+            wp_send_json_error( __( 'No size name was specified.', 'tso-image-master' ) );
+        }
+
+        if ( $delete_all ) {
+            // "Delete all" button: resolve the full, current list of
+            // attachments for this size server-side rather than trusting a
+            // list of IDs the browser may have loaded from a stale page,
+            // so it always matches exactly what the summary table shows.
+            $ids = TSOIMMA_Size_Scanner::get_all_ids_for_size( $size );
+        } else {
+            $ids = tsoimma_get_ajax_post_int_array( 'ids' );
+        }
+
+        if ( empty( $ids ) ) {
+            wp_send_json_error( __( 'No attachment IDs were specified.', 'tso-image-master' ) );
+        }
+
+        $result = TSOIMMA_Size_Scanner::delete_size_files( $size, $ids );
+
+        if ( class_exists( 'TSOIMMA_History' ) ) {
+            foreach ( $result['deleted'] as $item ) {
+                TSOIMMA_History::log(
+                    $item['id'],
+                    'size_deleted',
+                    array(
+                        'size'       => $size,
+                        'file'       => $item['file'],
+                        'bytes'      => $item['bytes'],
+                        'backup_zip' => $result['backup_zip'],
+                    )
+                );
+            }
+        }
+
+        wp_send_json_success( $result );
     }
 
 }

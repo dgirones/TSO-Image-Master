@@ -26,7 +26,7 @@ class TSOIMMA_Optimizer {
             return new WP_Error( 'file_not_found', 'Fitxer no trobat.' );
         }
 
-        $mime = mime_content_type( $file_path );
+        $mime = self::detect_mime( $file_path );
         if ( strpos( $mime, 'image/' ) === false ) {
             return new WP_Error( 'not_image', 'El fitxer no és una imatge.' );
         }
@@ -154,6 +154,17 @@ class TSOIMMA_Optimizer {
         $upload_dir   = wp_upload_dir();
         $final_path   = $path_info['dirname'] . '/' . $path_info['filename'] . '.' . $new_ext;
         $old_path     = $file_path;
+
+        // Never overwrite another file that already has the target name (e.g. foo.png + foo.jpg -> foo.webp).
+        if ( ! self::extensions_match( $old_ext, $new_ext )
+            && wp_normalize_path( $final_path ) !== wp_normalize_path( $old_path )
+            && file_exists( $final_path ) ) {
+            self::delete_file_if_exists( $temp_path );
+            return new WP_Error(
+                'target_exists',
+                'Ja existeix un fitxer amb el nom de destí; no es sobreescriu (pot pertànyer a una altra imatge).'
+            );
+        }
         // Store backup in plugin-specific uploads subdirectory (WP.org guideline).
         $backup_path      = self::get_backup_path( $old_path, strtolower( $old_ext ) );
         $backup_preserved = false;
@@ -625,6 +636,10 @@ class TSOIMMA_Optimizer {
             $chunks[] = (string) $row->option_value;
         }
 
+        // Only repair URLs in this attachment's own folder: same file name in another
+        // folder belongs to a different attachment and must never be redirected here.
+        $own_dir_url = ! empty( $valid_urls[0] ) ? rawurldecode( untrailingslashit( dirname( (string) $valid_urls[0] ) ) ) : '';
+
         $seen_urls = array();
         foreach ( $chunks as $content ) {
             if ( '' === $content || false === strpos( $content, $base_name ) ) {
@@ -641,6 +656,10 @@ class TSOIMMA_Optimizer {
                         continue;
                     }
                     $seen_urls[ $url ] = true;
+
+                    if ( '' === $own_dir_url || rawurldecode( untrailingslashit( dirname( $url ) ) ) !== $own_dir_url ) {
+                        continue;
+                    }
 
                     if ( self::uploads_url_exists_on_disk( $url, $base_dir, $base_url ) ) {
                         continue;
@@ -931,7 +950,7 @@ class TSOIMMA_Optimizer {
             $thumb_path = $base_dir . $size_data['file'];
             if ( ! file_exists( $thumb_path ) ) continue;
 
-            $mime  = mime_content_type( $thumb_path );
+            $mime  = self::detect_mime( $thumb_path );
             $image = self::load_image( $thumb_path, $mime );
             if ( ! $image ) continue;
 
@@ -1072,7 +1091,7 @@ class TSOIMMA_Optimizer {
             foreach ( (array) $meta_rows as $row ) {
                 $updated = self::replace_in_stored_value( (string) $row->meta_value, $s, $r );
                 if ( $updated !== (string) $row->meta_value ) {
-                    update_metadata( 'post', (int) $row->post_id, $row->meta_key, $updated );
+                    update_metadata( 'post', (int) $row->post_id, $row->meta_key, wp_slash( self::unwrap_serialized_for_write( $updated ) ) );
                 }
             }
 
@@ -1088,7 +1107,7 @@ class TSOIMMA_Optimizer {
             foreach ( (array) $option_rows as $row ) {
                 $updated = self::replace_in_stored_value( (string) $row->option_value, $s, $r );
                 if ( $updated !== (string) $row->option_value ) {
-                    update_option( (string) $row->option_name, $updated );
+                    update_option( (string) $row->option_name, self::unwrap_serialized_for_write( $updated ) );
                 }
             }
         }
@@ -1111,6 +1130,8 @@ class TSOIMMA_Optimizer {
             }
             self::append_replacement_pair_unique( $expanded, $pair[0], $pair[1] );
             self::append_replacement_pair_unique( $expanded, rawurldecode( $pair[0] ), rawurldecode( $pair[1] ) );
+            // JSON-escaped slashes (Elementor _elementor_data, block JSON): https:\/\/site\/img.jpg
+            self::append_replacement_pair_unique( $expanded, str_replace( '/', '\\/', $pair[0] ), str_replace( '/', '\\/', $pair[1] ) );
         }
         return array_values( $expanded );
     }
@@ -1148,6 +1169,7 @@ class TSOIMMA_Optimizer {
             $old_base = preg_replace( '/\.' . preg_quote( (string) $old_ext, '/' ) . '$/i', '', $old_variant );
             if ( $old_base ) {
                 $like_keys[ $old_base . '-' ] = true;
+                $like_keys[ str_replace( '/', '\\/', $old_base ) . '-' ] = true; // JSON-escaped slashes.
             }
         }
         if ( empty( $like_keys ) ) {
@@ -1179,9 +1201,9 @@ class TSOIMMA_Optimizer {
                 )
             );
             foreach ( (array) $meta_rows as $row ) {
-                $updated = self::apply_dimension_variant_regex( (string) $row->meta_value, $old_variants, $new_variants, $old_ext, $new_ext );
+                $updated = self::apply_dimension_variant_regex_stored( (string) $row->meta_value, $old_variants, $new_variants, $old_ext, $new_ext );
                 if ( $updated !== (string) $row->meta_value ) {
-                    update_metadata( 'post', (int) $row->post_id, $row->meta_key, $updated );
+                    update_metadata( 'post', (int) $row->post_id, $row->meta_key, wp_slash( self::unwrap_serialized_for_write( $updated ) ) );
                 }
             }
 
@@ -1195,9 +1217,9 @@ class TSOIMMA_Optimizer {
                 )
             );
             foreach ( (array) $option_rows as $row ) {
-                $updated = self::apply_dimension_variant_regex( (string) $row->option_value, $old_variants, $new_variants, $old_ext, $new_ext );
+                $updated = self::apply_dimension_variant_regex_stored( (string) $row->option_value, $old_variants, $new_variants, $old_ext, $new_ext );
                 if ( $updated !== (string) $row->option_value ) {
-                    update_option( (string) $row->option_name, $updated );
+                    update_option( (string) $row->option_name, self::unwrap_serialized_for_write( $updated ) );
                 }
             }
         }
@@ -1242,14 +1264,64 @@ class TSOIMMA_Optimizer {
                 continue;
             }
 
-            $updated = preg_replace(
-                '/' . preg_quote( $old_base, '/' ) . '-(\d+x\d+)\.' . preg_quote( (string) $old_ext, '/' ) . '/i',
-                $new_base . '-$1.' . $new_ext,
+            $pattern = '/' . str_replace( '\\/', '\\\\?\\/', preg_quote( $old_base, '/' ) ) . '-(\\d+x\\d+)\\.' . preg_quote( (string) $old_ext, '/' ) . '/i';
+            $updated = preg_replace_callback(
+                $pattern,
+                function ( $m ) use ( $new_base, $new_ext ) {
+                    // Keep JSON-escaped slashes escaped when the match was escaped.
+                    $base = ( false !== strpos( $m[0], '\\/' ) ) ? str_replace( '/', '\\/', $new_base ) : $new_base;
+                    return $base . '-' . $m[1] . '.' . $new_ext;
+                },
                 $updated
             );
         }
 
         return $updated;
+    }
+
+    /**
+     * Prepare a (possibly serialized) string for update_option()/update_metadata().
+     *
+     * Those APIs serialize their input, and maybe_serialize() double-serializes a
+     * string that already looks serialized, so the value would be read back as a
+     * string instead of an array and the option/meta would be lost. Unserialize
+     * first so WordPress serializes it exactly once.
+     *
+     * @param string $value Stored value after replacement.
+     * @return mixed
+     */
+    private static function unwrap_serialized_for_write( $value ) {
+        return is_serialized( $value ) ? maybe_unserialize( $value ) : $value;
+    }
+
+    /**
+     * Serialized-safe wrapper around apply_dimension_variant_regex().
+     *
+     * Unserializes PHP-serialized values, applies the regex to every string
+     * and re-serializes so the s:N length prefixes stay valid.
+     *
+     * @param string   $value        Stored meta/option value.
+     * @param string[] $old_variants Old URL variants.
+     * @param string[] $new_variants New URL variants.
+     * @param string   $old_ext      Old extension.
+     * @param string   $new_ext      New extension.
+     * @return string
+     */
+    private static function apply_dimension_variant_regex_stored( $value, $old_variants, $new_variants, $old_ext, $new_ext ) {
+        $value = (string) $value;
+        if ( is_serialized( $value ) ) {
+            $data = maybe_unserialize( $value );
+            if ( is_array( $data ) || is_object( $data ) ) {
+                $data = map_deep(
+                    $data,
+                    function ( $item ) use ( $old_variants, $new_variants, $old_ext, $new_ext ) {
+                        return is_string( $item ) ? self::apply_dimension_variant_regex( $item, $old_variants, $new_variants, $old_ext, $new_ext ) : $item;
+                    }
+                );
+                return maybe_serialize( $data );
+            }
+        }
+        return self::apply_dimension_variant_regex( $value, $old_variants, $new_variants, $old_ext, $new_ext );
     }
 
     /**
@@ -1332,6 +1404,10 @@ class TSOIMMA_Optimizer {
         $pi_current   = pathinfo( $current_path );
         $restored_path = $pi_current['dirname'] . '/' . $pi_current['filename'] . '.' . $pi_backup['extension'];
 
+        if ( wp_normalize_path( $restored_path ) !== wp_normalize_path( (string) $current_path )
+            && file_exists( $restored_path ) ) {
+            return new WP_Error( 'target_exists', 'Ja existeix un fitxer amb el nom original; no es sobreescriu.' );
+        }
         if ( ! self::copy_file_validated( $backup_path, $restored_path ) ) {
             return new WP_Error( 'copy_failed', 'No s\'ha pogut restaurar el fitxer.' );
         }
@@ -1961,10 +2037,67 @@ class TSOIMMA_Optimizer {
         return preg_match_all( '#\x00\x21\xF9\x04.{4}\x00\x2C#s', $bytes ) > 1;
     }
 
+    /**
+     * Detect a file MIME type without requiring the fileinfo extension.
+     *
+     * @param string $path File path.
+     * @return string MIME type or empty string.
+     */
+    public static function detect_mime( $path ) {
+        $path = (string) $path;
+        if ( '' === $path || ! file_exists( $path ) ) {
+            return '';
+        }
+        if ( function_exists( 'mime_content_type' ) ) {
+            $mime = mime_content_type( $path );
+            if ( is_string( $mime ) && '' !== $mime ) {
+                return $mime;
+            }
+        }
+        $size = function_exists( 'wp_getimagesize' ) ? wp_getimagesize( $path ) : false;
+        if ( is_array( $size ) && ! empty( $size['mime'] ) ) {
+            return (string) $size['mime'];
+        }
+        $type = wp_check_filetype( $path );
+        return ! empty( $type['type'] ) ? (string) $type['type'] : '';
+    }
+
+    /**
+     * Rotate a GD JPEG according to its EXIF orientation (GD drops EXIF on save).
+     *
+     * @param resource|\GdImage|false $image GD image.
+     * @param string                  $path  Source file.
+     * @return resource|\GdImage|false
+     */
+    private static function apply_exif_orientation( $image, $path ) {
+        if ( ! $image || ! function_exists( 'exif_read_data' ) || ! function_exists( 'imagerotate' ) ) {
+            return $image;
+        }
+        $exif = @exif_read_data( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+        $orientation = is_array( $exif ) && isset( $exif['Orientation'] ) ? (int) $exif['Orientation'] : 1;
+        $angle = 0;
+        if ( 3 === $orientation ) {
+            $angle = 180;
+        } elseif ( 6 === $orientation ) {
+            $angle = -90;
+        } elseif ( 8 === $orientation ) {
+            $angle = 90;
+        }
+        if ( 0 === $angle ) {
+            return $image;
+        }
+        $rotated = imagerotate( $image, $angle, 0 );
+        if ( ! $rotated ) {
+            return $image;
+        }
+        imagedestroy( $image );
+        return $rotated;
+    }
+
     private static function load_image( $path, $mime ) {
         switch ( $mime ) {
             case 'image/jpeg':
-                return function_exists( 'imagecreatefromjpeg' ) ? @imagecreatefromjpeg( $path ) : false;
+                return function_exists( 'imagecreatefromjpeg' ) ? self::apply_exif_orientation( @imagecreatefromjpeg( $path ), $path ) : false;
             case 'image/png':
                 $img = function_exists( 'imagecreatefrompng' ) ? @imagecreatefrompng( $path ) : false;
                 if ( $img ) {
@@ -2040,7 +2173,7 @@ class TSOIMMA_Optimizer {
             return false;
         }
 
-        $mime = mime_content_type( $source_path );
+        $mime = self::detect_mime( $source_path );
         if ( false === strpos( (string) $mime, 'image/' ) ) {
             return false;
         }
