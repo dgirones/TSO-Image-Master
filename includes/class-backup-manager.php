@@ -191,7 +191,7 @@ class TSOIMMA_Backup_Manager {
 				'url'           => $baseurl . $rel,
 				'bytes'         => (int) $f['size'],
 				'bytes_h'       => size_format( (int) $f['size'] ),
-				'date'          => date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), (int) $f['mtime'] ),
+				'date'          => wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), (int) $f['mtime'] ),
 				'is_size_batch' => $is_batch,
 				// A size-cleanup backup is a zip bundling one file per
 				// deleted attachment; a regular optimizer backup is always
