@@ -4248,6 +4248,29 @@
             });
         });
 
+        // Re-fetch the backups list from the server. Called after any
+        // action that can create or remove a backup (size cleanup), so the
+        // panel never needs a manual page reload (F5) to show the new zip.
+        function refreshBackupsList(retry) {
+            backupsLoaded = false;
+            if (!$('#imp-backups-panel').is(':visible')) return;
+            var before = $('#imp-backups-list-wrap tbody tr').length;
+            ajax('tsoimma_list_backups', { _ts: Date.now() }, function(data) {
+                backupsLoaded = true;
+                renderBackupsList(data);
+                // The zip was written just before this request; if the
+                // host's filesystem hasn't exposed it yet, look once more.
+                if (!retry && (data.items || []).length <= before) {
+                    setTimeout(function() { refreshBackupsList(true); }, 1500);
+                }
+            }, function(err) {
+                if (window.console) { console.error('[TSOIMMA] backups refresh failed:', err); }
+                if (!retry) {
+                    setTimeout(function() { refreshBackupsList(true); }, 1500);
+                }
+            });
+        }
+
         function renderBackupsList(data) {
             var items = data.items || [];
             if (!items.length) {
@@ -4396,6 +4419,8 @@
                     $('#imp-sizes-detail').hide();
                 }
 
+                refreshBackupsList();
+
                 var msg2 = '✓ ' + deletedCount + ' ' + uiText('sizes_deleted_msg', 'size file(s) deleted') + ' (' + (data.bytes_freed_h || formatBytes(data.bytes_freed || 0)) + ').';
                 if (data.backup_ok && data.backup_zip) {
                     msg2 += '\n' + uiText('sizes_backup_made', 'Backup saved to: {path}').replace('{path}', 'wp-content/uploads/' + data.backup_zip);
@@ -4523,6 +4548,7 @@
                 btn.prop('disabled', false);
                 var deletedIds = (data.deleted || []).map(function(d) { return d.id; });
                 detailSelected.clear();
+                refreshBackupsList();
 
                 var sizeRow = sizesFound.filter(function(s) { return s.name === detailSizeName; })[0];
                 if (sizeRow) {
