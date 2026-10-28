@@ -20,15 +20,8 @@ msgstr ""
 msgid "TSO Image Master"
 msgstr "TSO Image Master"
 
-msgid ""
-"Complete image optimization suite for WordPress: convert to WebP/JPG, "
-"resize, compress PDFs, find orphaned images, scan rogue files, fix broken "
-"image URLs, and manage SEO fields. Requires PHP GD library."
-msgstr ""
-"Suite completa d'optimització d'imatges per a WordPress: converteix a "
-"WebP/JPG, redimensiona, comprimeix PDFs, troba imatges orfes, analitza "
-"fitxers rogue, corrigeix URL d'imatges trencades i gestiona camps SEO. "
-"Requereix la biblioteca PHP GD."
+msgid "Auto-converts images to WebP, AVIF, JPG or PNG, compresses PDFs, and repairs your media library: broken links, orphans, unused sizes, alt, SEO."
+msgstr "Converteix automàticament les imatges en pujar-les a WebP, AVIF, JPG o PNG, comprimeix PDF i repara la biblioteca: enllaços trencats, orfes, mides d'imatge sense usar, alt i SEO."
 
 msgid "All selected extra files deleted!"
 msgstr "Fitxers extra seleccionats eliminats!"
@@ -698,3 +691,164 @@ msgstr "format original"
 
 msgid "You do not have permission to perform this action."
 msgstr "No tens permís per fer aquesta acció."
+
+msgid "Invalid attachment ID."
+msgstr "ID d'adjunt no vàlid."
+
+msgid "This size no longer exists for this image (already removed?)."
+msgstr "Aquesta mida ja no existeix per a aquesta imatge (ja s'ha eliminat?)."
+
+msgid "Original file not found."
+msgstr "No s'ha trobat el fitxer original."
+
+msgid "File already missing on disk."
+msgstr "El fitxer ja no existeix al disc."
+
+msgid "Skipped: the safety backup could not be created for this batch."
+msgstr "Omès: no s'ha pogut crear la còpia de seguretat d'aquest lot."
+
+msgid "Could not delete the file from disk."
+msgstr "No s'ha pogut eliminar el fitxer del disc."
+
+msgid ""
+"The PHP ZIP extension is not available on this server, so no backup could be"
+" made before deleting."
+msgstr ""
+"L'extensió ZIP de PHP no està disponible en aquest servidor, així que no "
+"s'ha pogut fer cap còpia de seguretat abans d'eliminar."
+
+msgid "Could not create the backup folder."
+msgstr "No s'ha pogut crear la carpeta de còpies de seguretat."
+
+msgid "Could not create the backup zip file."
+msgstr "No s'ha pogut crear el fitxer zip de la còpia de seguretat."
+
+msgid "A file could not be added to the backup zip, so nothing was deleted."
+msgstr ""
+"No s'ha pogut afegir un fitxer al zip de la còpia de seguretat, així que no "
+"s'ha eliminat res."
+
+msgid "The backup zip file could not be finalized."
+msgstr "No s'ha pogut finalitzar el fitxer zip de la còpia de seguretat."
+
+msgid "The backup zip did not pass verification, so nothing was deleted."
+msgstr ""
+"El zip de la còpia de seguretat no ha superat la verificació, així que no "
+"s'ha eliminat res."
+
+msgid "The PHP ZIP extension is not available on this server."
+msgstr "L'extensió ZIP de PHP no està disponible en aquest servidor."
+
+msgid "Could not open the backup zip file."
+msgstr "No s'ha pogut obrir el fitxer zip de la còpia de seguretat."
+
+msgid "Could not determine the size name of this backup."
+msgstr ""
+"No s'ha pogut determinar el nom de la mida d'aquesta còpia de seguretat."
+
+msgid "The attachment no longer exists."
+msgstr "L'adjunt ja no existeix."
+
+msgid "Invalid file path in backup."
+msgstr "Ruta de fitxer no vàlida a la còpia de seguretat."
+
+msgid "File missing inside the backup zip."
+msgstr "Falta el fitxer dins del zip de la còpia de seguretat."
+
+msgid "Could not write the file to disk."
+msgstr "No s'ha pogut escriure el fitxer al disc."
+
+msgid "No size name was specified."
+msgstr "No s'ha especificat cap nom de mida."
+
+msgid "This does not look like a valid backup file."
+msgstr "Això no sembla un fitxer de còpia de seguretat vàlid."
+
+msgid "No backup file was specified."
+msgstr "No s'ha especificat cap fitxer de còpia de seguretat."
+
+msgid "Could not delete the backup file."
+msgstr "No s'ha pogut eliminar el fitxer de còpia de seguretat."
+
+msgid ""
+"This size is still registered or protected by WordPress and cannot be "
+"deleted."
+msgstr ""
+"Aquesta mida encara està registrada o protegida per WordPress i no es pot "
+"eliminar."
+
+msgid "No attachment IDs were specified."
+msgstr "No s'ha especificat cap ID d'adjunt."
+
+msgid "Image Sizes"
+msgstr "Mides d'imatge"
+
+#, php-format
+msgid "Post #%d was edited after the removal and was left untouched."
+msgstr ""
+"El contingut #%d s'ha editat després de l'eliminació i s'ha deixat intacte."
+
+msgid "Suggests alt from title or filename. Click ✎ to edit a row; Save (green) stores the alt. Bulk fill uses your edited text."
+msgstr "Suggereix l'alt a partir del títol o del nom de fitxer. Prem ✎ per editar una fila; Desa (verd) emmagatzema l'alt. L'emplenament massiu usa el teu text editat."
+
+msgid "GhostScript"
+msgstr "GhostScript"
+
+msgid "Imagick"
+msgstr "Imagick"
+
+msgid "Cancel pending / thumbnails"
+msgstr "Cancel·la pendents / miniatures"
+
+msgid "Retention is disabled (0 days and 0 MB). Nothing to purge."
+msgstr "La retenció està desactivada (0 dies i 0 MB). No hi ha res per purgar."
+
+msgid "Clear search"
+msgstr "Esborra la cerca"
+
+msgid "This image is already being optimized (queue or another request)."
+msgstr "Aquesta imatge ja s'està optimitzant (cua o una altra petició)."
+
+#, php-format
+msgid "Phase 1 error: %s"
+msgstr "Error a la fase 1: %s"
+
+#, php-format
+msgid "Phase 2 error: %1$s at %2$s:%3$s (files restored from backup)"
+msgstr "Error a la fase 2: %1$s a %2$s:%3$s (fitxers restaurats des de la còpia de seguretat)"
+
+#, php-format
+msgid "Thumbnail error: %s"
+msgstr "Error de miniatura: %s"
+
+#, php-format
+msgid "Rename failed: %s"
+msgstr "Error en canviar el nom: %s"
+
+msgid "No backup found to delete."
+msgstr "No s'ha trobat cap còpia de seguretat per eliminar."
+
+msgid "No URL fixes were submitted."
+msgstr "No s'ha enviat cap correcció d'URL."
+
+msgid "No URLs were submitted for removal."
+msgstr "No s'ha enviat cap URL per eliminar."
+
+msgid "No valid URLs were submitted."
+msgstr "No s'ha enviat cap URL vàlida."
+
+#, php-format
+msgid "No images were queued (%d already busy or locked)."
+msgstr "No s'ha posat cap imatge a la cua (%d ja ocupades o bloquejades)."
+
+#, php-format
+msgid "(%d skipped — already in queue or being optimized.)"
+msgstr "(%d omeses: ja són a la cua o s'estan optimitzant.)"
+
+#, php-format
+msgid "Highlighting attachment #%d in the block editor."
+msgstr "Ressaltant l'adjunt #%d a l'editor de blocs."
+
+#, php-format
+msgid "Highlighting attachment #%d in code."
+msgstr "Ressaltant l'adjunt #%d al codi."

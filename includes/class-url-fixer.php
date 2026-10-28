@@ -233,19 +233,27 @@ class TSOIMMA_URL_Fixer {
         $total_scanned = count( $posts );
         $all_issues    = array();
         $seen_urls     = array();
+        $renamed_map   = tsoimma_get_renamed_map();
         $ext_pattern   = implode( '|', self::$img_exts );
 
         foreach ( $posts as $post ) {
             $pattern = '/(https?:\/\/[^\s"\'<>\)]+\.(' . $ext_pattern . '))/i';
             $urls    = array();
 
+            $url_attachment = array();
+            $post_text      = '';
             foreach ( self::collect_post_scan_sources( $post ) as $source ) {
+                $post_text .= "\n" . $source;
                 if ( ! preg_match_all( $pattern, $source, $matches ) ) {
                     continue;
                 }
 
                 foreach ( array_unique( $matches[1] ) as $url ) {
                     $urls[ $url ] = true;
+                }
+
+                foreach ( self::img_attachment_ids_from_html( $source ) as $img_url => $img_id ) {
+                    $url_attachment[ $img_url ] = $img_id;
                 }
             }
 
@@ -280,8 +288,30 @@ class TSOIMMA_URL_Fixer {
                     if ( ! file_exists( $full_path ) ) {
                         $pi = pathinfo( $full_path );
 
+                        // B0: the image was renamed with this plugin; point to its current file.
+                        $renamed_rel = self::resolve_renamed_rel( $rel_path, $renamed_map, $base );
+                        if ( null !== $renamed_rel ) {
+                            $new_url = $base['url'] . self::encode_rel_path_for_url( $renamed_rel );
+                            $reason  = 'Fitxer renomenat: la imatge té ara un altre nom';
+                            $type    = 'missing';
+                        }
+
+                        // B0b: <img class="wp-image-ID">: the attachment still exists, use its current file.
+                        if ( ! $type && isset( $url_attachment[ $url ] ) ) {
+                            $by_id = self::current_url_for_attachment( (int) $url_attachment[ $url ], $url );
+                            if ( null !== $by_id && self::attachment_already_in_text( (int) $url_attachment[ $url ], $post_text ) ) {
+                                // The same image is already there with a valid URL: repairing would duplicate it.
+                                $reason = 'Duplicada: la mateixa imatge ja hi és amb la URL correcta';
+                                $type   = 'missing_no_fix';
+                            } elseif ( null !== $by_id && ! self::urls_equivalent( $url, $by_id ) ) {
+                                $new_url = $by_id;
+                                $reason  = 'Imatge amb ID #' . (int) $url_attachment[ $url ] . ': l\'adjunt té ara un altre nom';
+                                $type    = 'missing';
+                            }
+                        }
+
                         // B1: Buscar el mateix nom en altres formats (jpg→webp, etc.)
-                        foreach ( self::$img_exts as $try_ext ) {
+                        foreach ( $type ? array() : self::$img_exts as $try_ext ) {
                             if ( strtolower( $try_ext ) === strtolower( $pi['extension'] ) ) continue;
                             $candidate = $pi['dirname'] . '/' . $pi['filename'] . '.' . $try_ext;
                             if ( file_exists( $candidate ) ) {
@@ -484,14 +514,16 @@ class TSOIMMA_URL_Fixer {
     /**
      * Remove broken image URL references from posts, postmeta, and options.
      *
+     * A backup of every row that is about to change is written first; when the
+     * backup cannot be written nothing is modified.
+     *
      * @param string[] $urls Absolute uploads URLs to strip from storage.
-     * @return array{removed:int,skipped:int,errors:string[]}
+     * @return array{removed:int,skipped:int,errors:string[],removed_urls:string[],backup:string}
      */
     public static function remove_urls( $urls ) {
-        $removed      = 0;
-        $skipped      = 0;
-        $errors       = array();
-        $removed_urls = array();
+        $skipped = 0;
+        $errors  = array();
+        $todo    = array();
 
         foreach ( (array) $urls as $url ) {
             $url = esc_url_raw( (string) $url );
@@ -513,18 +545,56 @@ class TSOIMMA_URL_Fixer {
                 continue;
             }
 
-            $affected = self::remove_url_from_db( $url );
-            if ( $affected > 0 ) {
-                $removed++;
-                // Same reasoning as fix()'s $fixed_urls: let the admin UI
-                // remove only the rows actually cleared from storage.
-                $removed_urls[] = $url;
+            $todo[] = $url;
+        }
+
+        $result = array(
+            'removed'      => 0,
+            'skipped'      => $skipped,
+            'errors'       => $errors,
+            'removed_urls' => array(),
+            'backup'       => '',
+        );
+
+        if ( empty( $todo ) ) {
+            return $result;
+        }
+
+        // Dry run: collect the original rows that would change.
+        $snap  = array( 'posts' => array(), 'meta' => array(), 'options' => array() );
+        $would = array();
+        foreach ( $todo as $url ) {
+            if ( self::remove_url_from_db( $url, false, $snap ) > 0 ) {
+                $would[] = $url;
             } else {
-                $skipped++;
+                $result['skipped']++;
             }
         }
 
-        if ( $removed > 0 ) {
+        if ( empty( $would ) ) {
+            return $result;
+        }
+
+        $backup_file = self::write_removal_backup( $would, $snap );
+        if ( '' === $backup_file ) {
+            $result['errors'][]  = 'No s\'ha pogut crear la còpia de seguretat; no s\'ha modificat res.';
+            $result['skipped']  += count( $would );
+            return $result;
+        }
+
+        foreach ( $would as $url ) {
+            if ( self::remove_url_from_db( $url, true ) > 0 ) {
+                $result['removed']++;
+                $result['removed_urls'][] = $url;
+            } else {
+                $result['skipped']++;
+            }
+        }
+
+        self::finalize_removal_backup( $backup_file );
+        $result['backup'] = $backup_file;
+
+        if ( $result['removed'] > 0 ) {
             if ( function_exists( 'wp_cache_flush' ) ) {
                 wp_cache_flush();
             }
@@ -540,12 +610,7 @@ class TSOIMMA_URL_Fixer {
             }
         }
 
-        return array(
-            'removed'      => $removed,
-            'skipped'      => $skipped,
-            'errors'       => $errors,
-            'removed_urls' => $removed_urls,
-        );
+        return $result;
     }
 
     /**
@@ -578,7 +643,36 @@ class TSOIMMA_URL_Fixer {
     }
 
     /**
-     * Remove img tags, Gutenberg image blocks, and bare URLs from HTML/text.
+     * Remove only the <img> tag(s) that use the broken URL, together with a link that
+     * wraps only that image; a link with other content is unwrapped, never deleted.
+     *
+     * @param string $html Content fragment.
+     * @param string $u    Broken URL (one written form).
+     * @return string
+     */
+    private static function strip_broken_img( $html, $u ) {
+        $esc = preg_quote( $u, '/' );
+        $img = '<img\b(?=[^>]*(?:\bsrc|\bsrcset)\s*=\s*["\'][^"\']*' . $esc . ')[^>]*\/?>';
+
+        // <a ...><img broken></a> (the link wraps only the broken image).
+        $html = preg_replace( '/<a\b[^>]*>\s*' . $img . '\s*<\/a>/i', '', $html );
+        // Any remaining broken <img>.
+        $html = preg_replace( '/' . $img . '/i', '', $html );
+        // Link whose href is the broken URL: unwrap it, keeping whatever it wraps (image or text).
+        $html = preg_replace_callback(
+            '/<a\b[^>]*\bhref=(["\'])' . $esc . '\1[^>]*>([\s\S]*?)<\/a>/i',
+            function ( $m ) {
+                return $m[2];
+            },
+            $html
+        );
+
+        return $html;
+    }
+
+    /**
+     * Remove the broken image from HTML/text without touching other images: a Gutenberg
+     * image block is dropped only when no other <img> is left in it.
      *
      * @param string $text  Content fragment.
      * @param string $url   Broken media URL.
@@ -600,32 +694,21 @@ class TSOIMMA_URL_Fixer {
         );
 
         foreach ( $variants as $u ) {
-            $esc = preg_quote( $u, '/' );
-
             $text = preg_replace_callback(
                 '/<!-- wp:image\b[^>]*-->[\s\S]*?<!-- \/wp:image -->/i',
-                function( $match ) use ( $u ) {
+                function ( $match ) use ( $u ) {
                     $block = $match[0];
-                    if ( false !== stripos( $block, $u ) || false !== stripos( rawurldecode( $block ), rawurldecode( $u ) ) ) {
-                        return '';
+                    if ( false === stripos( $block, $u ) && false === stripos( rawurldecode( $block ), rawurldecode( $u ) ) ) {
+                        return $block;
                     }
-                    return $block;
+                    $stripped = self::strip_broken_img( $block, $u );
+                    // Keep the block when another image is still inside it.
+                    return ( false !== stripos( $stripped, '<img' ) ) ? $stripped : '';
                 },
                 $text
             );
 
-            $text = preg_replace(
-                '/<img\b(?=[^>]*(?:\bsrc|\bsrcset)\s*=\s*["\'][^"\']*' . $esc . ')[^>]*\/?>/i',
-                '',
-                $text
-            );
-
-            $text = preg_replace(
-                '/<a\b[^>]*\bhref=(["\'])' . $esc . '\1[^>]*>[\s\S]*?<\/a>/i',
-                '',
-                $text
-            );
-
+            $text = self::strip_broken_img( $text, $u );
             $text = str_replace( $u, '', $text );
         }
 
@@ -638,10 +721,12 @@ class TSOIMMA_URL_Fixer {
     /**
      * Remove one broken URL everywhere it appears in public storage.
      *
-     * @param string $url Media URL.
-     * @return int Number of storage updates performed.
+     * @param string     $url   Media URL.
+     * @param bool       $apply False = dry run (only collects the original rows into $snap).
+     * @param array|null $snap  Collector for original rows (posts, meta, options).
+     * @return int Number of storage rows that change.
      */
-    private static function remove_url_from_db( $url ) {
+    private static function remove_url_from_db( $url, $apply = true, &$snap = null ) {
         global $wpdb;
         $affected = 0;
 
@@ -670,30 +755,48 @@ class TSOIMMA_URL_Fixer {
                 $content_updated = self::remove_url_from_text( (string) $row->post_content, $url );
                 $excerpt_updated = self::remove_url_from_text( (string) $row->post_excerpt, $url );
                 if ( $content_updated !== (string) $row->post_content || $excerpt_updated !== (string) $row->post_excerpt ) {
-                    $wpdb->update(
-                        $wpdb->posts,
-                        array(
-                            'post_content' => $content_updated,
-                            'post_excerpt' => $excerpt_updated,
-                        ),
-                        array( 'ID' => (int) $row->ID ),
-                        array( '%s', '%s' ),
-                        array( '%d' )
-                    );
+                    if ( is_array( $snap ) && ! isset( $snap['posts'][ (int) $row->ID ] ) ) {
+                        $snap['posts'][ (int) $row->ID ] = array(
+                            'content' => (string) $row->post_content,
+                            'excerpt' => (string) $row->post_excerpt,
+                        );
+                    }
+                    if ( $apply ) {
+                        $wpdb->update(
+                            $wpdb->posts,
+                            array(
+                                'post_content' => $content_updated,
+                                'post_excerpt' => $excerpt_updated,
+                            ),
+                            array( 'ID' => (int) $row->ID ),
+                            array( '%s', '%s' ),
+                            array( '%d' )
+                        );
+                        clean_post_cache( (int) $row->ID );
+                    }
                     $affected++;
                 }
             }
 
             $meta_rows = $wpdb->get_results(
                 $wpdb->prepare(
-                    "SELECT post_id, meta_key, meta_value FROM {$wpdb->postmeta} WHERE meta_value LIKE %s",
+                    "SELECT meta_id, post_id, meta_key, meta_value FROM {$wpdb->postmeta} WHERE meta_value LIKE %s",
                     $like
                 )
             );
             foreach ( (array) $meta_rows as $row ) {
                 $updated = self::remove_url_from_stored_value( (string) $row->meta_value, $url );
                 if ( $updated !== (string) $row->meta_value ) {
-                    update_metadata( 'post', (int) $row->post_id, $row->meta_key, $updated );
+                    if ( is_array( $snap ) && ! isset( $snap['meta'][ (int) $row->meta_id ] ) ) {
+                        $snap['meta'][ (int) $row->meta_id ] = array(
+                            'post_id' => (int) $row->post_id,
+                            'key'     => (string) $row->meta_key,
+                            'value'   => (string) $row->meta_value,
+                        );
+                    }
+                    if ( $apply ) {
+                        TSOIMMA_Optimizer::update_meta_row_raw( (int) $row->meta_id, (int) $row->post_id, $updated );
+                    }
                     $affected++;
                 }
             }
@@ -712,7 +815,12 @@ class TSOIMMA_URL_Fixer {
             foreach ( (array) $option_rows as $row ) {
                 $updated = self::remove_url_from_stored_value( (string) $row->option_value, $url );
                 if ( $updated !== (string) $row->option_value ) {
-                    update_option( (string) $row->option_name, $updated );
+                    if ( is_array( $snap ) && ! isset( $snap['options'][ (string) $row->option_name ] ) ) {
+                        $snap['options'][ (string) $row->option_name ] = array( 'value' => (string) $row->option_value );
+                    }
+                    if ( $apply ) {
+                        update_option( (string) $row->option_name, TSOIMMA_Optimizer::unwrap_serialized_for_write( $updated ) );
+                    }
                     $affected++;
                 }
             }
@@ -750,14 +858,14 @@ class TSOIMMA_URL_Fixer {
 
             $meta_rows = $wpdb->get_results(  // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
                 $wpdb->prepare(
-                    "SELECT post_id, meta_key, meta_value FROM {$wpdb->postmeta} WHERE meta_value LIKE %s",
+                    "SELECT meta_id, post_id, meta_key, meta_value FROM {$wpdb->postmeta} WHERE meta_value LIKE %s",
                     $like
                 )
             );
             foreach ( (array) $meta_rows as $row ) {
                 $updated = TSOIMMA_Optimizer::replace_in_stored_value( (string) $row->meta_value, $old, $new );
                 if ( $updated !== (string) $row->meta_value ) {
-                    update_metadata( 'post', (int) $row->post_id, $row->meta_key, $updated );
+                    TSOIMMA_Optimizer::update_meta_row_raw( (int) $row->meta_id, (int) $row->post_id, $updated );
                     $affected++;
                 }
             }
@@ -776,7 +884,7 @@ class TSOIMMA_URL_Fixer {
             foreach ( (array) $option_rows as $row ) {
                 $updated = TSOIMMA_Optimizer::replace_in_stored_value( (string) $row->option_value, $old, $new );
                 if ( $updated !== (string) $row->option_value ) {
-                    update_option( (string) $row->option_name, $updated );
+                    update_option( (string) $row->option_name, TSOIMMA_Optimizer::unwrap_serialized_for_write( $updated ) );
                     $affected++;
                 }
             }
@@ -784,5 +892,498 @@ class TSOIMMA_URL_Fixer {
         // phpcs:enable
 
         return $affected;
+    }
+
+    /**
+     * Map src URL => attachment ID for <img> tags that carry a wp-image-ID class.
+     *
+     * @param string $html Content fragment.
+     * @return array<string,int>
+     */
+    private static function img_attachment_ids_from_html( $html ) {
+        $found = array();
+        if ( ! preg_match_all( '/<img\b[^>]*>/i', (string) $html, $tags ) ) {
+            return $found;
+        }
+        foreach ( $tags[0] as $tag ) {
+            if ( ! preg_match( '/\bwp-image-(\d+)\b/', $tag, $id_match ) ) {
+                continue;
+            }
+            if ( ! preg_match( '/\bsrc\s*=\s*(["\'])(.*?)\1/i', $tag, $src_match ) ) {
+                continue;
+            }
+            $found[ $src_match[2] ] = (int) $id_match[1];
+        }
+        return $found;
+    }
+
+    /**
+     * Current URL of an attachment that matches a stale (renamed) URL, keeping the
+     * requested -WxH size when the old URL had one.
+     *
+     * @param int    $attachment_id Attachment ID.
+     * @param string $stale_url     URL found in the content.
+     * @return string|null
+     */
+    private static function current_url_for_attachment( $attachment_id, $stale_url ) {
+        if ( $attachment_id <= 0 || 'attachment' !== get_post_type( $attachment_id ) ) {
+            return null;
+        }
+
+        $full_url  = wp_get_attachment_url( $attachment_id );
+        $full_path = get_attached_file( $attachment_id );
+        if ( ! $full_url || ! $full_path || ! file_exists( $full_path ) || ! self::is_uploads_media_url( $full_url ) ) {
+            return null;
+        }
+
+        if ( ! preg_match( '/-(\d+)x(\d+)\.[a-z0-9]+$/i', rawurldecode( (string) $stale_url ), $dims ) ) {
+            return $full_url;
+        }
+
+        $meta = wp_get_attachment_metadata( $attachment_id );
+        if ( empty( $meta['sizes'] ) || ! is_array( $meta['sizes'] ) ) {
+            return $full_url;
+        }
+
+        $dir_path = trailingslashit( dirname( $full_path ) );
+        $dir_url  = trailingslashit( dirname( $full_url ) );
+        $best     = null;
+        $best_gap = PHP_INT_MAX;
+        foreach ( $meta['sizes'] as $size_data ) {
+            if ( empty( $size_data['file'] ) || empty( $size_data['width'] ) || empty( $size_data['height'] ) ) {
+                continue;
+            }
+            if ( ! is_file( $dir_path . $size_data['file'] ) ) {
+                continue;
+            }
+            $gap = abs( (int) $size_data['width'] - (int) $dims[1] ) + abs( (int) $size_data['height'] - (int) $dims[2] );
+            if ( $gap < $best_gap ) {
+                $best_gap = $gap;
+                $best     = $dir_url . self::encode_rel_path_for_url( $size_data['file'] );
+            }
+        }
+
+        return $best ? $best : $full_url;
+    }
+
+    /**
+     * Whether any current file (full size or generated sizes) of the attachment is
+     * already referenced in the given content.
+     *
+     * @param int    $attachment_id Attachment ID.
+     * @param string $text          Post content (and other scanned sources).
+     * @return bool
+     */
+    private static function attachment_already_in_text( $attachment_id, $text ) {
+        $files = array();
+        $main  = get_attached_file( $attachment_id );
+        if ( $main ) {
+            $files[] = basename( $main );
+        }
+        $meta = wp_get_attachment_metadata( $attachment_id );
+        if ( ! empty( $meta['sizes'] ) && is_array( $meta['sizes'] ) ) {
+            foreach ( $meta['sizes'] as $size_data ) {
+                if ( ! empty( $size_data['file'] ) ) {
+                    $files[] = (string) $size_data['file'];
+                }
+            }
+        }
+        $decoded = rawurldecode( (string) $text );
+        foreach ( array_unique( $files ) as $file ) {
+            if ( '' !== $file && ( false !== strpos( (string) $text, '/' . $file ) || false !== strpos( $decoded, '/' . $file ) ) ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ----------------------------------------------------------------
+    // Rename map (old relative path => new relative path)
+    // ----------------------------------------------------------------
+
+    /**
+     * Remember renamed uploads files so a later scan can repair links that still
+     * point to the old name instead of offering to delete them.
+     *
+     * @param array<int, array{0:string,1:string}> $pairs Old/new absolute URLs.
+     * @return void
+     */
+    public static function record_renames( $pairs ) {
+        $map     = tsoimma_get_renamed_map();
+        $changed = false;
+
+        foreach ( (array) $pairs as $pair ) {
+            if ( empty( $pair[0] ) || empty( $pair[1] ) ) {
+                continue;
+            }
+            $old = self::uploads_rel_path_from_url( (string) $pair[0] );
+            $new = self::uploads_rel_path_from_url( (string) $pair[1] );
+            if ( empty( $old ) || empty( $new ) || $old === $new ) {
+                continue;
+            }
+            foreach ( $map as $key => $target ) {
+                if ( $target === $old ) {
+                    $map[ $key ] = $new;
+                }
+            }
+            $map[ $old ] = $new;
+            unset( $map[ $new ] );
+            $changed = true;
+        }
+
+        if ( $changed ) {
+            if ( count( $map ) > 20000 ) {
+                $map = array_slice( $map, -20000, null, true );
+            }
+            tsoimma_set_renamed_map( $map );
+        }
+    }
+
+    /**
+     * Follow the rename map from a missing relative path to an existing file.
+     *
+     * @param string               $rel_path Missing relative path inside uploads.
+     * @param array<string,string> $map      Rename map.
+     * @param array                $base     uploads_base() result.
+     * @return string|null Existing relative path, or null.
+     */
+    private static function resolve_renamed_rel( $rel_path, $map, $base ) {
+        $rel_path = ltrim( (string) $rel_path, '/' );
+        if ( '' === $rel_path || empty( $map ) ) {
+            return null;
+        }
+
+        $follow = static function ( $start ) use ( $map, $base ) {
+            $cur = $start;
+            for ( $hop = 0; $hop < 6; $hop++ ) {
+                if ( ! isset( $map[ $cur ] ) ) {
+                    return null;
+                }
+                $cur = $map[ $cur ];
+                if ( file_exists( wp_normalize_path( $base['dir'] . $cur ) ) ) {
+                    return $cur;
+                }
+            }
+            return null;
+        };
+
+        $hit = $follow( $rel_path );
+        if ( null !== $hit ) {
+            return $hit;
+        }
+
+        $pi = pathinfo( $rel_path );
+
+        // Same name with another extension was renamed (e.g. old .png link, image converted to .webp and renamed later).
+        if ( isset( $pi['extension'] ) ) {
+            $dir_prefix = ( '.' === $pi['dirname'] ) ? '' : $pi['dirname'] . '/';
+            foreach ( self::$img_exts as $try_ext ) {
+                if ( strtolower( $try_ext ) === strtolower( $pi['extension'] ) ) {
+                    continue;
+                }
+                $alt_hit = $follow( $dir_prefix . $pi['filename'] . '.' . $try_ext );
+                if ( null !== $alt_hit ) {
+                    return $alt_hit;
+                }
+            }
+        }
+
+        // Sized file (-WxH) that was not in the map: use the renamed main image's size or the main image.
+        if ( isset( $pi['extension'] ) && preg_match( '/^(.+)-(\d+)x(\d+)$/', $pi['filename'], $m ) ) {
+            $dir = ( '.' === $pi['dirname'] ) ? '' : $pi['dirname'] . '/';
+            foreach ( self::$img_exts as $try_ext ) {
+                $main = $follow( $dir . $m[1] . '.' . $try_ext );
+                if ( null === $main ) {
+                    continue;
+                }
+                $mp        = pathinfo( $main );
+                $main_dir  = ( '.' === $mp['dirname'] ) ? '' : $mp['dirname'] . '/';
+                $sized     = $main_dir . $mp['filename'] . '-' . $m[2] . 'x' . $m[3] . '.' . $pi['extension'];
+                if ( file_exists( wp_normalize_path( $base['dir'] . $sized ) ) ) {
+                    return $sized;
+                }
+                return $main;
+            }
+        }
+
+        return null;
+    }
+
+    // ----------------------------------------------------------------
+    // Backups of "Remove from content"
+    // ----------------------------------------------------------------
+
+    /**
+     * @return string Absolute directory (with trailing slash).
+     */
+    private static function removal_backup_dir() {
+        $upload_dir = wp_upload_dir();
+        return trailingslashit( $upload_dir['basedir'] ) . 'tso-image-master/url-removal-backups/';
+    }
+
+    /**
+     * @param string $path Absolute path.
+     * @param string $data File contents.
+     * @return bool
+     */
+    private static function write_file( $path, $data ) {
+        global $wp_filesystem;
+        if ( empty( $wp_filesystem ) ) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            WP_Filesystem();
+        }
+        if ( empty( $wp_filesystem ) ) {
+            return false;
+        }
+        return (bool) $wp_filesystem->put_contents( $path, $data, FS_CHMOD_FILE );
+    }
+
+    /**
+     * @param string $path Absolute path.
+     * @return string
+     */
+    private static function read_file( $path ) {
+        global $wp_filesystem;
+        if ( empty( $wp_filesystem ) ) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            WP_Filesystem();
+        }
+        if ( empty( $wp_filesystem ) ) {
+            return '';
+        }
+        $data = $wp_filesystem->get_contents( $path );
+        return is_string( $data ) ? $data : '';
+    }
+
+    /**
+     * Write the snapshot of the rows about to be changed.
+     *
+     * @param string[] $urls URLs being removed.
+     * @param array    $snap Original rows.
+     * @return string Backup file name, or '' on failure.
+     */
+    private static function write_removal_backup( $urls, $snap ) {
+        $dir = self::removal_backup_dir();
+        if ( ! wp_mkdir_p( $dir ) ) {
+            return '';
+        }
+
+        foreach ( array(
+            $dir . 'index.html' => '',
+            $dir . '.htaccess'  => "Options -Indexes\n<IfModule mod_authz_core.c>\nRequire all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\nDeny from all\n</IfModule>\n",
+        ) as $path => $content ) {
+            if ( ! file_exists( $path ) ) {
+                self::write_file( $path, $content );
+            }
+        }
+
+        $payload = array(
+            'version' => 1,
+            'created' => time(),
+            'urls'    => array_values( $urls ),
+            'posts'   => $snap['posts'],
+            'meta'    => $snap['meta'],
+            'options' => $snap['options'],
+        );
+        $json = wp_json_encode( $payload );
+        if ( ! is_string( $json ) || '' === $json ) {
+            return '';
+        }
+
+        $name = 'url-removal-' . wp_date( 'Y-m-d-His' ) . '-' . strtolower( wp_generate_password( 8, false, false ) ) . '.json';
+        if ( ! self::write_file( $dir . $name, $json ) || ! file_exists( $dir . $name ) ) {
+            return '';
+        }
+
+        return $name;
+    }
+
+    /**
+     * Store a fingerprint of each row after the removal so a later restore never
+     * overwrites content that was edited in the meantime.
+     *
+     * @param string $name Backup file name.
+     * @return void
+     */
+    private static function finalize_removal_backup( $name ) {
+        global $wpdb;
+        $path = self::removal_backup_dir() . $name;
+        $data = json_decode( self::read_file( $path ), true );
+        if ( ! is_array( $data ) ) {
+            return;
+        }
+
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+        foreach ( (array) $data['posts'] as $id => $row ) {
+            $now = $wpdb->get_row( $wpdb->prepare( "SELECT post_content, post_excerpt FROM {$wpdb->posts} WHERE ID = %d", (int) $id ) );
+            $data['posts'][ $id ]['after'] = $now ? md5( $now->post_content . "\0" . $now->post_excerpt ) : '';
+        }
+        foreach ( (array) $data['meta'] as $id => $row ) {
+            $now = $wpdb->get_var( $wpdb->prepare( "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_id = %d", (int) $id ) );
+            $data['meta'][ $id ]['after'] = is_string( $now ) ? md5( $now ) : '';
+        }
+        foreach ( (array) $data['options'] as $opt => $row ) {
+            $now = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", (string) $opt ) );
+            $data['options'][ $opt ]['after'] = is_string( $now ) ? md5( $now ) : '';
+        }
+        // phpcs:enable
+
+        $json = wp_json_encode( $data );
+        if ( is_string( $json ) && '' !== $json ) {
+            self::write_file( $path, $json );
+        }
+    }
+
+    /**
+     * @param string $name Backup file name from the browser.
+     * @return string Absolute path, or '' when invalid.
+     */
+    private static function resolve_removal_backup( $name ) {
+        $name = basename( (string) $name );
+        if ( ! preg_match( '/^url-removal-[a-z0-9-]+\.json$/', $name ) ) {
+            return '';
+        }
+        $path = self::removal_backup_dir() . $name;
+        return is_file( $path ) ? $path : '';
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public static function list_removal_backups() {
+        $dir   = self::removal_backup_dir();
+        $items = array();
+        if ( ! is_dir( $dir ) ) {
+            return $items;
+        }
+
+        $files = glob( $dir . 'url-removal-*.json' );
+        if ( ! is_array( $files ) ) {
+            return $items;
+        }
+        rsort( $files );
+
+        foreach ( array_slice( $files, 0, 50 ) as $path ) {
+            $data = json_decode( self::read_file( $path ), true );
+            if ( ! is_array( $data ) ) {
+                continue;
+            }
+            $mtime   = (int) filemtime( $path );
+            $items[] = array(
+                'file'      => basename( $path ),
+                'created'   => wp_date( 'd/m/Y H:i', isset( $data['created'] ) ? (int) $data['created'] : $mtime ),
+                'urls'      => isset( $data['urls'] ) ? count( (array) $data['urls'] ) : 0,
+                'posts'     => isset( $data['posts'] ) ? count( (array) $data['posts'] ) : 0,
+                'other'     => ( isset( $data['meta'] ) ? count( (array) $data['meta'] ) : 0 ) + ( isset( $data['options'] ) ? count( (array) $data['options'] ) : 0 ),
+                'size_h'    => size_format( (int) filesize( $path ) ),
+                'restored'  => ! empty( $data['restored_at'] ),
+            );
+        }
+
+        return $items;
+    }
+
+    /**
+     * Put back the rows saved by a "Remove from content" action.
+     *
+     * Rows edited after the removal are skipped, never overwritten.
+     *
+     * @param string $name Backup file name.
+     * @return array{restored:int,skipped:int,errors:string[]}|WP_Error
+     */
+    public static function restore_removal_backup( $name ) {
+        global $wpdb;
+        $path = self::resolve_removal_backup( $name );
+        if ( '' === $path ) {
+            return new WP_Error( 'invalid_backup', __( 'This does not look like a valid backup file.', 'tso-image-master' ) );
+        }
+
+        $data = json_decode( self::read_file( $path ), true );
+        if ( ! is_array( $data ) || empty( $data['version'] ) ) {
+            return new WP_Error( 'invalid_backup', __( 'This does not look like a valid backup file.', 'tso-image-master' ) );
+        }
+
+        $restored = 0;
+        $skipped  = 0;
+        $errors   = array();
+
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+        foreach ( (array) ( $data['posts'] ?? array() ) as $id => $row ) {
+            $now = $wpdb->get_row( $wpdb->prepare( "SELECT post_content, post_excerpt FROM {$wpdb->posts} WHERE ID = %d", (int) $id ) );
+            if ( ! $now ) {
+                $skipped++;
+                continue;
+            }
+            if ( ! empty( $row['after'] ) && md5( $now->post_content . "\0" . $now->post_excerpt ) !== $row['after'] ) {
+                $skipped++;
+                /* translators: %d: post ID */
+                $errors[] = sprintf( __( 'Post #%d was edited after the removal and was left untouched.', 'tso-image-master' ), (int) $id );
+                continue;
+            }
+            $wpdb->update(
+                $wpdb->posts,
+                array(
+                    'post_content' => (string) $row['content'],
+                    'post_excerpt' => (string) $row['excerpt'],
+                ),
+                array( 'ID' => (int) $id ),
+                array( '%s', '%s' ),
+                array( '%d' )
+            );
+            clean_post_cache( (int) $id );
+            $restored++;
+        }
+
+        foreach ( (array) ( $data['meta'] ?? array() ) as $id => $row ) {
+            $now = $wpdb->get_var( $wpdb->prepare( "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_id = %d", (int) $id ) );
+            if ( ! is_string( $now ) || ( ! empty( $row['after'] ) && md5( $now ) !== $row['after'] ) ) {
+                $skipped++;
+                continue;
+            }
+            TSOIMMA_Optimizer::update_meta_row_raw( (int) $id, (int) $row['post_id'], (string) $row['value'] );
+            $restored++;
+        }
+
+        foreach ( (array) ( $data['options'] ?? array() ) as $opt => $row ) {
+            $now = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", (string) $opt ) );
+            if ( ! is_string( $now ) || ( ! empty( $row['after'] ) && md5( $now ) !== $row['after'] ) ) {
+                $skipped++;
+                continue;
+            }
+            update_option( (string) $opt, TSOIMMA_Optimizer::unwrap_serialized_for_write( (string) $row['value'] ) );
+            $restored++;
+        }
+        // phpcs:enable
+
+        if ( $restored > 0 ) {
+            $data['restored_at'] = time();
+            $json                = wp_json_encode( $data );
+            if ( is_string( $json ) && '' !== $json ) {
+                self::write_file( $path, $json );
+            }
+            if ( function_exists( 'wp_cache_flush' ) ) {
+                wp_cache_flush();
+            }
+            do_action( 'litespeed_purge_all' );  // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Third-party LiteSpeed Cache integration hook, name is defined by that plugin.
+        }
+
+        return array(
+            'restored' => $restored,
+            'skipped'  => $skipped,
+            'errors'   => $errors,
+        );
+    }
+
+    /**
+     * @param string $name Backup file name.
+     * @return bool
+     */
+    public static function delete_removal_backup( $name ) {
+        $path = self::resolve_removal_backup( $name );
+        if ( '' === $path ) {
+            return false;
+        }
+        wp_delete_file( $path );
+        return ! file_exists( $path );
     }
 }

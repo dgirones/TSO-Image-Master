@@ -307,7 +307,29 @@ function tsoimma_get_ajax_action_names() {
 		'tsoimma_delete_size_files',
 		'tsoimma_list_backups',
 		'tsoimma_delete_backup_file',
+		'tsoimma_restore_size_backup',
+		'tsoimma_list_url_backups',
+		'tsoimma_restore_url_backup',
+		'tsoimma_delete_url_backup',
 	);
+}
+
+/**
+ * Map of renamed uploads files (old relative path => new relative path).
+ *
+ * @return array<string, string>
+ */
+function tsoimma_get_renamed_map() {
+	$map = get_option( 'tsoimma_renamed_map', array() );
+	return is_array( $map ) ? $map : array();
+}
+
+/**
+ * @param array<string, string> $map Rename map.
+ * @return void
+ */
+function tsoimma_set_renamed_map( $map ) {
+	update_option( 'tsoimma_renamed_map', is_array( $map ) ? $map : array(), false );
 }
 
 /**

@@ -952,8 +952,9 @@ class TSOIMMA_Admin_Page {
                                 'id'         => 'imp-seo-sort',
                                 'class'      => 'imp-select',
                                 'wrap_style' => 'width:auto;min-width:180px;',
-                                'selected'   => 'filesize',
+                                'selected'   => 'seo',
                                 'options'    => array(
+                                    array( 'value' => 'seo', 'label' => '🏷️ Primer les que necessiten SEO', 'i18n' => 'sort_seo' ),
                                     array( 'value' => 'filesize', 'label' => '📦 Ordenar per pes (major primer)', 'i18n' => 'sort_size' ),
                                     array( 'value' => 'date', 'label' => '📅 Ordenar per data de creació', 'i18n' => 'sort_date' ),
                                     array( 'value' => 'modified', 'label' => '✏️ Ordenar per data de modificació', 'i18n' => 'sort_modified' ),
@@ -1013,6 +1014,10 @@ class TSOIMMA_Admin_Page {
                                 <div class="imp-field">
                                     <label data-i18n="seo_alt_label">Text alternatiu (Alt)</label>
                                     <input type="text" id="imp-seo-alt" placeholder="Descripció per a accessibilitat i SEO" data-i18n-placeholder="seo_alt_ph">
+                                    <div id="imp-seo-alt-hint" class="imp-alt-hint" hidden>
+                                        <span data-i18n="alt_hyphen_hint">Text alternatiu (Alt): treu els guions per al SEO.</span>
+                                        <button type="button" class="imp-btn imp-btn-sm" id="imp-alt-unhyphen" data-i18n="alt_unhyphen_btn">Treure guions i desar</button>
+                                    </div>
                                 </div>
                                 <div class="imp-field">
                                     <label data-i18n="seo_caption_label">Peu de foto (Caption)</label>
@@ -1307,6 +1312,10 @@ class TSOIMMA_Admin_Page {
                                         array( 'value' => 'delete', 'label' => '🗑️ Eliminades', 'i18n' => 'filter_delete' ),
                                         array( 'value' => 'pdf_compress', 'label' => '📄 PDFs comprimits', 'i18n' => 'filter_pdf' ),
                                         array( 'value' => 'size_deleted', 'label' => '📐 Mides eliminades', 'i18n' => 'filter_size_deleted' ),
+                                        array( 'value' => 'size_restored', 'label' => '♻️ Mides restaurades', 'i18n' => 'filter_size_restored' ),
+                                        array( 'value' => 'url_fix', 'label' => '🔗 URL reparades', 'i18n' => 'filter_url_fix' ),
+                                        array( 'value' => 'url_remove', 'label' => '🧹 URL eliminades', 'i18n' => 'filter_url_remove' ),
+                                        array( 'value' => 'url_restore', 'label' => '♻️ URL restaurades', 'i18n' => 'filter_url_restore' ),
                                     ),
                                 )
                             );
@@ -1390,6 +1399,12 @@ class TSOIMMA_Admin_Page {
                         </div>
                     </div>
                     <button id="imp-scan-urls" class="imp-btn imp-btn-primary"data-i18n="scan_web">🔍 Escanejar tota la web</button>
+                </div>
+
+                <div id="imp-url-backups-panel" class="imp-panel" style="display:none;">
+                    <h3 class="imp-panel-title" data-i18n="url_backups_title">Còpies de seguretat d'eliminacions</h3>
+                    <p class="imp-panel-desc" data-i18n="url_backups_desc">Cada vegada que elimines referències del contingut es desa una còpia. Pots desfer l'eliminació des d'aquí; els continguts editats després no se sobreescriuen.</p>
+                    <div id="imp-url-backups-list"></div>
                 </div>
 
                 <div id="imp-url-loading" class="imp-loading-overlay" style="display:none;">

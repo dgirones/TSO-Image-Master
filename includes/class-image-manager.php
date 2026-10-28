@@ -427,6 +427,11 @@ class TSOIMMA_Image_Manager {
                 $new_thumb_name = $target_name . $dims_suffix . '.' . $thumb_ext;
                 $new_thumb_path = $base_dir . '/' . $new_thumb_name;
 
+                // Never overwrite a file that already exists under the target name.
+                if ( file_exists( $new_thumb_path ) ) {
+                    continue;
+                }
+
                 if ( TSOIMMA_Optimizer::copy_file_validated( $old_thumb, $new_thumb_path ) ) {
                     $files_to_delete[] = $old_thumb;
                     $meta['sizes'][ $size_key ]['file'] = $new_thumb_name;
@@ -454,6 +459,9 @@ class TSOIMMA_Image_Manager {
 
             $new_scaled_name = $target_name . '-scaled.' . $scaled_ext;
             $new_scaled_path = $base_dir . '/' . $new_scaled_name;
+            if ( file_exists( $new_scaled_path ) ) {
+                continue;
+            }
             if ( TSOIMMA_Optimizer::copy_file_validated( $old_scaled_path, $new_scaled_path ) ) {
                 $files_to_delete[] = $old_scaled_path;
 
@@ -501,9 +509,15 @@ class TSOIMMA_Image_Manager {
         $wpdb->update( $wpdb->posts, array( 'guid' => $new_url ), array( 'ID' => $attachment_id ) );  // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         clean_post_cache( $attachment_id );
 
-        // Reemplaçar URLs a posts, postmeta i options (pares exactes + variants -WxH/-scaled).
+        // Remember the old -> new paths so the URL Detector can repair leftovers instead of deleting them.
         if ( ! empty( $url_pairs ) ) {
-            TSOIMMA_Optimizer::replace_url_pairs_in_content( array_values( $url_pairs ) );
+            TSOIMMA_URL_Fixer::record_renames( array_values( $url_pairs ) );
+        }
+
+        // Reemplaçar URLs a posts, postmeta i options (pares exactes + variants -WxH/-scaled).
+        $rows_updated = array( 'posts' => 0, 'revisions' => 0, 'meta' => 0, 'options' => 0 );
+        if ( ! empty( $url_pairs ) ) {
+            $rows_updated = TSOIMMA_Optimizer::replace_url_pairs_in_content( array_values( $url_pairs ) );
         }
         TSOIMMA_Optimizer::replace_basename_dimension_urls_in_storage(
             $old_dir_url,
@@ -519,6 +533,7 @@ class TSOIMMA_Image_Manager {
             'new_filename'  => $target_name . '.' . $ext,
             'old_url'       => $old_url,
             'new_url'       => $new_url,
+            'updated'       => $rows_updated,
         ];
     }
 
@@ -528,6 +543,7 @@ class TSOIMMA_Image_Manager {
     public static function update_seo_fields( $attachment_id, $title = null, $alt = null, $description = null, $caption = null ) {
         $attachment_id = absint( $attachment_id );
         $post_data     = [ 'ID' => $attachment_id ];
+        $before        = self::get_seo_snapshot( $attachment_id );
 
         if ( $title !== null ) {
             $post_data['post_title'] = sanitize_text_field( $title );
@@ -546,11 +562,41 @@ class TSOIMMA_Image_Manager {
             update_post_meta( $attachment_id, '_wp_attachment_image_alt', sanitize_text_field( $alt ) );
         }
 
+        // Only the fields whose value really changed (old/new), for the history log.
+        $after   = self::get_seo_snapshot( $attachment_id );
+        $changes = array();
+        foreach ( array( 'title' => $title, 'alt' => $alt, 'caption' => $caption, 'description' => $description ) as $field => $sent ) {
+            if ( null !== $sent && $before[ $field ] !== $after[ $field ] ) {
+                $changes[ $field ] = array( 'old' => $before[ $field ], 'new' => $after[ $field ] );
+            }
+        }
+
         return [
             'attachment_id' => $attachment_id,
             'title'         => get_the_title( $attachment_id ),
             'alt'           => get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ),
+            'changes'       => $changes,
         ];
+    }
+
+    /**
+     * Current SEO text fields of an attachment (plain text, trimmed for the history log).
+     *
+     * @param int $attachment_id Attachment ID.
+     * @return array<string, string>
+     */
+    private static function get_seo_snapshot( $attachment_id ) {
+        $post = get_post( $attachment_id );
+        $cut  = static function ( $text ) {
+            $text = trim( wp_strip_all_tags( (string) $text ) );
+            return function_exists( 'mb_substr' ) ? mb_substr( $text, 0, 200 ) : substr( $text, 0, 200 );
+        };
+        return array(
+            'title'       => $cut( $post ? $post->post_title : '' ),
+            'alt'         => $cut( get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ) ),
+            'caption'     => $cut( $post ? $post->post_excerpt : '' ),
+            'description' => $cut( $post ? $post->post_content : '' ),
+        );
     }
 
     /**
@@ -568,8 +614,9 @@ class TSOIMMA_Image_Manager {
         $errors  = array();
 
         foreach ( $attachment_ids as $id ) {
-            $id   = absint( $id );
-            $file = get_attached_file( $id );
+            $id    = absint( $id );
+            $file  = get_attached_file( $id );
+            $title = get_the_title( $id );
 
             // ── Eliminar fitxer de backup TSO del disc ─────────────────
             // wp_delete_attachment elimina els postmeta però NO coneix el fitxer
@@ -591,9 +638,7 @@ class TSOIMMA_Image_Manager {
                 wp_delete_file( $pdf_temp );
             }
 
-            // ── Eliminar entrades de l'historial TSO ───────────────────
-            // wp_delete_attachment no toca la taula tso_im_history (taula custom).
-            TSOIMMA_History::delete_by_attachment( $id );
+            // L'historial es conserva: queda com a rastre de què s'ha fet amb la imatge.
 
             // ── Eliminar el post, tots els postmeta i els thumbnails ───
             // wp_delete_attachment( $id, true ):
@@ -602,6 +647,14 @@ class TSOIMMA_Image_Manager {
             $res = wp_delete_attachment( $id, true );
 
             if ( $res ) {
+                TSOIMMA_History::log(
+                    $id,
+                    'delete',
+                    array(
+                        'filename'         => $file ? basename( $file ) : '',
+                        'attachment_title' => $title,
+                    )
+                );
                 $deleted[] = array( 'id' => $id, 'file' => $file );
             } else {
                 $errors[] = array( 'id' => $id, 'error' => 'No s\'ha pogut eliminar.' );
@@ -628,7 +681,7 @@ class TSOIMMA_Image_Manager {
         // filesize: cal ordenar en PHP (WP no indexa mida de fitxer)
         // search: filtre propi UTF-8 per prefix del nom (evita "ar" dins "mar").
         $search    = trim( (string) $search );
-        $fetch_all = ( $sort === 'filesize' || $search !== '' );
+        $fetch_all = ( $sort === 'filesize' || $sort === 'seo' || $search !== '' );
 
         $orderby = 'date';
         $order   = 'DESC';
@@ -665,7 +718,10 @@ class TSOIMMA_Image_Manager {
                 'id'           => $post->ID,
                 'title'        => $post->post_title,
                 'alt'          => $alt_text,
-                'alt_ok'       => '' !== trim( $alt_text ) && ! TSOIMMA_Dashboard::is_weak_alt( $alt_text, $post->ID ),
+                // One criterion for every image: present, not a camera/number placeholder and
+                // not written like a file name (hyphens/underscores, no spaces).
+                'alt_ok'       => ! TSOIMMA_Dashboard::is_placeholder_alt( $alt_text ) && ! TSOIMMA_Dashboard::is_hyphenated_alt( $alt_text ),
+                'alt_hyphen'   => TSOIMMA_Dashboard::is_hyphenated_alt( $alt_text ),
                 'caption'      => $post->post_excerpt,
                 'description'  => $post->post_content,
                 'filename'     => basename( $file_path ?? '' ),
@@ -680,6 +736,12 @@ class TSOIMMA_Image_Manager {
             ];
         }
 
+        // Orphan flag (same criterion as the Orphans tab) so SEO / Optimize can badge and sort them last.
+        $orphan_set = TSOIMMA_Orphan_Finder::orphan_id_set( wp_list_pluck( $items, 'id' ), $page > 1 );
+        foreach ( $items as $i => $item ) {
+            $items[ $i ]['is_orphan'] = isset( $orphan_set[ (int) $item['id'] ] );
+        }
+
         // Filtre de cerca estricte UTF-8: el nom base (sense extensió) ha de començar pel terme.
         if ( $search !== '' ) {
             $items = array_values( array_filter( $items, function( $item ) use ( $search ) {
@@ -690,9 +752,34 @@ class TSOIMMA_Image_Manager {
 
         // Ordenar per filesize si cal
         if ( $fetch_all ) {
-            usort( $items, function( $a, $b ) {
-                return $b['filesize_raw'] - $a['filesize_raw'];
-            } );
+            if ( 'seo' === $sort ) {
+                // SEO tab: images that still need SEO work first (no alt > alt like a file name > file name), the OK ones last.
+                $seo_score = static function ( $item ) {
+                    $score = 0;
+                    if ( '' === trim( (string) $item['alt'] ) ) {
+                        $score += 4;
+                    } elseif ( empty( $item['alt_ok'] ) ) {
+                        $score += 2;
+                    }
+                    if ( empty( $item['slug_ok'] ) ) {
+                        $score += 1;
+                    }
+                    return $score;
+                };
+                usort( $items, function( $a, $b ) use ( $seo_score ) {
+                    $diff = (int) $a['is_orphan'] <=> (int) $b['is_orphan'];
+                    if ( 0 !== $diff ) {
+                        return $diff;
+                    }
+                    $diff = $seo_score( $b ) <=> $seo_score( $a );
+                    return 0 !== $diff ? $diff : ( $b['filesize_raw'] <=> $a['filesize_raw'] );
+                } );
+            } else {
+                usort( $items, function( $a, $b ) {
+                    $diff = (int) $a['is_orphan'] <=> (int) $b['is_orphan'];
+                    return 0 !== $diff ? $diff : ( $b['filesize_raw'] <=> $a['filesize_raw'] );
+                } );
+            }
             $total       = count( $items );
             $total_pages = $per_page > 0 ? (int) ceil( $total / $per_page ) : 1;
             $offset      = ( $page - 1 ) * $per_page;

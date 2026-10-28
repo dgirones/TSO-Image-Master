@@ -1036,6 +1036,7 @@ class TSOIMMA_Optimizer {
      * Replace URL pairs in posts, postmeta, and options (serialized-safe).
      *
      * @param array<int, array{0:string,1:string}> $pairs Old/new URL pairs.
+     * @return array{posts:int,revisions:int,meta:int,options:int} Rows that contained the old URLs.
      */
     public static function replace_url_pairs_in_content( $pairs ) {
         global $wpdb;
@@ -1047,67 +1048,103 @@ class TSOIMMA_Optimizer {
             }
             $replacements[] = array( $pair[0], $pair[1] );
         }
+        $touched = array( 'posts' => 0, 'revisions' => 0, 'meta' => 0, 'options' => 0 );
         if ( empty( $replacements ) ) {
-            return;
+            return $touched;
         }
 
-        // Handle encoded/non-encoded URL variants (e.g. ñ vs %C3%B1) to avoid missed replacements.
-        $normalized_replacements = self::expand_replacement_variants( $replacements );
+        // Handle encoded/non-encoded and http/www/relative variants of every URL.
+        $all_replacements = self::expand_replacement_variants( $replacements );
 
-        $fallback_replacements   = array();
-        $dimension_replacements  = array();
+        // Dimension variants (-WxH) are derived from the full-size URL only; sized URLs
+        // already have their own exact pair. Never bare basename replacements (those can
+        // hit unrelated files with the same name).
+        $dimension_replacements = array();
         foreach ( $replacements as $pair ) {
             $old_url = $pair[0];
             $new_url = $pair[1];
             $old_ext = strtolower( pathinfo( $old_url, PATHINFO_EXTENSION ) );
             $new_ext = strtolower( pathinfo( $new_url, PATHINFO_EXTENSION ) );
-
-            // Dimension variants (-WxH) from the full URL only — never bare basename
-            // replacements (those can hit unrelated files with the same name).
-            if ( ! self::extensions_match( $old_ext, $new_ext ) ) {
-                $dimension_replacements[] = array( $old_url, $new_url, $old_ext, $new_ext );
+            if ( self::extensions_match( $old_ext, $new_ext ) ) {
+                continue;
             }
+            if ( preg_match( '/-\d+x\d+\.[a-z0-9]+$/i', $old_url ) ) {
+                continue;
+            }
+            $dimension_replacements[] = array( $old_url, $new_url, $old_ext, $new_ext );
         }
 
-        $all_replacements = self::expand_replacement_variants( array_merge( $normalized_replacements, $fallback_replacements ) );
-        foreach ( $all_replacements as $pair ) {
-            $s    = $pair[0];
-            $r    = $pair[1];
-            $like = '%' . $wpdb->esc_like( $s ) . '%';
+        // One prefilter pass per table (not one per variant): every written form of a
+        // URL shares the same host-less path, so a few LIKE needles find all candidate rows.
+        $needles = self::prefilter_needles( array_column( $all_replacements, 0 ) );
 
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-            $wpdb->query( $wpdb->prepare(
-                "UPDATE {$wpdb->posts} SET post_content = REPLACE(post_content, %s, %s) WHERE post_content LIKE %s",
-                $s, $r, $like
-            ) );
-
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Serialized-safe per-row updates.
-            $meta_rows = $wpdb->get_results(
-                $wpdb->prepare(
-                    "SELECT post_id, meta_key, meta_value FROM {$wpdb->postmeta} WHERE meta_value LIKE %s",
-                    $like
-                )
-            );
-            foreach ( (array) $meta_rows as $row ) {
-                $updated = self::replace_in_stored_value( (string) $row->meta_value, $s, $r );
-                if ( $updated !== (string) $row->meta_value ) {
-                    update_metadata( 'post', (int) $row->post_id, $row->meta_key, wp_slash( self::unwrap_serialized_for_write( $updated ) ) );
+        if ( ! empty( $needles ) ) {
+            // Posts (including revisions): row ids first, then primary-key bound atomic REPLACE().
+            $id_rows = array();
+            foreach ( self::like_arg_groups( $needles ) as $group ) {
+                // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- One scan per group of 4 needles.
+                foreach ( (array) $wpdb->get_results( $wpdb->prepare( "SELECT ID, post_type FROM {$wpdb->posts} WHERE post_content LIKE %s OR post_content LIKE %s OR post_content LIKE %s OR post_content LIKE %s", $group[0], $group[1], $group[2], $group[3] ) ) as $found_row ) {
+                    $id_rows[ (int) $found_row->ID ] = $found_row;
+                }
+            }
+            $ids     = array();
+            foreach ( (array) $id_rows as $id_row ) {
+                $ids[] = (int) $id_row->ID;
+                if ( 'revision' === $id_row->post_type ) {
+                    ++$touched['revisions'];
+                } else {
+                    ++$touched['posts'];
                 }
             }
 
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-            $option_rows = $wpdb->get_results(
-                $wpdb->prepare(
-                    "SELECT option_name, option_value FROM {$wpdb->options}
-                     WHERE option_value LIKE %s AND option_name NOT LIKE %s",
-                    $like,
-                    $wpdb->esc_like( '_transient' ) . '%'
-                )
-            );
+            foreach ( array_chunk( $ids, 200 ) as $id_chunk ) {
+                $id_placeholders = implode( ',', array_fill( 0, count( $id_chunk ), '%d' ) );
+                foreach ( $all_replacements as $pair ) {
+                    $query_args = array_merge( array( $pair[0], $pair[1] ), $id_chunk, array( '%' . $wpdb->esc_like( $pair[0] ) . '%' ) );
+                    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- Placeholders are generated above.
+                    $wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->posts} SET post_content = REPLACE(post_content, %s, %s) WHERE ID IN ({$id_placeholders}) AND post_content LIKE %s", $query_args ) );
+                }
+                foreach ( $id_chunk as $changed_id ) {
+                    clean_post_cache( $changed_id );
+                }
+            }
+
+            // Custom fields (serialized-safe, per row by meta_id).
+            $meta_rows = array();
+            foreach ( self::like_arg_groups( $needles ) as $group ) {
+                // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- One scan per group of 4 needles.
+                foreach ( (array) $wpdb->get_results( $wpdb->prepare( "SELECT meta_id, post_id, meta_key, meta_value FROM {$wpdb->postmeta} WHERE meta_value LIKE %s OR meta_value LIKE %s OR meta_value LIKE %s OR meta_value LIKE %s", $group[0], $group[1], $group[2], $group[3] ) ) as $found_row ) {
+                    $meta_rows[ (int) $found_row->meta_id ] = $found_row;
+                }
+            }
+            foreach ( (array) $meta_rows as $row ) {
+                $updated = (string) $row->meta_value;
+                foreach ( $all_replacements as $pair ) {
+                    $updated = self::replace_in_stored_value( $updated, $pair[0], $pair[1] );
+                }
+                if ( $updated !== (string) $row->meta_value ) {
+                    self::update_meta_row_raw( (int) $row->meta_id, (int) $row->post_id, $updated );
+                    ++$touched['meta'];
+                }
+            }
+
+            // Options (not transients).
+            $option_rows = array();
+            foreach ( self::like_arg_groups( $needles ) as $group ) {
+                $transient_like = $wpdb->esc_like( '_transient' ) . '%';
+                // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- One scan per group of 4 needles.
+                foreach ( (array) $wpdb->get_results( $wpdb->prepare( "SELECT option_name, option_value FROM {$wpdb->options} WHERE ( option_value LIKE %s OR option_value LIKE %s OR option_value LIKE %s OR option_value LIKE %s ) AND option_name NOT LIKE %s", $group[0], $group[1], $group[2], $group[3], $transient_like ) ) as $found_row ) {
+                    $option_rows[ (string) $found_row->option_name ] = $found_row;
+                }
+            }
             foreach ( (array) $option_rows as $row ) {
-                $updated = self::replace_in_stored_value( (string) $row->option_value, $s, $r );
+                $updated = (string) $row->option_value;
+                foreach ( $all_replacements as $pair ) {
+                    $updated = self::replace_in_stored_value( $updated, $pair[0], $pair[1] );
+                }
                 if ( $updated !== (string) $row->option_value ) {
                     update_option( (string) $row->option_name, self::unwrap_serialized_for_write( $updated ) );
+                    ++$touched['options'];
                 }
             }
         }
@@ -1120,6 +1157,58 @@ class TSOIMMA_Optimizer {
         do_action( 'litespeed_purge_all' );  // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Third-party LiteSpeed Cache integration hook, name is defined by that plugin.
         if ( function_exists( 'rocket_clean_domain' ) ) rocket_clean_domain();
         if ( function_exists( 'w3tc_flush_all' ) ) w3tc_flush_all();
+
+        return $touched;
+    }
+
+    /**
+     * Host-less path needles that match every written form (http/https, www, relative,
+     * encoded, JSON-escaped) of the given URLs.
+     *
+     * @param string[] $strings URL strings (or URL fragments).
+     * @return string[]
+     */
+    private static function prefilter_needles( $strings ) {
+        $needles = array();
+        foreach ( (array) $strings as $string ) {
+            $string = (string) $string;
+            if ( '' === $string ) {
+                continue;
+            }
+            if ( false !== strpos( $string, '\\/' ) ) {
+                $path = preg_replace( '#^(?:https?:)?\\\\/\\\\/[^\\\\]+#i', '', $string );
+            } else {
+                $path = preg_replace( '#^(?:https?:)?//[^/]+#i', '', $string );
+            }
+            if ( null === $path || strlen( $path ) < 6 ) {
+                $path = $string;
+            }
+            $needles[ $path ] = true;
+        }
+        return array_keys( $needles );
+    }
+
+    /**
+     * LIKE arguments ("%needle%", escaped) split in groups of exactly 4, so every query can use
+     * fixed, literal SQL (short groups repeat their last needle). Keeps one scan per group.
+     *
+     * @param string[] $needles Needles.
+     * @return array<int, string[]>
+     */
+    private static function like_arg_groups( $needles ) {
+        global $wpdb;
+        $args = array();
+        foreach ( $needles as $needle ) {
+            $args[] = '%' . $wpdb->esc_like( $needle ) . '%';
+        }
+        $groups = array();
+        foreach ( array_chunk( $args, 4 ) as $chunk ) {
+            while ( count( $chunk ) < 4 ) {
+                $chunk[] = end( $chunk );
+            }
+            $groups[] = $chunk;
+        }
+        return $groups;
     }
 
     private static function expand_replacement_variants( $pairs ) {
@@ -1128,12 +1217,98 @@ class TSOIMMA_Optimizer {
             if ( empty( $pair[0] ) || empty( $pair[1] ) ) {
                 continue;
             }
-            self::append_replacement_pair_unique( $expanded, $pair[0], $pair[1] );
-            self::append_replacement_pair_unique( $expanded, rawurldecode( $pair[0] ), rawurldecode( $pair[1] ) );
-            // JSON-escaped slashes (Elementor _elementor_data, block JSON): https:\/\/site\/img.jpg
-            self::append_replacement_pair_unique( $expanded, str_replace( '/', '\\/', $pair[0] ), str_replace( '/', '\\/', $pair[1] ) );
+            // Same image as written in older content: http:// vs https://, www vs
+            // non-www, protocol-relative and root-relative (/wp-content/...) URLs.
+            foreach ( self::origin_variant_pairs( $pair[0], $pair[1] ) as $variant ) {
+                self::append_replacement_pair_unique( $expanded, $variant[0], $variant[1] );
+                self::append_replacement_pair_unique( $expanded, rawurldecode( $variant[0] ), rawurldecode( $variant[1] ) );
+                // JSON-escaped slashes (Elementor _elementor_data, block JSON): https:\/\/site\/img.jpg
+                self::append_replacement_pair_unique( $expanded, str_replace( '/', '\\/', $variant[0] ), str_replace( '/', '\\/', $variant[1] ) );
+            }
         }
         return array_values( $expanded );
+    }
+
+    /**
+     * Hostnames that identify this site (home/site/uploads), with and without "www.".
+     *
+     * @return string[]
+     */
+    private static function site_url_hosts() {
+        static $hosts = null;
+        if ( null !== $hosts ) {
+            return $hosts;
+        }
+
+        $upload_dir = wp_upload_dir();
+        $hosts      = array();
+        foreach ( array( home_url(), site_url(), $upload_dir['baseurl'] ) as $site_url ) {
+            $host = wp_parse_url( (string) $site_url, PHP_URL_HOST );
+            if ( ! $host ) {
+                continue;
+            }
+            $host    = strtolower( $host );
+            $hosts[] = $host;
+            $hosts[] = ( 0 === strpos( $host, 'www.' ) ) ? substr( $host, 4 ) : 'www.' . $host;
+        }
+        $hosts = array_values( array_unique( $hosts ) );
+
+        return $hosts;
+    }
+
+    /**
+     * Every way the same site URL may be written in stored content.
+     *
+     * @param string $url Absolute URL of this site.
+     * @return array<string, string> Shape key => URL (only "self" when the URL is not on this site).
+     */
+    private static function origin_shapes( $url ) {
+        $url    = (string) $url;
+        $shapes = array( 'self' => $url );
+        $parts  = wp_parse_url( $url );
+        if ( empty( $parts['host'] ) || empty( $parts['path'] ) ) {
+            return $shapes;
+        }
+
+        $host = strtolower( $parts['host'] );
+        if ( ! in_array( $host, self::site_url_hosts(), true ) ) {
+            return $shapes;
+        }
+
+        $port = isset( $parts['port'] ) ? ':' . $parts['port'] : '';
+        $path = $parts['path'];
+        $alt  = ( 0 === strpos( $host, 'www.' ) ) ? substr( $host, 4 ) : 'www.' . $host;
+
+        foreach ( array( 'https', 'http' ) as $scheme ) {
+            foreach ( array( $host, $alt ) as $variant_host ) {
+                $shapes[ $scheme . '://' . $variant_host ] = $scheme . '://' . $variant_host . $port . $path;
+            }
+        }
+        $shapes[ '//' . $host ] = '//' . $host . $port . $path;
+        $shapes[ '//' . $alt ]  = '//' . $alt . $port . $path;
+        $shapes['path']         = $path;
+
+        return $shapes;
+    }
+
+    /**
+     * Aligned old/new URL pairs for every written form of the same URL.
+     *
+     * @param string $old_url Old URL.
+     * @param string $new_url New URL.
+     * @return array<int, array{0:string,1:string}>
+     */
+    private static function origin_variant_pairs( $old_url, $new_url ) {
+        $old_shapes = self::origin_shapes( $old_url );
+        $new_shapes = self::origin_shapes( $new_url );
+        $pairs      = array();
+        foreach ( $old_shapes as $key => $old_variant ) {
+            if ( ! isset( $new_shapes[ $key ] ) || $old_variant === $new_shapes[ $key ] ) {
+                continue;
+            }
+            $pairs[ md5( $old_variant . "\n" . $new_shapes[ $key ] ) ] = array( $old_variant, $new_shapes[ $key ] );
+        }
+        return array_values( $pairs );
     }
 
     private static function append_replacement_pair_unique( &$pairs, $old, $new ) {
@@ -1152,14 +1327,20 @@ class TSOIMMA_Optimizer {
     private static function replace_dimension_variant_urls_in_storage( $old_url, $new_url, $old_ext, $new_ext ) {
         global $wpdb;
 
-        $old_variants = array_values( array_unique( array_filter( array(
-            (string) $old_url,
-            rawurldecode( (string) $old_url ),
-        ) ) ) );
-        $new_variants = array_values( array_unique( array_filter( array(
-            (string) $new_url,
-            rawurldecode( (string) $new_url ),
-        ) ) ) );
+        // Aligned old/new lists covering http/https, www, protocol-relative,
+        // root-relative and percent-decoded forms of the same URL.
+        $variant_pairs = array();
+        foreach ( array( array( (string) $old_url, (string) $new_url ), array( rawurldecode( (string) $old_url ), rawurldecode( (string) $new_url ) ) ) as $base_pair ) {
+            foreach ( self::origin_variant_pairs( $base_pair[0], $base_pair[1] ) as $variant ) {
+                $variant_pairs[ md5( $variant[0] . "\n" . $variant[1] ) ] = $variant;
+            }
+        }
+        $old_variants = array();
+        $new_variants = array();
+        foreach ( $variant_pairs as $variant ) {
+            $old_variants[] = $variant[0];
+            $new_variants[] = $variant[1];
+        }
         if ( empty( $old_variants ) || empty( $new_variants ) ) {
             return;
         }
@@ -1176,51 +1357,47 @@ class TSOIMMA_Optimizer {
             return;
         }
 
+        // One scan per table: host-less path needles cover every variant.
+        $needles = self::prefilter_needles( array_keys( $like_keys ) );
         $posts_by_id = array();
-        foreach ( array_keys( $like_keys ) as $like_fragment ) {
-            $like = '%' . $wpdb->esc_like( $like_fragment ) . '%';
 
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-            $rows = $wpdb->get_results(
-                $wpdb->prepare(
-                    "SELECT ID, post_content, post_excerpt FROM {$wpdb->posts}
-                     WHERE (post_content LIKE %s OR post_excerpt LIKE %s) AND post_status != 'trash'",
-                    $like,
-                    $like
-                )
-            );
-            foreach ( (array) $rows as $row ) {
-                $posts_by_id[ (int) $row->ID ] = $row;
+        $rows = array();
+        foreach ( self::like_arg_groups( $needles ) as $group ) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- One scan per group of 4 needles.
+            foreach ( (array) $wpdb->get_results( $wpdb->prepare( "SELECT ID, post_content, post_excerpt FROM {$wpdb->posts} WHERE ( post_content LIKE %s OR post_content LIKE %s OR post_content LIKE %s OR post_content LIKE %s OR post_excerpt LIKE %s OR post_excerpt LIKE %s OR post_excerpt LIKE %s OR post_excerpt LIKE %s ) AND post_status != 'trash'", $group[0], $group[1], $group[2], $group[3], $group[0], $group[1], $group[2], $group[3] ) ) as $found_row ) {
+                $rows[ (int) $found_row->ID ] = $found_row;
             }
+        }
+        foreach ( (array) $rows as $row ) {
+            $posts_by_id[ (int) $row->ID ] = $row;
+        }
 
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Targeted LIKE scan to fix broken image URLs in custom fields/widgets.
-            $meta_rows = $wpdb->get_results(
-                $wpdb->prepare(
-                    "SELECT post_id, meta_key, meta_value FROM {$wpdb->postmeta} WHERE meta_value LIKE %s",
-                    $like
-                )
-            );
-            foreach ( (array) $meta_rows as $row ) {
-                $updated = self::apply_dimension_variant_regex_stored( (string) $row->meta_value, $old_variants, $new_variants, $old_ext, $new_ext );
-                if ( $updated !== (string) $row->meta_value ) {
-                    update_metadata( 'post', (int) $row->post_id, $row->meta_key, wp_slash( self::unwrap_serialized_for_write( $updated ) ) );
-                }
+        $meta_rows = array();
+        foreach ( self::like_arg_groups( $needles ) as $group ) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- One scan per group of 4 needles.
+            foreach ( (array) $wpdb->get_results( $wpdb->prepare( "SELECT meta_id, post_id, meta_key, meta_value FROM {$wpdb->postmeta} WHERE meta_value LIKE %s OR meta_value LIKE %s OR meta_value LIKE %s OR meta_value LIKE %s", $group[0], $group[1], $group[2], $group[3] ) ) as $found_row ) {
+                $meta_rows[ (int) $found_row->meta_id ] = $found_row;
             }
+        }
+        foreach ( (array) $meta_rows as $row ) {
+            $updated = self::apply_dimension_variant_regex_stored( (string) $row->meta_value, $old_variants, $new_variants, $old_ext, $new_ext );
+            if ( $updated !== (string) $row->meta_value ) {
+                self::update_meta_row_raw( (int) $row->meta_id, (int) $row->post_id, $updated );
+            }
+        }
 
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-            $option_rows = $wpdb->get_results(
-                $wpdb->prepare(
-                    "SELECT option_name, option_value FROM {$wpdb->options}
-                     WHERE option_value LIKE %s AND option_name NOT LIKE %s",
-                    $like,
-                    $wpdb->esc_like( '_transient' ) . '%'
-                )
-            );
-            foreach ( (array) $option_rows as $row ) {
-                $updated = self::apply_dimension_variant_regex_stored( (string) $row->option_value, $old_variants, $new_variants, $old_ext, $new_ext );
-                if ( $updated !== (string) $row->option_value ) {
-                    update_option( (string) $row->option_name, self::unwrap_serialized_for_write( $updated ) );
-                }
+        $option_rows = array();
+        foreach ( self::like_arg_groups( $needles ) as $group ) {
+            $transient_like = $wpdb->esc_like( '_transient' ) . '%';
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- One scan per group of 4 needles.
+            foreach ( (array) $wpdb->get_results( $wpdb->prepare( "SELECT option_name, option_value FROM {$wpdb->options} WHERE ( option_value LIKE %s OR option_value LIKE %s OR option_value LIKE %s OR option_value LIKE %s ) AND option_name NOT LIKE %s", $group[0], $group[1], $group[2], $group[3], $transient_like ) ) as $found_row ) {
+                $option_rows[ (string) $found_row->option_name ] = $found_row;
+            }
+        }
+        foreach ( (array) $option_rows as $row ) {
+            $updated = self::apply_dimension_variant_regex_stored( (string) $row->option_value, $old_variants, $new_variants, $old_ext, $new_ext );
+            if ( $updated !== (string) $row->option_value ) {
+                update_option( (string) $row->option_name, self::unwrap_serialized_for_write( $updated ) );
             }
         }
 
@@ -1240,6 +1417,7 @@ class TSOIMMA_Optimizer {
                     array( '%s', '%s' ),
                     array( '%d' )
                 );
+                clean_post_cache( (int) $row->ID );
             }
         }
     }
@@ -1280,6 +1458,22 @@ class TSOIMMA_Optimizer {
     }
 
     /**
+     * Write a postmeta value verbatim by meta_id.
+     *
+     * update_metadata() would unslash the value and update every row that shares the
+     * meta key, and would double-serialize an already serialized string.
+     *
+     * @param int    $meta_id Meta row ID.
+     * @param int    $post_id Post ID (for cache invalidation).
+     * @param string $value   Final stored value (already serialized when needed).
+     */
+    public static function update_meta_row_raw( $meta_id, $post_id, $value ) {
+        global $wpdb;
+        $wpdb->update( $wpdb->postmeta, array( 'meta_value' => (string) $value ), array( 'meta_id' => (int) $meta_id ), array( '%s' ), array( '%d' ) );  // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Writes one row by primary key (meta_id); no meta_value lookup.
+        wp_cache_delete( (int) $post_id, 'post_meta' );
+    }
+
+    /**
      * Prepare a (possibly serialized) string for update_option()/update_metadata().
      *
      * Those APIs serialize their input, and maybe_serialize() double-serializes a
@@ -1290,7 +1484,7 @@ class TSOIMMA_Optimizer {
      * @param string $value Stored value after replacement.
      * @return mixed
      */
-    private static function unwrap_serialized_for_write( $value ) {
+    public static function unwrap_serialized_for_write( $value ) {
         return is_serialized( $value ) ? maybe_unserialize( $value ) : $value;
     }
 

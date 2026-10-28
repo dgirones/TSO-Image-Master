@@ -5,15 +5,17 @@ Tags: image optimization, webp, avif, media library, pdf compression
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.0.6
+Stable tag: 2.0.9
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Complete image optimization suite: WebP/AVIF/JPG/PNG, PDFs, orphans, SEO, queue, and URL repair.
+Auto-converts images to WebP, AVIF, JPG or PNG, compresses PDFs, and repairs your media library: broken links, orphans, unused sizes, alt, SEO.
 
 == Description ==
 
-TSO Image Master is a complete media management and image optimization plugin for WordPress. It provides the following features from a single admin screen:
+Most image plugins only compress. TSO Image Master also fixes what goes wrong. It automatically converts every upload to WebP, AVIF, JPG or PNG (with an undo backup) and compresses your PDFs. Then it helps you repair the rest of your media library: broken image URLs with one-click fix and undo, safe renaming that updates every link, orphan images and extra files, duplicates, unused image sizes that waste disk space, missing or hyphenated alt text, and oversized files.
+
+It provides the following features from a single admin screen:
 
 **Overview** — Site health metrics (image count, missing alt, TSO backups, space saved, server engines). Bulk-fill missing or weak alt text. Scan for duplicate image files. Configure backup retention and watch the background optimize queue.
 
@@ -22,6 +24,8 @@ TSO Image Master is a complete media management and image optimization plugin fo
 **Orphaned Image Finder** — Detects Media Library images that are not referenced in posts, pages, widgets, meta, theme Customizer settings, FSE templates/parts/patterns, term meta, or menu items. Paginated batch scanning helps avoid timeouts on large sites.
 
 **Rogue File Scanner** — Scans the uploads directory for physical files WordPress does not know about: double-extension files (e.g. image.jpg.webp), plugin backup files, temporary files, and other unregistered images that waste disk space.
+
+**Image Sizes** — Finds image sizes (thumbnails) left behind by old plugins or themes that WordPress no longer registers or uses, grouped by size. Delete a whole size in one click: every deletion saves a backup zip you can download, restore or delete, and files used by another size or by the main image are never removed.
 
 **SEO & File Names** — Edit title, alt text, caption, and description for any image. Rename files using SEO-friendly slugs (lowercase, no accents, hyphens instead of spaces). All internal links are updated automatically.
 
@@ -57,8 +61,6 @@ The plugin interface is already translated into the following languages (include
 * **Català (Catalan)** — `ca`
 * **Español (Spanish)** — `es_ES`
 
-Bundled `.mo` files also translate the plugin name and description on the WordPress **Plugins** screen when your site language is Catalan or Spanish.
-
 If you would like to contribute a translation into another language, you can do so at [translate.wordpress.org](https://translate.wordpress.org/projects/wp-plugins/tso-image-master/).
 
 == Installation ==
@@ -67,6 +69,7 @@ If you would like to contribute a translation into another language, you can do 
 2. Activate the plugin through the **Plugins** screen in WordPress.
 3. Go to **Image Master** in the admin sidebar to start using the plugin.
 4. (Optional) To enable PDF compression, install GhostScript on your server. Ask your hosting provider for assistance if needed.
+5. Requires PHP GD to WebP images.Ask your hosting provider for assistance if needed.
 
 == Frequently Asked Questions ==
 
@@ -138,34 +141,20 @@ On Overview, **Scan duplicates** groups Media Library files with the same MD5 ha
 
 For releases before 2.0.0, see CHANGELOG.txt in the plugin folder.
 
-= 2.0.6 =
-* New: "Image Sizes" tab has a "Delete all" button per size and a "View backups" panel listing every saved backup zip with a direct download link, so a full cleanup and finding its backup afterwards each take one click.
-* New: The "View backups" panel now also has a "Delete" button per backup file, to remove one manually without waiting for the retention cleanup.
-* New: The "View backups" panel now shows how many files each backup contains, next to its size.
-* Fixed: The "View backups" panel now refreshes by itself after deleting size files, so the new backup zip appears without reloading the page.
-* Fixed: Backup dates in the "View backups" panel now use the site's timezone instead of UTC.
+= 2.0.9 =
+* Improved: New plugin description that highlights automatic WebP/AVIF/JPG/PNG conversion, PDF compression and library repair tools.
+* Fixed: URL Detector now repairs old links (e.g. .png) of images that were converted and later renamed, instead of offering to delete them.
 
-= 2.0.5 =
-* New: Checkbox below the media uploader (Media > Add New and the media modal) to turn automatic image optimization on or off for each upload; it remembers your last choice as soon as you change it.
-* New: "Image Sizes" tab: scans the media library and groups every generated size file (thumbnail, medium, wp_review...) by size name, flagging which ones are no longer registered by any active theme/plugin, so you can review and bulk-delete just those size files (never the original) with a sample-first safety flow.
-* Fixed: "Image Sizes" tab now only lists sizes that are actually safe to delete (still-registered sizes and WordPress's own site-icon sizes are excluded), instead of showing every unregistered size and requiring the admin to tell them apart.
-* New: "Image Sizes" tab now backs up every file into a single zip (under uploads/tso-image-master/, reusing the existing backup retention settings) right before deleting a batch, so a size cleanup of hundreds of files is never a one-way trip.
-* Fixed: Renaming a file (SEO & File Names) could silently revert the attachment's guid back to the old URL right after saving, due to a stale object-cache read; the new filename/URL now stick correctly.
-* Fixed: Optimize/convert responses (single and bulk) no longer include the server's absolute file paths, avoiding unnecessary disclosure of server/hosting directory structure.
+= 2.0.8 =
+* Fixed: URL Detector "Remove from content" no longer deletes other images in the same block or link; it can also repair links of renamed images.
+* Fixed: Uploading and renaming images is much faster (one database scan instead of hundreds).
+* New: History records old and new alt/title, URL Detector actions, links updated on rename and deleted images.
+* Improved: SEO tab lists images that need SEO first, asks to remove hyphens from the alt text (one-click button) and fixes the "SEO" button.
+* Improved: Orphan images are labelled and listed last in SEO and Optimize; "Extra files" ignores other TSO plugins' backups (Swiss Knife).
 
-= 2.0.4 =
-* Fixed: Image URL rewriting after conversion no longer corrupts or loses serialized custom fields/options (e.g. block widgets) and now also updates Elementor/JSON-escaped URLs.
-
-= 2.0.3 =
-* Fixed: Merging duplicate images no longer strips backslashes from post content (could trigger "unexpected or invalid content" in the block editor).
-* Fixed: Image search (Optimize / SEO) now matches the start of any word in the file name or title, not only the start of the name.
-* Fixed: Orphan scan now detects images used via [gallery ids] shortcodes, image blocks and wp-image classes, and scans much faster (one reference index per scan instead of several queries per image); logs, caches and other plugins' data no longer count as image usage.
-* Fixed: Orphan detection no longer counts post_parent, revisions, trashed/auto-draft posts, internal meta keys or the plugin's own options as image usage.
-* Fixed: Image detail no longer lists 'attached only' posts as usage; shown separately.
-* Fixed: Converting or restoring an image no longer overwrites another file that already has the target file name (e.g. foo.png and foo.jpg both converted to foo.webp).
-* Fixed: JPEG photos keep their orientation (EXIF) when converted, resized or regenerated.
-* Fixed: File type detection no longer causes a fatal error on servers without the PHP fileinfo extension.
-* Fixed: Broken-link repair after optimizing no longer redirects same-named files from other folders to the wrong image.
-* Fixed: A failed restore (e.g. no backup available) no longer leaves the image locked for 15 minutes.
-* Fixed: PDF compression no longer stays in 'processing' forever when the compressed file is smaller than 10 KB.
-
+= 2.0.7 =
+* New: URL Detector now repairs links to images renamed with the plugin instead of offering to delete them, and every "Remove from content" saves a backup with an Undo button.
+* Fixed: Renaming an image now also updates links written as http://, without www or as relative paths, which were left broken before.
+* Fixed: Image Sizes module strings now fully translated to Catalan and Spanish.
+* Fixed: URL Detector no longer corrupts serialized or escaped custom fields/options, or other fields that share the same key, when fixing or removing links.
+* Fixed: Renaming an image never overwrites an existing file, and edited posts refresh their cached content.

@@ -19,6 +19,31 @@ class TSOIMMA_Rogue_Scanner {
     );
 
     /**
+     * Whether a path (relative to uploads, or absolute inside uploads) belongs to the
+     * data folder of ANOTHER plugin (e.g. the TSO Swiss Knife quarantine and backups).
+     * Those files are never reported and can never be deleted from here.
+     * This plugin's own folder (tso-image-master) is not protected.
+     *
+     * @param string $path Relative uploads path or absolute path.
+     * @return bool
+     */
+    public static function is_other_plugin_path( $path ) {
+        $path = wp_normalize_path( (string) $path );
+        $base = wp_normalize_path( trailingslashit( wp_upload_dir()['basedir'] ) );
+        if ( 0 === strpos( $path, $base ) ) {
+            $path = substr( $path, strlen( $base ) );
+        }
+        $parts = explode( '/', ltrim( $path, '/' ) );
+        $top   = strtolower( (string) $parts[0] );
+        if ( '' === $top || 'tso-image-master' === $top ) {
+            return false;
+        }
+        // Same convention as TSO Swiss Knife: top-level folders owned by TSO plugins.
+        $is_other = (bool) preg_match( '/^(tso-|tsosk-)/', $top );
+        return (bool) apply_filters( 'tsoimma_rogue_is_other_plugin_path', $is_other, $path );
+    }
+
+    /**
      * Escàner principal: retorna fitxers físics sense entrada a WP.
      */
     /**
@@ -59,6 +84,11 @@ class TSOIMMA_Rogue_Scanner {
             $rel_path  = str_replace( wp_normalize_path( $base_path ), '', $norm_path );
             $filename  = basename( $full_path );
             $ext       = strtolower( pathinfo( $full_path, PATHINFO_EXTENSION ) );
+
+            // Never touch the data (backups, quarantine) of other plugins.
+            if ( self::is_other_plugin_path( $rel_path ) ) {
+                continue;
+            }
 
             // Saltar fitxers no-imatge
             if ( ! in_array( $ext, array( 'jpg','jpeg','png','gif','webp','avif' ), true ) ) {
@@ -409,6 +439,9 @@ class TSOIMMA_Rogue_Scanner {
         }
 
         $norm = wp_normalize_path( (string) $resolved_real_path );
+        if ( self::is_other_plugin_path( $norm ) ) {
+            return false;
+        }
         return ! empty( $allowed[ $norm ] );
     }
 

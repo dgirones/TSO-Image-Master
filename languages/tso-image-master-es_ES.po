@@ -20,15 +20,8 @@ msgstr ""
 msgid "TSO Image Master"
 msgstr "TSO Image Master"
 
-msgid ""
-"Complete image optimization suite for WordPress: convert to WebP/JPG, "
-"resize, compress PDFs, find orphaned images, scan rogue files, fix broken "
-"image URLs, and manage SEO fields. Requires PHP GD library."
-msgstr ""
-"Suite completa de optimización de imágenes para WordPress: convierte a "
-"WebP/JPG, redimensiona, comprime PDFs, encuentra imágenes huérfanas, analiza"
-" archivos huérfanos, corrige URLs de imágenes rotas y gestiona campos SEO. "
-"Requiere la biblioteca PHP GD."
+msgid "Auto-converts images to WebP, AVIF, JPG or PNG, compresses PDFs, and repairs your media library: broken links, orphans, unused sizes, alt, SEO."
+msgstr "Convierte automáticamente las imágenes al subirlas a WebP, AVIF, JPG o PNG, comprime PDFs y repara tu biblioteca: enlaces rotos, huérfanas, tamaños de imagen sin usar, alt y SEO."
 
 msgid "All selected extra files deleted!"
 msgstr "Archivos extra seleccionados eliminados."
@@ -705,3 +698,164 @@ msgstr "formato original"
 
 msgid "You do not have permission to perform this action."
 msgstr "No tienes permiso para realizar esta acción."
+
+msgid "Invalid attachment ID."
+msgstr "ID de adjunto no válido."
+
+msgid "This size no longer exists for this image (already removed?)."
+msgstr "Este tamaño ya no existe para esta imagen (¿ya se eliminó?)."
+
+msgid "Original file not found."
+msgstr "No se ha encontrado el fichero original."
+
+msgid "File already missing on disk."
+msgstr "El fichero ya no existe en el disco."
+
+msgid "Skipped: the safety backup could not be created for this batch."
+msgstr "Omitido: no se pudo crear la copia de seguridad de este lote."
+
+msgid "Could not delete the file from disk."
+msgstr "No se pudo eliminar el fichero del disco."
+
+msgid ""
+"The PHP ZIP extension is not available on this server, so no backup could be"
+" made before deleting."
+msgstr ""
+"La extensión ZIP de PHP no está disponible en este servidor, así que no se "
+"pudo hacer ninguna copia de seguridad antes de eliminar."
+
+msgid "Could not create the backup folder."
+msgstr "No se pudo crear la carpeta de copias de seguridad."
+
+msgid "Could not create the backup zip file."
+msgstr "No se pudo crear el fichero zip de la copia de seguridad."
+
+msgid "A file could not be added to the backup zip, so nothing was deleted."
+msgstr ""
+"No se pudo añadir un fichero al zip de la copia de seguridad, así que no se "
+"eliminó nada."
+
+msgid "The backup zip file could not be finalized."
+msgstr "No se pudo finalizar el fichero zip de la copia de seguridad."
+
+msgid "The backup zip did not pass verification, so nothing was deleted."
+msgstr ""
+"El zip de la copia de seguridad no superó la verificación, así que no se "
+"eliminó nada."
+
+msgid "The PHP ZIP extension is not available on this server."
+msgstr "La extensión ZIP de PHP no está disponible en este servidor."
+
+msgid "Could not open the backup zip file."
+msgstr "No se pudo abrir el fichero zip de la copia de seguridad."
+
+msgid "Could not determine the size name of this backup."
+msgstr ""
+"No se pudo determinar el nombre del tamaño de esta copia de seguridad."
+
+msgid "The attachment no longer exists."
+msgstr "El adjunto ya no existe."
+
+msgid "Invalid file path in backup."
+msgstr "Ruta de fichero no válida en la copia de seguridad."
+
+msgid "File missing inside the backup zip."
+msgstr "Falta el fichero dentro del zip de la copia de seguridad."
+
+msgid "Could not write the file to disk."
+msgstr "No se pudo escribir el fichero en el disco."
+
+msgid "No size name was specified."
+msgstr "No se ha especificado ningún nombre de tamaño."
+
+msgid "This does not look like a valid backup file."
+msgstr "Esto no parece un fichero de copia de seguridad válido."
+
+msgid "No backup file was specified."
+msgstr "No se ha especificado ningún fichero de copia de seguridad."
+
+msgid "Could not delete the backup file."
+msgstr "No se pudo eliminar el fichero de copia de seguridad."
+
+msgid ""
+"This size is still registered or protected by WordPress and cannot be "
+"deleted."
+msgstr ""
+"Este tamaño sigue registrado o protegido por WordPress y no se puede "
+"eliminar."
+
+msgid "No attachment IDs were specified."
+msgstr "No se ha especificado ningún ID de adjunto."
+
+msgid "Image Sizes"
+msgstr "Tamaños de imagen"
+
+#, php-format
+msgid "Post #%d was edited after the removal and was left untouched."
+msgstr ""
+"El contenido #%d se editó después de la eliminación y se ha dejado intacto."
+
+msgid "Suggests alt from title or filename. Click ✎ to edit a row; Save (green) stores the alt. Bulk fill uses your edited text."
+msgstr "Sugiere el alt a partir del título o del nombre de archivo. Pulsa ✎ para editar una fila; Guardar (verde) almacena el alt. El relleno masivo usa tu texto editado."
+
+msgid "GhostScript"
+msgstr "GhostScript"
+
+msgid "Imagick"
+msgstr "Imagick"
+
+msgid "Cancel pending / thumbnails"
+msgstr "Cancelar pendientes / miniaturas"
+
+msgid "Retention is disabled (0 days and 0 MB). Nothing to purge."
+msgstr "La retención está desactivada (0 días y 0 MB). No hay nada que purgar."
+
+msgid "Clear search"
+msgstr "Borrar búsqueda"
+
+msgid "This image is already being optimized (queue or another request)."
+msgstr "Esta imagen ya se está optimizando (cola u otra petición)."
+
+#, php-format
+msgid "Phase 1 error: %s"
+msgstr "Error en la fase 1: %s"
+
+#, php-format
+msgid "Phase 2 error: %1$s at %2$s:%3$s (files restored from backup)"
+msgstr "Error en la fase 2: %1$s en %2$s:%3$s (archivos restaurados desde la copia de seguridad)"
+
+#, php-format
+msgid "Thumbnail error: %s"
+msgstr "Error de miniatura: %s"
+
+#, php-format
+msgid "Rename failed: %s"
+msgstr "Error al renombrar: %s"
+
+msgid "No backup found to delete."
+msgstr "No se ha encontrado ninguna copia de seguridad para eliminar."
+
+msgid "No URL fixes were submitted."
+msgstr "No se ha enviado ninguna corrección de URL."
+
+msgid "No URLs were submitted for removal."
+msgstr "No se ha enviado ninguna URL para eliminar."
+
+msgid "No valid URLs were submitted."
+msgstr "No se ha enviado ninguna URL válida."
+
+#, php-format
+msgid "No images were queued (%d already busy or locked)."
+msgstr "No se ha puesto ninguna imagen en cola (%d ya ocupadas o bloqueadas)."
+
+#, php-format
+msgid "(%d skipped — already in queue or being optimized.)"
+msgstr "(%d omitidas: ya están en cola o se están optimizando.)"
+
+#, php-format
+msgid "Highlighting attachment #%d in the block editor."
+msgstr "Resaltando el adjunto #%d en el editor de bloques."
+
+#, php-format
+msgid "Highlighting attachment #%d in code."
+msgstr "Resaltando el adjunto #%d en el código."

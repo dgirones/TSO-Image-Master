@@ -85,7 +85,17 @@ class TSOIMMA_Backup_Manager {
 			);
 		}
 
-		$files = self::list_backup_files();
+		// Size-cleanup zips are the only copy of files the admin chose to
+		// delete, so the automatic retention never removes them: they are
+		// deleted manually from the "View backups" panel.
+		$files = array_values(
+			array_filter(
+				self::list_backup_files(),
+				static function ( $file ) {
+					return false === strpos( wp_normalize_path( $file['path'] ), '/size-backups/' );
+				}
+			)
+		);
 		$now   = time();
 
 		if ( $settings['days'] > 0 ) {
@@ -137,6 +147,45 @@ class TSOIMMA_Backup_Manager {
 			'freed'    => $freed,
 			'freed_h'  => size_format( $freed ),
 		);
+	}
+
+	/**
+	 * Keep the backup tree from being browsable: drops a directory-listing
+	 * block (.htaccess) and empty index.html files in the backup roots.
+	 * Non-executable files only; the per-size folders are left untouched so
+	 * empty ones can still be pruned.
+	 *
+	 * @return void
+	 */
+	public static function protect_backup_dirs() {
+		global $wp_filesystem;
+
+		$upload_dir = wp_upload_dir();
+		$root       = trailingslashit( $upload_dir['basedir'] ) . 'tso-image-master';
+		if ( ! is_dir( $root ) ) {
+			return;
+		}
+
+		$targets = array(
+			$root . '/.htaccess'  => "Options -Indexes\n",
+			$root . '/index.html' => '',
+		);
+		if ( is_dir( $root . '/size-backups' ) ) {
+			$targets[ $root . '/size-backups/index.html' ] = '';
+		}
+
+		foreach ( $targets as $path => $content ) {
+			if ( file_exists( $path ) ) {
+				continue;
+			}
+			if ( empty( $wp_filesystem ) ) {
+				require_once ABSPATH . 'wp-admin/includes/file.php';
+				WP_Filesystem();
+			}
+			if ( ! empty( $wp_filesystem ) ) {
+				$wp_filesystem->put_contents( $path, $content, FS_CHMOD_FILE );
+			}
+		}
 	}
 
 	/**
@@ -225,7 +274,10 @@ class TSOIMMA_Backup_Manager {
 			return 0;
 		}
 
-		$count = $zip->numFiles;
+		$count = $zip->count();
+		if ( false !== $zip->locateName( 'tso-manifest.json' ) ) {
+			--$count;
+		}
 		$zip->close();
 
 		return (int) $count;

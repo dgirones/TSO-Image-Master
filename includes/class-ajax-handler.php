@@ -460,6 +460,7 @@ class TSOIMMA_Ajax_Handler {
             'filename'     => $result['new_filename'],
             'old_filename' => $result['old_filename'],
             'new_filename' => $result['new_filename'],
+            'updated'      => isset( $result['updated'] ) ? $result['updated'] : array(),
         ) );
         wp_send_json_success( $result );
     }
@@ -482,28 +483,9 @@ class TSOIMMA_Ajax_Handler {
             wp_send_json_error( $result->get_error_message() );
         }
 
-        $seo_details = array( 'source' => 'manual' );
         // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verified above.
         $context = tsoimma_get_ajax_post_key( 'context' );
-        if ( 'dashboard_alt' === $context ) {
-            $seo_details['source'] = 'dashboard_inline_alt';
-        }
-        if ( null !== $title && '' !== $title ) {
-            $seo_details['seo_title'] = $title;
-        }
-        if ( null !== $alt && '' !== $alt ) {
-            $seo_details['seo_alt'] = $alt;
-        }
-        if ( null !== $caption && '' !== $caption ) {
-            $seo_details['seo_caption'] = $caption;
-        }
-        if ( null !== $description ) {
-            $desc_plain = wp_strip_all_tags( $description );
-            if ( '' !== $desc_plain ) {
-                $seo_details['seo_description'] = $desc_plain;
-            }
-        }
-        TSOIMMA_History::log( $id, 'seo_update', $seo_details );
+        TSOIMMA_History::log_seo_changes( $id, $result, 'dashboard_alt' === $context ? 'dashboard_inline_alt' : 'manual' );
         if ( 'dashboard_alt' === $context ) {
             TSOIMMA_Dashboard::flush_fillable_alt_cache();
         }
@@ -1222,6 +1204,22 @@ class TSOIMMA_Ajax_Handler {
             }
         }
         $result = TSOIMMA_URL_Fixer::fix( $clean_fixes );
+        if ( ! empty( $result['fixed'] ) ) {
+            $pairs = array();
+            foreach ( $clean_fixes as $fix ) {
+                if ( in_array( $fix['old_url'], (array) $result['fixed_urls'], true ) ) {
+                    $pairs[] = array( basename( (string) wp_parse_url( $fix['old_url'], PHP_URL_PATH ) ), basename( (string) wp_parse_url( $fix['new_url'], PHP_URL_PATH ) ) );
+                }
+            }
+            TSOIMMA_History::log_url_action(
+                'url_fix',
+                array(
+                    'count'   => (int) $result['fixed'],
+                    'skipped' => (int) $result['skipped'],
+                    'pairs'   => array_slice( $pairs, 0, 20 ),
+                )
+            );
+        }
         wp_send_json_success( $result );
     }
 
@@ -1248,7 +1246,58 @@ class TSOIMMA_Ajax_Handler {
         }
 
         $result = TSOIMMA_URL_Fixer::remove_urls( $clean_urls );
+        if ( ! empty( $result['removed'] ) ) {
+            $names = array();
+            foreach ( (array) $result['removed_urls'] as $removed_url ) {
+                $names[] = basename( (string) wp_parse_url( $removed_url, PHP_URL_PATH ) );
+            }
+            TSOIMMA_History::log_url_action(
+                'url_remove',
+                array(
+                    'count'   => (int) $result['removed'],
+                    'skipped' => (int) $result['skipped'],
+                    'files'   => array_slice( $names, 0, 20 ),
+                    'backup'  => (string) $result['backup'],
+                )
+            );
+        }
         wp_send_json_success( $result );
+    }
+
+    public static function handle_tso_im_list_url_backups() {
+        tsoimma_verify_ajax_nonce();
+        self::require_admin();
+        wp_send_json_success( array( 'items' => TSOIMMA_URL_Fixer::list_removal_backups() ) );
+    }
+
+    public static function handle_tso_im_restore_url_backup() {
+        tsoimma_verify_ajax_nonce();
+        self::require_admin();
+
+        $backup_name = tsoimma_get_ajax_post_text( 'file' );
+        $result      = TSOIMMA_URL_Fixer::restore_removal_backup( $backup_name );
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( $result->get_error_message() );
+        }
+        TSOIMMA_History::log_url_action(
+            'url_restore',
+            array(
+                'count'   => (int) $result['restored'],
+                'skipped' => (int) $result['skipped'],
+                'backup'  => $backup_name,
+            )
+        );
+        wp_send_json_success( $result );
+    }
+
+    public static function handle_tso_im_delete_url_backup() {
+        tsoimma_verify_ajax_nonce();
+        self::require_admin();
+
+        if ( ! TSOIMMA_URL_Fixer::delete_removal_backup( tsoimma_get_ajax_post_text( 'file' ) ) ) {
+            wp_send_json_error( __( 'This does not look like a valid backup file.', 'tso-image-master' ) );
+        }
+        wp_send_json_success( array( 'deleted' => true ) );
     }
 
     // ----------------------------------------------------------------
@@ -1902,6 +1951,53 @@ class TSOIMMA_Ajax_Handler {
     }
 
     /**
+     * Restaura un zip de neteja de mides: torna cada fitxer a la seva
+     * carpeta original i re-registra la mida a les metadades.
+     */
+    public static function handle_tso_im_restore_size_backup() {
+        tsoimma_verify_ajax_nonce();
+        self::require_admin();
+
+        $relative = tsoimma_get_ajax_post_text( 'relative_path' );
+        if ( '' === $relative || false === strpos( $relative, 'size-backups/' ) ) {
+            wp_send_json_error( __( 'This does not look like a valid backup file.', 'tso-image-master' ) );
+        }
+
+        $upload_dir = wp_upload_dir();
+        $absolute   = trailingslashit( $upload_dir['basedir'] ) . ltrim( $relative, '/' );
+
+        $resolved = TSOIMMA_Optimizer::resolve_backup_path( $absolute, true );
+        if ( ! $resolved || ! preg_match( '/\.zip$/i', $resolved ) ) {
+            wp_send_json_error( __( 'This does not look like a valid backup file.', 'tso-image-master' ) );
+        }
+
+        $result = TSOIMMA_Size_Scanner::restore_backup_zip( $resolved );
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( $result->get_error_message() );
+        }
+
+        if ( function_exists( 'wp_cache_flush' ) ) {
+            wp_cache_flush();
+        }
+
+        if ( class_exists( 'TSOIMMA_History' ) && ! empty( $result['restored_ids'] ) ) {
+            foreach ( $result['restored_ids'] as $restored_id ) {
+                TSOIMMA_History::log(
+                    $restored_id,
+                    'size_restored',
+                    array(
+                        'size'       => $result['size'],
+                        'backup_zip' => $relative,
+                    )
+                );
+            }
+        }
+        unset( $result['restored_ids'] );
+
+        wp_send_json_success( $result );
+    }
+
+    /**
      * Elimina, per als attachments indicats, únicament el fitxer generat
      * d'una mida concreta (mai l'original ni les altres mides). Pensat
      * per provar amb una mostra petita abans d'eliminar-ho tot.
@@ -1917,14 +2013,27 @@ class TSOIMMA_Ajax_Handler {
             wp_send_json_error( __( 'No size name was specified.', 'tso-image-master' ) );
         }
 
+        if ( ! TSOIMMA_Size_Scanner::is_size_deletable( $size ) ) {
+            wp_send_json_error( __( 'This size is still registered or protected by WordPress and cannot be deleted.', 'tso-image-master' ) );
+        }
+
+        // Work in batches so a size with hundreds of files never hits the
+        // PHP time limit halfway through; the browser loops until done.
+        $batch_max = 100;
+        $remaining = 0;
+
         if ( $delete_all ) {
             // "Delete all" button: resolve the full, current list of
             // attachments for this size server-side rather than trusting a
             // list of IDs the browser may have loaded from a stale page,
             // so it always matches exactly what the summary table shows.
-            $ids = TSOIMMA_Size_Scanner::get_all_ids_for_size( $size );
+            $ids       = TSOIMMA_Size_Scanner::get_all_ids_for_size( $size );
+            $limit     = tsoimma_get_ajax_post_int( 'limit', $batch_max );
+            $limit     = ( $limit > 0 ) ? min( $limit, $batch_max ) : $batch_max;
+            $remaining = max( 0, count( $ids ) - $limit );
+            $ids       = array_slice( $ids, 0, $limit );
         } else {
-            $ids = tsoimma_get_ajax_post_int_array( 'ids' );
+            $ids = array_slice( tsoimma_get_ajax_post_int_array( 'ids' ), 0, $batch_max );
         }
 
         if ( empty( $ids ) ) {
@@ -1932,6 +2041,7 @@ class TSOIMMA_Ajax_Handler {
         }
 
         $result = TSOIMMA_Size_Scanner::delete_size_files( $size, $ids );
+        $result['remaining'] = $remaining;
 
         if ( class_exists( 'TSOIMMA_History' ) ) {
             foreach ( $result['deleted'] as $item ) {

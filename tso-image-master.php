@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name:       TSO Image Master
- * Description:       Complete image optimization suite for WordPress: convert to WebP/JPG, resize, compress PDFs, find orphaned images, scan rogue files, fix broken image URLs, and manage SEO fields. Requires PHP GD library.
- * Version:           2.0.6
+ * Description:       Auto-converts images to WebP, AVIF, JPG or PNG, compresses PDFs, and repairs your media library: broken links, orphans, unused sizes, alt, SEO.
+ * Version:           2.0.9
  * Requires at least: 6.2
  * Requires PHP:      7.4
  * Tested up to:      7.1
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // ── Constants ────────────────────────────────────────────────────────
-define( 'TSOIMMA_VERSION',    '2.0.6' );
+define( 'TSOIMMA_VERSION',    '2.0.9' );
 define( 'TSOIMMA_FILE',       __FILE__ );
 define( 'TSOIMMA_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'TSOIMMA_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -141,7 +141,7 @@ function tsoimma_translate_plugin_list_headers( $plugins ) {
 
     $plugins[ $basename ]['Name']        = __( 'TSO Image Master', 'tso-image-master' );
     $plugins[ $basename ]['Description'] = __(
-        'Complete image optimization suite for WordPress: convert to WebP/JPG, resize, compress PDFs, find orphaned images, scan rogue files, fix broken image URLs, and manage SEO fields. Requires PHP GD library.',
+        'Auto-converts images to WebP, AVIF, JPG or PNG, compresses PDFs, and repairs your media library: broken links, orphans, unused sizes, alt, SEO.',
         'tso-image-master'
     );
 

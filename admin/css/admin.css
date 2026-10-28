@@ -1372,6 +1372,8 @@
 .imp-history-action.auto_optimize { background: rgba(0,212,170,.15); color: var(--imp-accent2); }
 .imp-history-action.rename        { background: rgba(255,209,102,.15); color: var(--imp-warn); }
 .imp-history-action.seo_update    { background: rgba(6,214,160,.15); color: var(--imp-success); }
+.imp-history-action.url_fix, .imp-history-action.url_restore { background: rgba(6,214,160,.15); color: var(--imp-success); }
+.imp-history-action.url_remove     { background: rgba(255,209,102,.15); color: var(--imp-warn); }
 .imp-history-action.delete        { background: rgba(255,77,109,.15); color: var(--imp-danger); }
 .imp-history-action.pdf_compress  { background: rgba(255,255,255,.08); color: var(--imp-text-muted); }
 .imp-history-action.dup_merge_rewrite  { background: rgba(108,99,255,.2); color: #a599ff; }
@@ -1741,3 +1743,6 @@
 .imp-panel-title {
     color: var(--imp-text) !important;
 }
+
+.imp-alt-hint { margin-top: 6px; font-size: 12px; color: var(--imp-warn); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.imp-alt-hint[hidden] { display: none; }

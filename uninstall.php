@@ -61,6 +61,7 @@ delete_option( 'tsoimma_version' );
 delete_option( 'tsoimma_job_queue' );
 delete_option( 'tsoimma_backup_retention' );
 delete_option( 'tsoimma_queue_lock' );
+delete_option( 'tsoimma_renamed_map' );
 delete_transient( 'tsoimma_orphan_index' );
 
 // ── Clear scheduled cron events ───────────────────────────────────

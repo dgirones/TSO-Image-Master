@@ -19,6 +19,9 @@ class TSOIMMA_Size_Scanner {
 	/** @var int Attachments processats per lot intern durant scan(). */
 	private const SCAN_BATCH = 500;
 
+	/** @var string Manifest file stored inside every size-cleanup backup zip. */
+	private const MANIFEST_NAME = 'tso-manifest.json';
+
 	/**
 	 * Noms de mida que WordPress generaria ARA MATEIX per a una pujada nova.
 	 *
@@ -41,7 +44,7 @@ class TSOIMMA_Size_Scanner {
 		$sizes = wp_get_registered_image_subsizes();
 
 		/** This filter is documented in wp-admin/includes/image.php */
-		$sizes = apply_filters( 'intermediate_image_sizes_advanced', $sizes, array(), 0 );
+		$sizes = apply_filters( 'intermediate_image_sizes_advanced', $sizes, array(), 0 ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WordPress core filter, applied here to mirror which sizes core would generate.
 
 		if ( ! is_array( $sizes ) ) {
 			return array();
@@ -67,6 +70,23 @@ class TSOIMMA_Size_Scanner {
 	 */
 	private static function is_core_protected_size_name( $size_name ) {
 		return (bool) preg_match( '/^site_icon-\d+$/', (string) $size_name );
+	}
+
+	/**
+	 * Server-side guard: a size may only be deleted when it is neither
+	 * still registered (in use by the theme/plugins) nor protected by core.
+	 * The UI already hides those rows, but a stale page or a hand-made
+	 * request must not be able to bypass that.
+	 *
+	 * @param string $size_name Size name.
+	 * @return bool
+	 */
+	public static function is_size_deletable( $size_name ) {
+		$size_name = (string) $size_name;
+		if ( '' === $size_name || self::is_core_protected_size_name( $size_name ) ) {
+			return false;
+		}
+		return ! in_array( $size_name, self::get_registered_size_names(), true );
 	}
 
 	/**
@@ -392,7 +412,7 @@ class TSOIMMA_Size_Scanner {
 		// what the safety backup exists for — if we could build the zip but
 		// something went wrong partway (disk full, permissions...), abort
 		// the whole delete rather than removing files with no safety copy.
-		if ( $backup['attempted'] && ! $backup['ok'] ) {
+		if ( ! $backup['ok'] ) {
 			foreach ( $candidates as $candidate ) {
 				$errors[] = array(
 					'id'    => $candidate['id'],
@@ -417,11 +437,19 @@ class TSOIMMA_Size_Scanner {
 			$meta          = $candidate['meta'];
 			$freed         = filesize( $path );
 
-			wp_delete_file( $path );
+			// WordPress can point several size names (same dimensions) or
+			// even the main/original file at ONE physical file. Only drop
+			// the metadata entry in that case; deleting the file would
+			// break the other size or the image itself.
+			if ( self::is_file_shared( $meta, $size_name, $size_filename, get_attached_file( $id ) ) ) {
+				$freed = 0;
+			} else {
+				wp_delete_file( $path );
 
-			if ( file_exists( $path ) ) {
-				$errors[] = array( 'id' => $id, 'error' => __( 'Could not delete the file from disk.', 'tso-image-master' ) );
-				continue;
+				if ( file_exists( $path ) ) {
+					$errors[] = array( 'id' => $id, 'error' => __( 'Could not delete the file from disk.', 'tso-image-master' ) );
+					continue;
+				}
 			}
 
 			unset( $meta['sizes'][ $size_name ] );
@@ -463,6 +491,34 @@ class TSOIMMA_Size_Scanner {
 			'backup_zip'    => $backup['relative_path'],
 			'backup_error'  => $backup['error'],
 		);
+	}
+
+	/**
+	 * Whether the generated file of $size_name is also used by the main
+	 * file, the original (pre-scaled) image or another size of the same
+	 * attachment.
+	 *
+	 * @param array  $meta          Attachment metadata.
+	 * @param string $size_name     Size being removed.
+	 * @param string $size_filename File name of that size.
+	 * @param string $main_file     Absolute path of the attached file.
+	 * @return bool
+	 */
+	private static function is_file_shared( $meta, $size_name, $size_filename, $main_file ) {
+		if ( $main_file && wp_basename( $main_file ) === $size_filename ) {
+			return true;
+		}
+		if ( ! empty( $meta['original_image'] ) && wp_basename( (string) $meta['original_image'] ) === $size_filename ) {
+			return true;
+		}
+		if ( ! empty( $meta['sizes'] ) && is_array( $meta['sizes'] ) ) {
+			foreach ( $meta['sizes'] as $other_name => $other ) {
+				if ( (string) $other_name !== (string) $size_name && ! empty( $other['file'] ) && $other['file'] === $size_filename ) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -511,7 +567,15 @@ class TSOIMMA_Size_Scanner {
 			return $result;
 		}
 
-		$filename  = $size_name . '-' . gmdate( 'Y-m-d-His' ) . '-' . count( $candidates ) . 'files_tso_im_backup.zip';
+		TSOIMMA_Backup_Manager::protect_backup_dirs();
+
+		$filename  = $size_name . '-' . wp_date( 'Y-m-d-His' ) . '-' . count( $candidates ) . 'files_tso_im_backup.zip';
+		// Never overwrite an existing backup created within the same second.
+		$suffix = 1;
+		while ( file_exists( trailingslashit( $backup_base ) . $filename ) ) {
+			$filename = $size_name . '-' . wp_date( 'Y-m-d-His' ) . '-' . count( $candidates ) . 'files-' . $suffix . '_tso_im_backup.zip';
+			++$suffix;
+		}
 		$zip_path  = trailingslashit( $backup_base ) . $filename;
 
 		$result['attempted'] = true;
@@ -522,13 +586,47 @@ class TSOIMMA_Size_Scanner {
 			return $result;
 		}
 
+		$basedir  = wp_normalize_path( trailingslashit( $upload_dir['basedir'] ) );
+		$manifest = array(
+			'version' => 2,
+			'size'    => $size_name,
+			'created' => time(),
+			'items'   => array(),
+		);
+
 		foreach ( $candidates as $candidate ) {
-			// Prefix with the attachment ID so files with the same generated
-			// name (e.g. two different photos both producing "img-65x65.jpg")
-			// never collide inside the archive.
-			$entry_name = $candidate['id'] . '__' . wp_basename( $candidate['path'] );
-			$zip->addFile( $candidate['path'], $entry_name );
+			// Store each file under its path relative to uploads/ (e.g.
+			// 2026/09/photo-320x240.jpg) so the zip mirrors the real folder
+			// layout, and record it in a manifest so the batch can be
+			// restored to exactly where every file came from.
+			$norm     = wp_normalize_path( $candidate['path'] );
+			$relative = ( 0 === strpos( $norm, $basedir ) ) ? substr( $norm, strlen( $basedir ) ) : '';
+			// Fallback for files outside uploads/: prefix with the attachment
+			// ID so identical generated names never collide in the archive.
+			$entry_name = ( '' !== $relative ) ? $relative : $candidate['id'] . '__' . wp_basename( $candidate['path'] );
+			if ( ! $zip->addFile( $candidate['path'], $entry_name ) ) {
+				$zip->close();
+				self::delete_file_quietly( $zip_path );
+				$result['error'] = __( 'A file could not be added to the backup zip, so nothing was deleted.', 'tso-image-master' );
+				return $result;
+			}
+
+			$size_meta = isset( $candidate['meta']['sizes'][ $size_name ] ) && is_array( $candidate['meta']['sizes'][ $size_name ] )
+				? $candidate['meta']['sizes'][ $size_name ]
+				: array();
+
+			$manifest['items'][] = array(
+				'id'        => (int) $candidate['id'],
+				'entry'     => $entry_name,
+				'path'      => $relative,
+				'file'      => $candidate['file'],
+				'width'     => isset( $size_meta['width'] ) ? (int) $size_meta['width'] : 0,
+				'height'    => isset( $size_meta['height'] ) ? (int) $size_meta['height'] : 0,
+				'mime-type' => isset( $size_meta['mime-type'] ) ? (string) $size_meta['mime-type'] : '',
+			);
 		}
+
+		$zip->addFromString( self::MANIFEST_NAME, wp_json_encode( $manifest ) );
 
 		$ok = $zip->close();
 
@@ -538,9 +636,184 @@ class TSOIMMA_Size_Scanner {
 			return $result;
 		}
 
+		// Re-open and check the archive really holds every file (+ manifest).
+		$check = new ZipArchive();
+		$count = ( true === $check->open( $zip_path ) ) ? $check->count() : -1;
+		if ( $count >= 0 ) {
+			$check->close();
+		}
+		if ( $count < count( $candidates ) + 1 ) {
+			self::delete_file_quietly( $zip_path );
+			$result['error'] = __( 'The backup zip did not pass verification, so nothing was deleted.', 'tso-image-master' );
+			return $result;
+		}
+
 		$result['ok']            = true;
 		$result['relative_path'] = 'tso-image-master/size-backups/' . $size_name . '/' . $filename;
 		return $result;
+	}
+
+	/**
+	 * Restores every file of a size-cleanup backup zip to its original
+	 * folder and re-registers the size in each attachment's metadata.
+	 *
+	 * Files that already exist on disk are never overwritten. The zip is
+	 * kept after restoring (retention cleanup removes it later).
+	 *
+	 * @param string $zip_path Absolute, already-validated path of the zip.
+	 * @return array{restored:int, skipped:int, errors:array, size:string}|WP_Error
+	 */
+	public static function restore_backup_zip( $zip_path ) {
+		if ( ! class_exists( 'ZipArchive' ) ) {
+			return new WP_Error( 'tsoimma_no_zip', __( 'The PHP ZIP extension is not available on this server.', 'tso-image-master' ) );
+		}
+
+		$zip = new ZipArchive();
+		if ( true !== $zip->open( $zip_path ) ) {
+			return new WP_Error( 'tsoimma_zip_open', __( 'Could not open the backup zip file.', 'tso-image-master' ) );
+		}
+
+		$upload_dir = wp_upload_dir();
+		$basedir    = wp_normalize_path( trailingslashit( $upload_dir['basedir'] ) );
+
+		$items     = array();
+		$size_name = sanitize_key( wp_basename( dirname( $zip_path ) ) );
+		$raw       = $zip->getFromName( self::MANIFEST_NAME );
+		if ( false !== $raw ) {
+			$manifest = json_decode( $raw, true );
+			if ( is_array( $manifest ) && ! empty( $manifest['items'] ) && is_array( $manifest['items'] ) ) {
+				if ( ! empty( $manifest['size'] ) ) {
+					$size_name = sanitize_key( $manifest['size'] );
+				}
+				$items = $manifest['items'];
+			}
+		}
+
+		// Legacy zips (no manifest): entries are "<ID>__<filename>"; the
+		// folder is the one of the attachment's original file.
+		if ( empty( $items ) ) {
+			for ( $i = 0; $i < $zip->count(); $i++ ) {
+				$entry = (string) $zip->getNameIndex( $i );
+				if ( preg_match( '/^(\d+)__(.+)$/', $entry, $m ) ) {
+					$items[] = array(
+						'id'    => (int) $m[1],
+						'entry' => $entry,
+						'path'  => '',
+						'file'  => $m[2],
+					);
+				}
+			}
+		}
+
+		$restored     = 0;
+		$skipped      = 0;
+		$errors       = array();
+		$restored_ids = array();
+
+		if ( '' === $size_name ) {
+			$zip->close();
+			return new WP_Error( 'tsoimma_no_size', __( 'Could not determine the size name of this backup.', 'tso-image-master' ) );
+		}
+
+		foreach ( $items as $item ) {
+			$id    = isset( $item['id'] ) ? absint( $item['id'] ) : 0;
+			$entry = isset( $item['entry'] ) ? (string) $item['entry'] : '';
+			if ( ! $id || '' === $entry || 'attachment' !== get_post_type( $id ) ) {
+				$errors[] = array( 'id' => $id, 'error' => __( 'The attachment no longer exists.', 'tso-image-master' ) );
+				continue;
+			}
+
+			$relative = isset( $item['path'] ) ? (string) $item['path'] : '';
+			if ( '' !== $relative ) {
+				$target = $basedir . ltrim( wp_normalize_path( $relative ), '/' );
+			} else {
+				$original = get_attached_file( $id );
+				if ( ! $original ) {
+					$errors[] = array( 'id' => $id, 'error' => __( 'Original file not found.', 'tso-image-master' ) );
+					continue;
+				}
+				$target = wp_normalize_path( trailingslashit( dirname( $original ) ) . wp_basename( (string) $item['file'] ) );
+			}
+
+			// Safety: stay inside uploads/, no traversal, images only.
+			$type = wp_check_filetype( $target );
+			if ( false !== strpos( $target, '..' ) || 0 !== strpos( wp_normalize_path( $target ), $basedir ) || empty( $type['type'] ) || 0 !== strpos( $type['type'], 'image/' ) ) {
+				$errors[] = array( 'id' => $id, 'error' => __( 'Invalid file path in backup.', 'tso-image-master' ) );
+				continue;
+			}
+
+			if ( file_exists( $target ) ) {
+				++$skipped;
+			} else {
+				$data = $zip->getFromName( $entry );
+				if ( false === $data ) {
+					$errors[] = array( 'id' => $id, 'error' => __( 'File missing inside the backup zip.', 'tso-image-master' ) );
+					continue;
+				}
+				wp_mkdir_p( dirname( $target ) );
+				if ( false === self::write_file( $target, $data ) ) {
+					$errors[] = array( 'id' => $id, 'error' => __( 'Could not write the file to disk.', 'tso-image-master' ) );
+					continue;
+				}
+				++$restored;
+			}
+
+			$restored_ids[] = $id;
+
+			$meta = wp_get_attachment_metadata( $id );
+			if ( ! is_array( $meta ) ) {
+				$meta = array();
+			}
+			if ( empty( $meta['sizes'][ $size_name ] ) ) {
+				$width  = isset( $item['width'] ) ? (int) $item['width'] : 0;
+				$height = isset( $item['height'] ) ? (int) $item['height'] : 0;
+				if ( ! $width || ! $height ) {
+					$dims = wp_getimagesize( $target );
+					if ( $dims ) {
+						$width  = (int) $dims[0];
+						$height = (int) $dims[1];
+					}
+				}
+				$meta['sizes'][ $size_name ] = array(
+					'file'      => wp_basename( $target ),
+					'width'     => $width,
+					'height'    => $height,
+					'mime-type' => ! empty( $item['mime-type'] ) ? (string) $item['mime-type'] : $type['type'],
+				);
+				wp_update_attachment_metadata( $id, $meta );
+			}
+		}
+
+		$zip->close();
+
+		if ( ( $restored || $skipped ) && class_exists( 'TSOIMMA_Dashboard' ) ) {
+			TSOIMMA_Dashboard::flush_backup_stats_cache();
+		}
+
+		return array(
+			'restored'     => $restored,
+			'skipped'      => $skipped,
+			'errors'       => $errors,
+			'size'         => $size_name,
+			'restored_ids' => $restored_ids,
+		);
+	}
+
+	/**
+	 * @param string $path Absolute path.
+	 * @param string $data File contents.
+	 * @return bool
+	 */
+	private static function write_file( $path, $data ) {
+		global $wp_filesystem;
+		if ( empty( $wp_filesystem ) ) {
+			require_once ABSPATH . 'wp-admin/includes/file.php';
+			WP_Filesystem();
+		}
+		if ( empty( $wp_filesystem ) ) {
+			return false;
+		}
+		return (bool) $wp_filesystem->put_contents( $path, $data, FS_CHMOD_FILE );
 	}
 
 	/**

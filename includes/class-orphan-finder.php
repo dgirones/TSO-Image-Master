@@ -55,6 +55,29 @@ class TSOIMMA_Orphan_Finder {
     }
 
     /**
+     * Quins d'aquests attachments són orfes (mateix criteri que la pestanya Orfes),
+     * amb UN sol índex de referències per a tots.
+     *
+     * @param int[] $ids   Attachment IDs.
+     * @param bool  $reuse Reutilitza l'índex en memòria cau (15 min) en comptes de reconstruir-lo.
+     * @return array<int, true> Conjunt d'IDs orfes.
+     */
+    public static function orphan_id_set( array $ids, $reuse = false ) {
+        $set = array();
+        if ( empty( $ids ) ) {
+            return $set;
+        }
+        update_meta_cache( 'post', $ids );
+        $index = self::get_index( (bool) $reuse );
+        foreach ( $ids as $id ) {
+            if ( ! self::is_used_in_index( (int) $id, $index ) ) {
+                $set[ (int) $id ] = true;
+            }
+        }
+        return $set;
+    }
+
+    /**
      * Comprova si un attachment és orfe.
      */
     public static function is_orphan( $attachment_id ) {
@@ -389,14 +412,14 @@ class TSOIMMA_Orphan_Finder {
         $last = 0;
         do {
             $rows = $wpdb->get_results( $wpdb->prepare(
-                "SELECT umeta_id, meta_value FROM {$wpdb->termmeta}
-                 WHERE umeta_id > %d
+                "SELECT meta_id, meta_value FROM {$wpdb->termmeta}
+                 WHERE meta_id > %d
                  AND meta_value REGEXP '[.](jpe?g|png|gif|webp|avif|svg)'
-                 ORDER BY umeta_id ASC LIMIT 500",
+                 ORDER BY meta_id ASC LIMIT 500",
                 $last
             ) );
             foreach ( (array) $rows as $row ) {
-                $last = (int) $row->umeta_id;
+                $last = (int) $row->meta_id;
                 self::index_text( $idx, $row->meta_value, false, false );
             }
         } while ( ! empty( $rows ) );

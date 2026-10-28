@@ -495,14 +495,9 @@ class TSOIMMA_Auto_Optimizer {
             return;
         }
 
-        TSOIMMA_Image_Manager::update_seo_fields( $attachment_id, null, $suggested, null, null );
-        TSOIMMA_History::log(
-            $attachment_id,
-            'seo_update',
-            array(
-                'seo_alt' => $suggested,
-                'source'  => 'auto_upload_alt',
-            )
-        );
+        $seo_result = TSOIMMA_Image_Manager::update_seo_fields( $attachment_id, null, $suggested, null, null );
+        if ( ! is_wp_error( $seo_result ) ) {
+            TSOIMMA_History::log_seo_changes( $attachment_id, $seo_result, 'auto_upload_alt' );
+        }
     }
 }

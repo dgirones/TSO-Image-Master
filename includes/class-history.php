@@ -618,6 +618,43 @@ class TSOIMMA_History {
     }
 
     /**
+     * Log an alt/title/caption/description change with old and new values.
+     * Nothing is logged when no field really changed.
+     *
+     * @param int                  $attachment_id Attachment ID.
+     * @param array<string, mixed> $result        Result of TSOIMMA_Image_Manager::update_seo_fields().
+     * @param string               $source        manual|dashboard_inline_alt|dashboard_bulk_alt|auto_upload_alt.
+     * @return bool True when a row was inserted.
+     */
+    public static function log_seo_changes( $attachment_id, $result, $source = 'manual' ) {
+        if ( empty( $result['changes'] ) || ! is_array( $result['changes'] ) ) {
+            return false;
+        }
+        $details = array(
+            'source'      => sanitize_key( $source ),
+            'seo_changes' => $result['changes'],
+        );
+        // Keep the legacy "new value" keys used by older history rows and exports.
+        foreach ( $result['changes'] as $field => $change ) {
+            if ( '' !== $change['new'] ) {
+                $details[ 'seo_' . $field ] = $change['new'];
+            }
+        }
+        return self::log( $attachment_id, 'seo_update', $details );
+    }
+
+    /**
+     * Log a global (not tied to one attachment) URL Detector action.
+     *
+     * @param string               $action_type url_fix|url_remove|url_restore.
+     * @param array<string, mixed> $details     Counts and a short list of URLs.
+     * @return bool
+     */
+    public static function log_url_action( $action_type, $details ) {
+        return self::log( 0, $action_type, $details );
+    }
+
+    /**
      * Stash optimize history (legacy / recovery path). Prefer log() immediately after convert.
      *
      * @param int                  $attachment_id Attachment ID.
@@ -1261,6 +1298,9 @@ class TSOIMMA_History {
             'delete'        => 'Eliminada',
             'pdf_compress'  => 'PDF comprimit',
             'revert'        => 'Revertida',
+            'url_fix'       => 'URL reparades',
+            'url_remove'    => 'URL eliminades',
+            'url_restore'   => 'URL restaurades',
         );
         return isset( $map[ $type ] ) ? $map[ $type ] : $type;
     }

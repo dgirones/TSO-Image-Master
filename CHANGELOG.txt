@@ -2,6 +2,30 @@
 
 Full release history for TSO Image Master. readme.txt (for WordPress.org) keeps only the 3 most recent versions in its own Changelog section; older versions live only here.
 
+= 2.0.9 =
+* Improved: New plugin description that highlights automatic WebP/AVIF/JPG/PNG conversion, PDF compression and library repair tools.
+* Fixed: URL Detector now repairs old links (e.g. .png) of images that were converted and later renamed, instead of offering to delete them.
+
+= 2.0.8 =
+* Fixed: URL Detector "Remove from content" no longer deletes other images in the same block or link; it can also repair links of renamed images.
+* Fixed: Uploading and renaming images is much faster (one database scan instead of hundreds).
+* New: History records old and new alt/title, URL Detector actions, links updated on rename and deleted images.
+* Improved: SEO tab lists images that need SEO first, asks to remove hyphens from the alt text (one-click button) and fixes the "SEO" button.
+* Improved: Orphan images are labelled and listed last in SEO and Optimize; "Extra files" ignores other TSO plugins' backups (Swiss Knife).
+
+= 2.0.7 =
+* New: URL Detector now repairs links to images renamed with the plugin instead of offering to delete them, and every "Remove from content" saves a backup with an Undo button.
+* Fixed: Renaming an image now also updates links written as http://, without www or as relative paths, which were left broken before.
+* Fixed: Image Sizes module strings now fully translated to Catalan and Spanish.
+* Fixed: URL Detector no longer corrupts serialized or escaped custom fields/options, or other fields that share the same key, when fixing or removing links.
+* Fixed: Renaming an image never overwrites an existing file, and edited posts refresh their cached content.
+
+= 2.0.6 =
+* New: "Image Sizes" tab: "Delete all" per size and a "View backups" panel to download, delete or restore each backup zip (files go back to their original folders and the size is re-registered).
+* New: Size backups keep each file's folder path plus a manifest; deleting runs in batches of 100 and is aborted if the backup zip cannot be created or verified.
+* Fixed: Deleting a size no longer removes a file used by another size or the main image, and registered/protected sizes are refused on the server; renaming an image now also updates links written as http://, without www or as relative paths, which were left broken before.
+* Changed: Backup dates use the site time zone; the backup list updates live, F5 keeps the current tab, restores are logged in History, size zips are exempt from automatic retention and the backup folder is protected against listing; Catalan and Spanish translations added for the Image Sizes module.
+
 = 2.0.5 =
 * New: Checkbox below the media uploader (Media > Add New and the media modal) to turn automatic image optimization on or off for each upload; it remembers your last choice as soon as you change it.
 * Fixed: Renaming a file (SEO & File Names) could silently revert the attachment's guid back to the old URL right after saving, due to a stale object-cache read; the new filename/URL now stick correctly.

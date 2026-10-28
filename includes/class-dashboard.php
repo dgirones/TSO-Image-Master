@@ -231,14 +231,7 @@ class TSOIMMA_Dashboard {
 				continue;
 			}
 
-			TSOIMMA_History::log(
-				$attachment_id,
-				'seo_update',
-				array(
-					'seo_alt' => $new_alt,
-					'source'  => 'dashboard_bulk_alt',
-				)
-			);
+			TSOIMMA_History::log_seo_changes( $attachment_id, $result, 'dashboard_bulk_alt' );
 			++$updated;
 		}
 
@@ -420,8 +413,34 @@ class TSOIMMA_Dashboard {
 	}
 
 	/**
-	 * @param string $alt            Current alt text.
-	 * @param int    $attachment_id  Attachment ID.
+	 * Alt text containing hyphens/underscores used as word separators ("Fondo-de-pantalla-3",
+	 * "Chiste-o-muerte libertad"). A hyphen between two digits (2020-2021) is fine.
+	 *
+	 * @param string $alt Alt text.
+	 * @return bool
+	 */
+	public static function is_hyphenated_alt( $alt ) {
+		return (bool) preg_match( '/(?<!\d)[-_]+|[-_]+(?!\d)/u', trim( (string) $alt ) );
+	}
+
+	/**
+	 * Alt is empty, a camera name (IMG_1234) or only digits.
+	 *
+	 * @param string $alt Alt text.
+	 * @return bool
+	 */
+	public static function is_placeholder_alt( $alt ) {
+		$alt = trim( (string) $alt );
+		return '' === $alt
+			|| (bool) preg_match( '/^(IMG[-_]?|DSC[-_]?|DSCN|PICT|PHOTO)[0-9]+$/i', $alt )
+			|| (bool) preg_match( '/^\d+$/', $alt );
+	}
+
+	/**
+	 * Alt is empty, a camera/number placeholder, or the raw file name stem (stricter, used by the alt filler).
+	 *
+	 * @param string $alt           Alt text.
+	 * @param int    $attachment_id Attachment ID.
 	 * @return bool
 	 */
 	public static function is_weak_alt( $alt, $attachment_id ) {
