@@ -239,15 +239,16 @@ class TSOIMMA_Image_Manager {
      * @param string               $name  Option name.
      * @param array<int, string>   $map   Output map.
      * @param int                  $depth Recursion guard.
+     * @param string|int|null      $key   Array key that holds $data (null for the option value itself).
      * @return void
      */
-    private static function collect_ids_from_tree( $data, $name, array &$map, $depth = 0 ) {
+    private static function collect_ids_from_tree( $data, $name, array &$map, $depth = 0, $key = null ) {
         if ( $depth > 6 ) {
             return;
         }
         if ( is_array( $data ) || is_object( $data ) ) {
-            foreach ( (array) $data as $item ) {
-                self::collect_ids_from_tree( $item, $name, $map, $depth + 1 );
+            foreach ( (array) $data as $item_key => $item ) {
+                self::collect_ids_from_tree( $item, $name, $map, $depth + 1, $item_key );
             }
             return;
         }
@@ -257,9 +258,41 @@ class TSOIMMA_Image_Manager {
         } elseif ( is_string( $data ) && ctype_digit( $data ) && strlen( $data ) < 12 ) {
             $int = (int) $data;
         }
-        if ( null !== $int && $int > 0 && ! isset( $map[ $int ] ) ) {
-            $map[ $int ] = $name;
+        if ( null === $int || $int <= 0 || isset( $map[ $int ] ) ) {
+            return;
         }
+        if ( ! self::option_number_may_be_attachment_id( $name, $key, $depth ) ) {
+            return;
+        }
+        $map[ $int ] = $name;
+    }
+
+    /**
+     * Whether a plain number found in an option can be an attachment ID.
+     *
+     * A bare number is ambiguous: WordPress core stores plenty of settings that are numbers (posts_per_rss = 10,
+     * posts_per_page, thumbnail_size_w = 150, medium_size_w = 300...), so an image with ID 10, 150 or 300 used to look
+     * "used by a theme option". A top-level numeric option only counts when its name talks about media, and inside a
+     * settings array a key that names a count or a size (per_page, width, limit...) is ignored.
+     *
+     * @param string          $option_name Option name.
+     * @param string|int|null $key         Array key holding the number (null for a top-level value).
+     * @param int             $depth       Depth inside the option value (0 = the option itself).
+     * @return bool
+     */
+    private static function option_number_may_be_attachment_id( $option_name, $key, $depth ) {
+        // Names of counts, sizes and other plain settings: never an attachment ID.
+        $setting = '/(per_page|per_rss|per_row|count|number|num$|limit|offset|column|cols?$|width|height|size|_w$|_h$|depth|days|interval|timeout|delay|speed|priority|order|version|zoom|quality|opacity|margin|padding|radius|font|length|max|min|rows?$|page$|pages$|paged|id_base)/i';
+
+        if ( 0 === (int) $depth ) {
+            $name = (string) $option_name;
+            return ! preg_match( $setting, $name )
+                && preg_match( '/(logo|icon|image|img|thumb|avatar|background|header|banner|favicon|media|photo|picture|cover|attachment)/i', $name );
+        }
+        if ( is_string( $key ) && '' !== $key && ! ctype_digit( $key ) ) {
+            return ! preg_match( $setting, $key );
+        }
+        return true;
     }
 
     /**
@@ -811,6 +844,46 @@ class TSOIMMA_Image_Manager {
     }
 
     /**
+     * URL of an image size that really exists on disk (the admin screens show many thumbnails at once).
+     *
+     * wp_get_attachment_image_url() trusts the attachment metadata, which can list a size whose file is gone
+     * (deleted by a size cleanup, or its thumbnails are still being regenerated after a conversion): the browser
+     * then requests a missing file and every 404 monitor logs it. This falls back to a smaller size and then to
+     * the original; when the original is not on this server (offloaded media) it cannot check, so it returns the
+     * normal URL.
+     *
+     * @param int    $attachment_id Attachment ID.
+     * @param string $size          Wanted size name (medium, thumbnail...).
+     * @return string URL or ''.
+     */
+    public static function get_existing_image_url( $attachment_id, $size = 'medium' ) {
+        $attachment_id = absint( $attachment_id );
+        $file          = $attachment_id > 0 ? get_attached_file( $attachment_id ) : false;
+        if ( ! $file || ! is_file( $file ) ) {
+            return (string) wp_get_attachment_image_url( $attachment_id, $size );
+        }
+
+        $meta  = wp_get_attachment_metadata( $attachment_id );
+        $sizes = is_array( $meta ) && ! empty( $meta['sizes'] ) && is_array( $meta['sizes'] ) ? $meta['sizes'] : array();
+        $dir   = trailingslashit( dirname( $file ) );
+
+        foreach ( array_unique( array( (string) $size, 'thumbnail' ) ) as $name ) {
+            if ( 'full' === $name ) {
+                break;
+            }
+            if ( empty( $sizes[ $name ]['file'] ) || ! is_file( $dir . $sizes[ $name ]['file'] ) ) {
+                continue;
+            }
+            $url = wp_get_attachment_image_url( $attachment_id, $name );
+            if ( $url ) {
+                return (string) $url;
+            }
+        }
+
+        return (string) wp_get_attachment_url( $attachment_id );
+    }
+
+    /**
      * Retorna llista paginada d'imatges amb info SEO.
      * $sort: 'date' | 'filesize' | 'modified'
      */
@@ -863,7 +936,6 @@ class TSOIMMA_Image_Manager {
                 'description'  => $post->post_content,
                 'filename'     => basename( $file_path ?? '' ),
                 'url'          => wp_get_attachment_url( $post->ID ),
-                'thumb'        => wp_get_attachment_image_url( $post->ID, 'medium' ),
                 'filesize'     => $raw_size > 0 ? size_format( $raw_size ) : '—',
                 'filesize_raw' => $raw_size,
                 'mime'         => $real_mime,
@@ -915,6 +987,11 @@ class TSOIMMA_Image_Manager {
         } else {
             $total       = (int) $query->found_posts;
             $total_pages = (int) $query->max_num_pages;
+        }
+
+        // Only the visible page gets a thumbnail URL (it checks the files on disk).
+        foreach ( $items as $i => $item ) {
+            $items[ $i ]['thumb'] = self::get_existing_image_url( $item['id'], 'medium' );
         }
 
         return [

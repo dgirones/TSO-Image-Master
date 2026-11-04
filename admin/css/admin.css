@@ -396,6 +396,7 @@
     color: var(--imp-text-muted); font-size: 12px; padding: 4px 12px;
     border-radius: 20px; font-weight: 500;
 }
+.imp-count-badge:empty { display: none; }
 
 /* ===== BUTTONS ===== */
 .imp-btn {
@@ -1406,7 +1407,7 @@
 .imp-history-action.seo_update    { background: rgba(6,214,160,.15); color: var(--imp-success); }
 .imp-history-action.url_fix, .imp-history-action.url_restore { background: rgba(6,214,160,.15); color: var(--imp-success); }
 .imp-history-action.url_remove     { background: rgba(255,209,102,.15); color: var(--imp-warn); }
-.imp-history-action.repair_paths, .imp-history-action.repair_mime { background: rgba(6,214,160,.15); color: var(--imp-success); }
+.imp-history-action.repair_paths, .imp-history-action.repair_mime, .imp-history-action.repair_sizes { background: rgba(6,214,160,.15); color: var(--imp-success); }
 .imp-history-action.url_backup_delete, .imp-history-action.ghost_delete { background: rgba(255,77,109,.15); color: var(--imp-danger); }
 .imp-history-action.delete        { background: rgba(255,77,109,.15); color: var(--imp-danger); }
 .imp-history-action.pdf_compress  { background: rgba(255,255,255,.08); color: var(--imp-text-muted); }
@@ -1881,6 +1882,20 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .imp-ghost-reason { font-size: 11px; color: var(--imp-danger); flex-shrink: 0; }
+/* Missing sizes (Repairs): one row per image with a colour chip per missing size. */
+.imp-msz-row { flex-wrap: wrap; }
+.imp-msz-thumb { width: 36px; height: 36px; object-fit: contain; border-radius: 4px; background: var(--imp-surface2); flex-shrink: 0; }
+.imp-msz-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.imp-msz-chip { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.imp-msz-regenerate { background: rgba(6,214,160,.15); color: var(--imp-success); }
+.imp-msz-relink { background: rgba(108,99,255,.2); color: var(--imp-accent); }
+.imp-msz-drop { background: rgba(255,209,102,.15); color: var(--imp-warn); }
+.imp-msz-more { font-size: 12px; color: var(--imp-text-muted); padding: 8px 0; }
+@media (max-width: 768px) {
+    .imp-msz-name { flex: 1 1 calc(100% - 52px); white-space: normal; overflow-wrap: anywhere; }
+    .imp-msz-chips { flex: 1 1 100%; }
+}
+
 
 /* Removal backups list: keep the action buttons on one line and aligned right. */
 #imp-url-backups-list .imp-history-table td:last-child { white-space: nowrap; text-align: right; }

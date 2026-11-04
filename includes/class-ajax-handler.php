@@ -879,7 +879,7 @@ class TSOIMMA_Ajax_Handler {
             'description'      => get_post_field( 'post_content', $id ),
             'filename'         => $file ? basename( $file ) : '',
             'url'              => wp_get_attachment_url( $id ),
-            'thumb'            => wp_get_attachment_image_url( $id, 'medium' ),
+            'thumb'            => TSOIMMA_Image_Manager::get_existing_image_url( $id, 'medium' ),
             'filesize'         => $file && file_exists( $file ) ? filesize( $file ) : 0,
             'filesize_h'       => $file && file_exists( $file ) ? size_format( filesize( $file ) ) : '—',
             'mime'             => $real_mime,
@@ -1250,6 +1250,113 @@ class TSOIMMA_Ajax_Handler {
                 'fixed'   => $fixed,
                 'scanned' => $scanned,
                 'errors'  => $errors,
+            )
+        );
+    }
+
+    // ----------------------------------------------------------------
+    // Mides que figuren a les metadades però el fitxer no existeix
+    // ----------------------------------------------------------------
+    /**
+     * Loads the Missing sizes class on demand (an update that replaced this file but not the main plugin file
+     * would otherwise end in "class not found") and says so clearly when the file itself is not on the server.
+     *
+     * @return void
+     */
+    private static function require_missing_sizes_class() {
+        if ( ! class_exists( 'TSOIMMA_Missing_Sizes', false ) ) {
+            $file = TSOIMMA_PLUGIN_DIR . 'includes/class-missing-sizes.php';
+            if ( is_readable( $file ) ) {
+                require_once $file;
+            }
+        }
+        if ( ! class_exists( 'TSOIMMA_Missing_Sizes', false ) ) {
+            wp_send_json_error( __( 'The file includes/class-missing-sizes.php is missing from the plugin folder: upload the complete update.', 'tso-image-master' ) );
+        }
+    }
+
+    public static function handle_tso_im_find_missing_sizes() {
+        tsoimma_verify_ajax_nonce();
+        self::require_admin();
+        self::require_missing_sizes_class();
+
+        // A PHP error here used to surface only as an opaque "500": report its message instead.
+        try {
+            $batch = TSOIMMA_Missing_Sizes::scan_batch(
+                tsoimma_get_ajax_post_int( 'after_id' ),
+                tsoimma_get_ajax_post_int( 'limit', TSOIMMA_Missing_Sizes::SCAN_BATCH )
+            );
+        } catch ( \Throwable $ex ) {
+            wp_send_json_error(
+                sprintf(
+                    /* translators: %s: error message */
+                    __( 'The scan failed: %s', 'tso-image-master' ),
+                    $ex->getMessage()
+                )
+            );
+            return;
+        }
+
+        wp_send_json_success( $batch );
+    }
+
+    public static function handle_tso_im_repair_missing_sizes() {
+        tsoimma_verify_ajax_nonce();
+        self::require_admin();
+        self::require_missing_sizes_class();
+
+        // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
+        @set_time_limit( 300 );
+
+        $ids = array_slice( array_values( array_unique( array_filter( array_map( 'absint', tsoimma_get_ajax_post_int_array( 'ids' ) ) ) ) ), 0, TSOIMMA_Missing_Sizes::REPAIR_BATCH );
+        if ( empty( $ids ) ) {
+            wp_send_json_error( __( 'No attachment IDs were specified.', 'tso-image-master' ) );
+        }
+
+        $results     = array();
+        $totals      = array( 'relinked' => 0, 'regenerated' => 0, 'dropped' => 0 );
+        $fixed_files = array();
+        foreach ( $ids as $id ) {
+            try {
+                $row = TSOIMMA_Missing_Sizes::repair( $id );
+            } catch ( \Throwable $ex ) {
+                $row = array(
+                    'id'          => $id,
+                    'ok'          => false,
+                    'error'       => $ex->getMessage(),
+                    'relinked'    => 0,
+                    'regenerated' => 0,
+                    'dropped'     => 0,
+                    'filename'    => '',
+                );
+            }
+            $results[] = $row;
+            foreach ( $totals as $key => $unused ) {
+                $totals[ $key ] += (int) $row[ $key ];
+            }
+            if ( $row['ok'] && ( $row['relinked'] + $row['regenerated'] + $row['dropped'] ) > 0 ) {
+                $fixed_files[ (int) $row['id'] ] = $row['filename'];
+            }
+        }
+
+        if ( ! empty( $fixed_files ) ) {
+            TSOIMMA_History::log_url_action(
+                'repair_sizes',
+                array(
+                    'count'       => count( $fixed_files ),
+                    'files'       => array_slice( array_values( $fixed_files ), 0, 20 ),
+                    'relinked'    => $totals['relinked'],
+                    'regenerated' => $totals['regenerated'],
+                    'dropped'     => $totals['dropped'],
+                ),
+                (int) key( $fixed_files )
+            );
+        }
+
+        wp_send_json_success(
+            array(
+                'results' => $results,
+                'totals'  => $totals,
             )
         );
     }

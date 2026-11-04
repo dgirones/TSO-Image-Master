@@ -293,6 +293,8 @@ function tsoimma_get_ajax_action_names() {
 		'tsoimma_remove_url_issues',
 		'tsoimma_find_ghost_attachments',
 		'tsoimma_delete_ghost_attachments',
+		'tsoimma_find_missing_sizes',
+		'tsoimma_repair_missing_sizes',
 		'tsoimma_get_dashboard_overview',
 		'tsoimma_get_missing_alt',
 		'tsoimma_bulk_fill_alt',

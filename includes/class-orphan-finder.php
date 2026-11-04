@@ -608,7 +608,7 @@ class TSOIMMA_Orphan_Finder {
             'title'     => get_the_title( $attachment_id ),
             'filename'  => basename( $file_path ?? '' ),
             'url'       => wp_get_attachment_url( $attachment_id ),
-            'thumb'     => wp_get_attachment_image_url( $attachment_id, 'thumbnail' ),
+            'thumb'     => TSOIMMA_Image_Manager::get_existing_image_url( $attachment_id, 'thumbnail' ),
             'filesize'  => $file_size,
             'filesize_h'=> size_format( $file_size ),
             'mime'      => get_post_mime_type( $attachment_id ),

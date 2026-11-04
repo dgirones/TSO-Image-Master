@@ -36,6 +36,7 @@ require_once TSOIMMA_PLUGIN_DIR . 'includes/class-image-manager.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-orphan-finder.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-rogue-scanner.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-size-scanner.php';
+require_once TSOIMMA_PLUGIN_DIR . 'includes/class-missing-sizes.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-url-fixer.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-pdf-compressor.php';
 require_once TSOIMMA_PLUGIN_DIR . 'includes/class-auto-optimizer.php';

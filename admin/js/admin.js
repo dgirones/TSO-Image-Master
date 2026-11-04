@@ -481,6 +481,19 @@
             dash_dup_wasted: 'Espai malgastat',
             dash_dup_explain: 'Cada grup són fitxers idèntics (mateix MD5) registrats més d\'una vegada a la Mediateca. Marca els que vols conservar i fusiona o elimina la resta amb els botons de cada grup.',
             dash_dup_desc: 'Busca fitxers d\'imatge idèntics (mateix contingut, comprovat amb MD5) registrats més d\'una vegada a la Mediateca, que ocupen espai de més. Mostra on s\'usa cada còpia perquè en conservis una i eliminis la resta. No s\'elimina res automàticament.',
+            msz_desc: '📐 <strong class="imp-repair-title-warn">Mides que falten</strong> — Detecta imatges les metadades de les quals llisten una mida (per exemple la «mitjana») però el fitxer ja no és al disc: el web i l\'administració en demanen un fitxer que dona 404. Reparar reenllaça la mida si existeix amb una altra extensió, la torna a generar si encara està registrada, o treu l\'entrada si ja no cal. <strong>No es toca mai el fitxer original.</strong> És el cas contrari de la pestanya «Mides d\'imatge», que només compta els fitxers que existeixen.',
+            msz_scan: '🔍 Escanejar mides que falten',
+            msz_none: 'No falta cap mida: totes les metadades coincideixen amb els fitxers.',
+            msz_found: '{n} imatge(s) amb {m} mida(es) que falten: {a} es regeneraran, {b} es reenllaçaran i {c} es trauran de les metadades.',
+            msz_repair: '🔧 Reparar',
+            msz_repairing: 'Reparant {n}/{t}…',
+            msz_done: '✓ {n} imatge(s) reparada(es): {a} mides regenerades, {b} reenllaçades i {c} tretes de les metadades.',
+            msz_act_regenerate: 'es regenerarà',
+            msz_act_relink: 'es reenllaçarà a un fitxer que ja existeix',
+            msz_act_drop: 'es traurà de les metadades (la mida ja no és registrada o la imatge és més petita)',
+            hist_msz_detail: '{a} regenerades · {b} reenllaçades · {c} tretes',
+            action_repair_sizes: 'Mides reparades',
+            filter_repair_sizes: '📐 Mides reparades',
             ref_untitled: '(sense títol)',
             ref_t_cust_logo: 'Logo del lloc (Personalitzador)',
             ref_t_cust_icon: 'Icona del lloc (Personalitzador)',
@@ -917,6 +930,19 @@
             ,dash_dup_wasted: 'Espacio desperdiciado'
             ,dash_dup_explain: 'Cada grupo son archivos idénticos (mismo MD5) registrados más de una vez en la Biblioteca de medios. Marca los que quieres conservar y fusiona o elimina el resto con los botones de cada grupo.'
             ,dash_dup_desc: 'Busca archivos de imagen idénticos (mismo contenido, comprobado con MD5) registrados más de una vez en la Biblioteca de medios, que ocupan espacio de más. Muestra dónde se usa cada copia para que conserves una y elimines el resto. No se elimina nada automáticamente.'
+            ,msz_desc: '📐 <strong class="imp-repair-title-warn">Tamaños que faltan</strong> — Detecta imágenes cuyos metadatos listan un tamaño (por ejemplo el «mediano») pero el archivo ya no está en el disco: la web y la administración piden un archivo que da 404. Reparar reenlaza el tamaño si existe con otra extensión, lo vuelve a generar si sigue registrado, o quita la entrada si ya no hace falta. <strong>Nunca se toca el archivo original.</strong> Es el caso contrario de la pestaña «Tamaños de imagen», que solo cuenta los archivos que existen.'
+            ,msz_scan: '🔍 Escanear tamaños que faltan'
+            ,msz_none: 'No falta ningún tamaño: todos los metadatos coinciden con los archivos.'
+            ,msz_found: '{n} imagen(es) con {m} tamaño(s) que faltan: {a} se regenerarán, {b} se reenlazarán y {c} se quitarán de los metadatos.'
+            ,msz_repair: '🔧 Reparar'
+            ,msz_repairing: 'Reparando {n}/{t}…'
+            ,msz_done: '✓ {n} imagen(es) reparada(s): {a} tamaños regenerados, {b} reenlazados y {c} quitados de los metadatos.'
+            ,msz_act_regenerate: 'se regenerará'
+            ,msz_act_relink: 'se reenlazará a un archivo que ya existe'
+            ,msz_act_drop: 'se quitará de los metadatos (el tamaño ya no está registrado o la imagen es más pequeña)'
+            ,hist_msz_detail: '{a} regeneradas · {b} reenlazadas · {c} quitadas'
+            ,action_repair_sizes: 'Tamaños reparados'
+            ,filter_repair_sizes: '📐 Tamaños reparados'
             ,ref_untitled: '(sin título)'
             ,ref_t_cust_logo: 'Logo del sitio (Personalizador)'
             ,ref_t_cust_icon: 'Icono del sitio (Personalizador)'
@@ -1350,6 +1376,19 @@
             ,dash_dup_wasted: 'Wasted space'
             ,dash_dup_explain: 'Each group is identical file content (same MD5) registered more than once in the Media Library. Tick the ones you want to keep and merge or delete the rest with each group\'s buttons.'
             ,dash_dup_desc: 'Finds identical image files (same content, checked with MD5) registered more than once in the Media Library, which waste disk space. It shows where each copy is used so you can keep one and delete the rest. Nothing is deleted automatically.'
+            ,msz_desc: '📐 <strong class="imp-repair-title-warn">Missing sizes</strong> — Finds images whose metadata lists a size (for example “medium”) but whose file is no longer on disk: the site and the admin request a file that returns 404. Repair relinks the size if it exists with another extension, generates it again if it is still registered, or removes the entry if it is no longer needed. <strong>The original file is never touched.</strong> It is the opposite case of the “Image sizes” tab, which only counts files that exist.'
+            ,msz_scan: '🔍 Scan missing sizes'
+            ,msz_none: 'No size is missing: all the metadata matches the files.'
+            ,msz_found: '{n} image(s) with {m} missing size(s): {a} will be regenerated, {b} relinked and {c} removed from the metadata.'
+            ,msz_repair: '🔧 Repair'
+            ,msz_repairing: 'Repairing {n}/{t}…'
+            ,msz_done: '✓ {n} image(s) repaired: {a} sizes regenerated, {b} relinked and {c} removed from the metadata.'
+            ,msz_act_regenerate: 'will be regenerated'
+            ,msz_act_relink: 'will be relinked to a file that exists'
+            ,msz_act_drop: 'will be removed from the metadata (the size is no longer registered or the image is smaller)'
+            ,hist_msz_detail: '{a} regenerated · {b} relinked · {c} removed'
+            ,action_repair_sizes: 'Sizes repaired'
+            ,filter_repair_sizes: '📐 Sizes repaired'
             ,ref_untitled: '(untitled)'
             ,ref_t_cust_logo: 'Site logo (Customizer)'
             ,ref_t_cust_icon: 'Site icon (Customizer)'
@@ -2807,7 +2846,18 @@
             $el.text(count + ' ' + (count > 1 ? uiText('ghost_found_plural', 'ghost attachments found.') : uiText('ghost_found_singular', 'ghost attachment found.')));
         } else if (kind === 'ghost_deleted') {
             $el.text('✓ ' + count + ' ' + uiText('ghost_deleted_ok', 'deleted successfully.') + (errTxt ? ' ⚠ ' + errTxt : ''));
+        } else if (kind === 'msz_none') {
+            $el.text('✓ ' + uiText('msz_none', 'No size is missing: all the metadata matches the files.'));
+        } else if (kind === 'msz_found') {
+            $el.text(mszFill(uiText('msz_found', '{n} image(s) with {m} missing size(s): {a} will be regenerated, {b} relinked and {c} removed from the metadata.'), $el.data('stats')));
+        } else if (kind === 'msz_done') {
+            $el.text(mszFill(uiText('msz_done', '✓ {n} image(s) repaired: {a} sizes regenerated, {b} relinked and {c} removed from the metadata.'), $el.data('stats')) + (errTxt ? ' ⚠ ' + errTxt : ''));
         }
+    }
+
+    function mszFill(text, st) {
+        st = st || {};
+        return text.replace('{n}', st.n || 0).replace('{m}', st.m || 0).replace('{a}', st.a || 0).replace('{b}', st.b || 0).replace('{c}', st.c || 0);
     }
 
     // ================================================================
@@ -6425,6 +6475,132 @@
             });
         });
 
+        // ── Missing sizes (metadata lists a file that is not on disk) ──────
+        var mszItems = [];
+
+        function mszStats(items) {
+            var st = { n: items.length, m: 0, a: 0, b: 0, c: 0 };
+            items.forEach(function(it) {
+                (it.missing || []).forEach(function(x) {
+                    st.m++;
+                    if (x.action === 'regenerate') st.a++; else if (x.action === 'relink') st.b++; else st.c++;
+                });
+            });
+            return st;
+        }
+
+        function renderMszList() {
+            var $list = $('#imp-msizes-list').empty();
+            var shown = mszItems.slice(0, 40);
+            shown.forEach(function(it) {
+                var chips = (it.missing || []).map(function(x) {
+                    var tip = x.file + ' — ' + uiText('msz_act_' + x.action, x.action);
+                    return '<span class="imp-msz-chip imp-msz-' + escHtml(x.action) + '" title="' + escHtml(tip) + '">' + escHtml(x.size) + '</span>';
+                }).join('');
+                $list.append('<div class="imp-ghost-row imp-msz-row">' +
+                    (it.thumb ? '<img class="imp-msz-thumb" loading="lazy" src="' + escHtml(it.thumb) + '" alt="">' : '') +
+                    '<span class="imp-ghost-name imp-msz-name" title="#' + parseInt(it.id, 10) + '">#' + parseInt(it.id, 10) + ' ' + escHtml(it.filename) + '</span>' +
+                    '<span class="imp-msz-chips">' + chips + '</span></div>');
+            });
+            if (mszItems.length > shown.length) {
+                $list.append('<div class="imp-msz-more">' + escHtml(uiText('hist_more', '+{n} more').replace('{n}', mszItems.length - shown.length)) + '</div>');
+            }
+        }
+
+        function mszScan(afterId, acc) {
+            var $btn = $('#imp-scan-msizes');
+            var $res = $('#imp-msizes-scan-result');
+            if (afterId === 0) {
+                mszScan.scanned = 0;
+                $('#imp-msizes-actions .imp-btn').show();
+                $btn.prop('disabled', true).text('⏳ ' + uiText('btn_scanning', 'Scanning...'));
+                $res.removeData('kind').hide();
+                $('#imp-msizes-repair-result').removeData('kind').hide();
+                $('#imp-msizes-list').hide().empty();
+                $('#imp-msizes-actions').hide();
+            }
+            ajax('tsoimma_find_missing_sizes', { after_id: afterId, limit: 200 }, function(data) {
+                acc = acc.concat(data.items || []);
+                if (!data.done) {
+                    mszScan.scanned = (mszScan.scanned || 0) + (data.scanned || 0);
+                    $res.removeData('kind').show().css('color', 'var(--imp-text-muted)')
+                        .text(uiText('scanning_msg', 'Scanning...') + ' ' + mszScan.scanned + '/' + (data.total || 0) + '...');
+                    setTimeout(function() { mszScan(parseInt(data.after_id, 10) || afterId, acc); }, 50);
+                    return;
+                }
+                mszScan.scanned = 0;
+                $btn.prop('disabled', false).text(uiText('msz_scan', '🔍 Scan missing sizes'));
+                mszItems = acc;
+                if (!mszItems.length) {
+                    $res.data('kind', 'msz_none').show().css('color', 'var(--imp-success)');
+                    refreshStoredResult('#imp-msizes-scan-result');
+                    return;
+                }
+                $res.data('kind', 'msz_found').data('stats', mszStats(mszItems)).show().css('color', 'var(--imp-warn)');
+                refreshStoredResult('#imp-msizes-scan-result');
+                renderMszList();
+                $('#imp-msizes-list').show();
+                $('#imp-msizes-actions').css('display', 'flex');
+            }, function(err) {
+                mszScan.scanned = 0;
+                $btn.prop('disabled', false).text(uiText('msz_scan', '🔍 Scan missing sizes'));
+                $res.removeData('kind').show().css('color', 'var(--imp-danger)').text((L.error_prefix || 'Error: ') + err);
+            }, 120000);
+        }
+        mszScan.scanned = 0;
+        $('#imp-scan-msizes').on('click', function() { mszScan(0, []); });
+
+        $('#imp-repair-msizes').on('click', function() {
+            var $btn = $(this);
+            var $res = $('#imp-msizes-repair-result');
+            var ids = mszItems.map(function(it) { return it.id; });
+            if (!ids.length) return;
+            var totals = { n: 0, m: 0, a: 0, b: 0, c: 0 };
+            var errors = [];
+            var done = 0;
+            $btn.prop('disabled', true);
+            $('#imp-scan-msizes').prop('disabled', true);
+            $res.removeData('kind').show().css('color', 'var(--imp-text-muted)');
+
+            (function step() {
+                if (done >= ids.length) {
+                    $btn.prop('disabled', false);
+                    $('#imp-scan-msizes').prop('disabled', false);
+                    $res.data('kind', 'msz_done').data('stats', totals).data('errors', errors.length)
+                        .attr('title', errors.slice(0, 20).join('\n')).css('color', errors.length ? 'var(--imp-warn)' : 'var(--imp-success)');
+                    refreshStoredResult('#imp-msizes-repair-result');
+                    markDashboardDirty();
+                    if (!mszItems.length) {
+                        $('#imp-repair-msizes').hide();
+                        $('#imp-msizes-list').hide();
+                        $('#imp-msizes-scan-result').hide();
+                    } else {
+                        renderMszList();
+                    }
+                    return;
+                }
+                var chunk = ids.slice(done, done + 5);
+                $res.text(uiText('msz_repairing', 'Repairing {n}/{t}...').replace('{n}', done).replace('{t}', ids.length));
+                ajax('tsoimma_repair_missing_sizes', { ids: chunk }, function(data) {
+                    (data.results || []).forEach(function(r) {
+                        if (r.ok) {
+                            totals.n++; totals.a += r.regenerated || 0; totals.b += r.relinked || 0; totals.c += r.dropped || 0;
+                            totals.m += (r.regenerated || 0) + (r.relinked || 0) + (r.dropped || 0);
+                            mszItems = mszItems.filter(function(it) { return it.id !== r.id; });
+                        } else {
+                            errors.push('#' + r.id + ' ' + (r.filename || '') + ': ' + (r.error || ''));
+                        }
+                    });
+                    done += chunk.length;
+                    step();
+                }, function(err) {
+                    errors.push(err);
+                    done += chunk.length;
+                    step();
+                }, 300000);
+            })();
+        });
+
         // ── Ghost attachments ─────────────────────────────────────
         var ghostSelected = new Set();
 
@@ -6780,9 +6956,10 @@
                 url_backup_delete: uiText('action_url_backup_delete', 'Backup deleted'),
                 repair_paths: uiText('action_repair_paths', 'Paths repaired'),
                 repair_mime: uiText('action_repair_mime', 'MIME types repaired'),
+                repair_sizes: uiText('action_repair_sizes', 'Sizes repaired'),
                 ghost_delete: uiText('action_ghost_delete', 'Ghosts deleted')
             };
-            var repairTypes = { url_fix: '🔗', url_remove: '🧹', url_restore: '♻️', url_backup_delete: '🗑️', repair_paths: '🔧', repair_mime: '🔧', ghost_delete: '🗑️' };
+            var repairTypes = { url_fix: '🔗', url_remove: '🧹', url_restore: '♻️', url_backup_delete: '🗑️', repair_paths: '🔧', repair_mime: '🔧', repair_sizes: '📐', ghost_delete: '🗑️' };
             var d    = item.details || {};
             var details = '';
             if (d.savings_pct)  details += '<span class="imp-history-savings">-' + d.savings_pct + '%</span> (' + formatBytes(d.savings_bytes || 0) + ')';
@@ -6851,6 +7028,8 @@
                 var isUrlRow = item.action_type.indexOf('url_') === 0;
                 var uBits = ['<strong>' + (d.count || 0) + ' ' + escHtml((d.count || 0) === 1 ? (isUrlRow ? uiText('hist_url_one', 'URL') : uiText('hist_att_one', 'attachment')) : (isUrlRow ? uiText('hist_url_count', 'URLs') : uiText('hist_att_count', 'attachments'))) + '</strong>'];
                 if (d.skipped) uBits.push(d.skipped + ' ' + escHtml(uiText('hist_skipped', 'skipped')));
+                if (item.action_type === 'repair_sizes') uBits.push(escHtml(dupFill(uiText('hist_msz_detail', '{a} regenerated · {b} relinked · {c} removed'), [])
+                    .replace('{a}', d.regenerated || 0).replace('{b}', d.relinked || 0).replace('{c}', d.dropped || 0)));
                 var uList = '';
                 if (d.pairs && d.pairs.length) uList = d.pairs.map(function(p) { return escHtml(p[0]) + ' \u2192 ' + escHtml(p[1]); }).join('<br>');
                 else if (d.files && d.files.length) uList = d.files.map(escHtml).join('<br>');

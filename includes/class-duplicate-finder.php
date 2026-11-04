@@ -342,7 +342,7 @@ class TSOIMMA_Duplicate_Finder {
 			'filename'   => basename( $file_path ),
 			'rel_path'   => $rel_path,
 			'url'        => wp_get_attachment_url( $attachment_id ),
-			'thumb'      => wp_get_attachment_image_url( $attachment_id, 'thumbnail' ),
+			'thumb'      => TSOIMMA_Image_Manager::get_existing_image_url( $attachment_id, 'thumbnail' ),
 			'filesize'   => (int) $filesize,
 			'filesize_h' => size_format( $filesize ),
 			'width'      => isset( $metadata['width'] ) ? (int) $metadata['width'] : 0,

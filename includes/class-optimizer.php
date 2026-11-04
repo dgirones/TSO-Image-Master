@@ -384,6 +384,51 @@ class TSOIMMA_Optimizer {
     }
 
     /**
+     * Suffix of a thumbnail moved aside while its sizes are regenerated.
+     */
+    const STASH_SUFFIX = '.tsoimma-old';
+
+    /**
+     * Move a file aside (same folder) instead of deleting it, remembering where it came from.
+     *
+     * @param string               $path    File path.
+     * @param array<string,string> $stashed Map [ moved path => original path ] (by reference).
+     * @return void
+     */
+    private static function stash_file( $path, array &$stashed ) {
+        if ( ! is_file( $path ) ) {
+            return;
+        }
+        $tmp = $path . self::STASH_SUFFIX;
+        if ( file_exists( $tmp ) ) {
+            wp_delete_file( $tmp );
+        }
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- same-folder move inside uploads, restored on failure.
+        if ( @rename( $path, $tmp ) ) {
+            $stashed[ $tmp ] = $path;
+        }
+    }
+
+    /**
+     * Put back the files moved aside by stash_file() (a half-generated file with the same name is replaced).
+     *
+     * @param array<string,string> $stashed Map [ moved path => original path ].
+     * @return void
+     */
+    private static function restore_stashed_files( array $stashed ) {
+        foreach ( $stashed as $tmp => $orig ) {
+            if ( ! is_file( $tmp ) ) {
+                continue;
+            }
+            if ( file_exists( $orig ) ) {
+                wp_delete_file( $orig );
+            }
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- restoring the file moved aside.
+            @rename( $tmp, $orig );
+        }
+    }
+
+    /**
      * FASE 3 — Thumbnails (WP-Cron, background, lent).
      * En aquest punt update_wp_metadata_only() ja ha actualitzat la DB,
      * per tant get_attached_file() retorna el path correcte.
@@ -413,38 +458,55 @@ class TSOIMMA_Optimizer {
         $file = get_attached_file( $attachment_id );
         if ( ! $file || ! file_exists( $file ) ) return;
 
-        // ── FIX CRÍTIC: Eliminar thumbnails existents ABANS de wp_generate_attachment_metadata ──
-        // Si no s'eliminen, WordPress detecta que el fitxer de destí ja existeix i usa
+        // ── FIX CRÍTIC: apartar els thumbnails existents ABANS de wp_generate_attachment_metadata ──
+        // Si no s'aparten, WordPress detecta que el fitxer de destí ja existeix i usa
         // wp_unique_filename() per crear noms com photo-150x150-1.webp → metadades duplicades!
-        // Eliminem totes les variants (jpg, webp, png...) per garantir nom net.
+        // S'aparten totes les variants (jpg, webp, png...) per garantir nom net.
+        //
+        // No s'eliminen d'entrada: si la regeneració falla, s'acaba el temps o es cancel·la, es
+        // tornen al seu lloc. Així les metadades mai no apunten a fitxers que ja no hi són
+        // (404 al web i a l'administració).
         $old_meta = wp_get_attachment_metadata( $attachment_id );
+        $stashed  = array();
+        $stash_ok = false;
+        register_shutdown_function(
+            static function () use ( &$stashed, &$stash_ok ) {
+                if ( ! $stash_ok ) {
+                    self::restore_stashed_files( $stashed );
+                }
+            }
+        );
         if ( ! empty( $old_meta['sizes'] ) ) {
             $thumb_dir = trailingslashit( dirname( $file ) );
             foreach ( $old_meta['sizes'] as $size_data ) {
                 if ( empty( $size_data['file'] ) ) continue;
                 $thumb_path = $thumb_dir . $size_data['file'];
-                if ( file_exists( $thumb_path ) ) {
-                    wp_delete_file( $thumb_path );
-                }
-                // Eliminar variants d'extensió alternativa (seguretat addicional)
+                self::stash_file( $thumb_path, $stashed );
+                // Apartar variants d'extensió alternativa (seguretat addicional)
                 $pi_t = pathinfo( $thumb_path );
                 foreach ( array( 'webp', 'jpg', 'jpeg', 'png', 'gif', 'avif' ) as $try_ext ) {
                     if ( strtolower( isset( $pi_t['extension'] ) ? $pi_t['extension'] : '' ) === $try_ext ) {
                         continue;
                     }
-                    $alt_path = $pi_t['dirname'] . '/' . $pi_t['filename'] . '.' . $try_ext;
-                    if ( file_exists( $alt_path ) ) {
-                        wp_delete_file( $alt_path );
-                    }
+                    self::stash_file( $pi_t['dirname'] . '/' . $pi_t['filename'] . '.' . $try_ext, $stashed );
                 }
             }
         }
 
         // Regenerar thumbnails físics amb el nou fitxer principal
-        // Ara que els fitxers antics han estat eliminats, WordPress crea noms nets sense sufixos _1, _2...
+        // Ara que els fitxers antics són apartats, WordPress crea noms nets sense sufixos _1, _2...
         $new_meta = wp_generate_attachment_metadata( $attachment_id, $file );
-        if ( ! is_wp_error( $new_meta ) && ! empty( $new_meta ) ) {
-            wp_update_attachment_metadata( $attachment_id, $new_meta );
+        if ( is_wp_error( $new_meta ) || empty( $new_meta ) ) {
+            // Nothing was generated: put the old thumbnails back and leave the metadata as it was.
+            self::restore_stashed_files( $stashed );
+            $stash_ok = true;
+            return;
+        }
+        wp_update_attachment_metadata( $attachment_id, $new_meta );
+        // The metadata now describes the new files: the old ones are no longer needed.
+        $stash_ok = true;
+        foreach ( array_keys( $stashed ) as $tmp ) {
+            wp_delete_file( $tmp );
         }
 
         // Optimitzar els thumbnails generats (aplica format/qualitat personalitzats)
@@ -977,9 +1039,12 @@ class TSOIMMA_Optimizer {
                 wp_delete_file( $thumb_path );
                 $metadata['sizes'][ $size ]['file']      = $thumb_clean_name . '.' . $new_ext;
                 $metadata['sizes'][ $size ]['mime-type'] = self::ext_to_mime( $new_ext );
+                // Saved per size: if the request dies later, the metadata still matches the files on disk.
+                wp_update_attachment_metadata( $attachment_id, $metadata );
             } elseif ( $thumb_clean_name !== $pi['filename'] && $new_path !== $thumb_path ) {
                 wp_delete_file( $thumb_path );
                 $metadata['sizes'][ $size ]['file'] = $thumb_clean_name . '.' . $new_ext;
+                wp_update_attachment_metadata( $attachment_id, $metadata );
             }
         }
 
