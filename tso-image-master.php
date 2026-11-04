@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       TSO Image Master
  * Description:       Auto-converts images to WebP, AVIF, JPG or PNG, compresses PDFs, and repairs your media library: broken links, orphans, unused sizes, alt, SEO.
- * Version:           2.1.1
+ * Version:           2.1.2
  * Requires at least: 6.2
  * Requires PHP:      7.4
  * Tested up to:      7.1
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // ── Constants ────────────────────────────────────────────────────────
-define( 'TSOIMMA_VERSION',    '2.1.1' );
+define( 'TSOIMMA_VERSION',    '2.1.2' );
 define( 'TSOIMMA_FILE',       __FILE__ );
 define( 'TSOIMMA_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'TSOIMMA_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
