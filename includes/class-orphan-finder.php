@@ -43,7 +43,7 @@ class TSOIMMA_Orphan_Finder {
         $orphans = [];
 
         foreach ( $attachment_ids as $id ) {
-            if ( ! self::is_used_in_index( $id, $index ) ) {
+            if ( self::is_confirmed_orphan( $id, $index ) ) {
                 $orphans[] = self::build_orphan_data( $id );
             }
         }
@@ -70,11 +70,33 @@ class TSOIMMA_Orphan_Finder {
         update_meta_cache( 'post', $ids );
         $index = self::get_index( (bool) $reuse );
         foreach ( $ids as $id ) {
-            if ( ! self::is_used_in_index( (int) $id, $index ) ) {
+            if ( self::is_confirmed_orphan( (int) $id, $index ) ) {
                 $set[ (int) $id ] = true;
             }
         }
         return $set;
+    }
+
+    /**
+     * ÚNICA definició d'"orfa", compartida per la pestanya Orfes i per la
+     * subpestanya Sense adjuntar, perquè mai no es contradiguin: una imatge
+     * és orfa només si ni l'índex ràpid ni la cerca directa (la que dóna el
+     * motiu concret) hi troben cap ús. Qualsevol dels dos que la trobi usada
+     * la fa NO orfa, i aleshores la subpestanya Sense adjuntar la mostra
+     * (si no té pare) amb el lloc on s'usa.
+     *
+     * La cerca directa només s'executa per als candidats (els que l'índex
+     * no ha trobat usats), així l'escaneig continua sent ràpid.
+     *
+     * @param int   $attachment_id Attachment ID.
+     * @param array $index         Índex de referències.
+     * @return bool
+     */
+    private static function is_confirmed_orphan( $attachment_id, array $index ) {
+        if ( self::is_used_in_index( $attachment_id, $index ) ) {
+            return false;
+        }
+        return '' === self::get_reference_reason( $attachment_id );
     }
 
     /**
@@ -97,10 +119,12 @@ class TSOIMMA_Orphan_Finder {
      * - La cerca per ID a postmeta ignora claus internes de WordPress
      *   (_edit_last, _wp_*...) que guarden números sense relació.
      *
-     * @param int $attachment_id Attachment ID.
+     * @param int  $attachment_id Attachment ID.
+     * @param bool $skip_posts    Ignora els usos dins d'entrades (contingut, postmeta, imatge destacada):
+     *                            serveix per saber si una imatge s'usa també FORA d'entrades.
      * @return string Motiu de protecció, o '' si és orfe.
      */
-    public static function get_reference_reason( $attachment_id ) {
+    public static function get_reference_reason( $attachment_id, $skip_posts = false ) {
         global $wpdb;
 
         // 1b. Personalitzador / Identitat del lloc: custom_logo i site_icon
@@ -145,47 +169,50 @@ class TSOIMMA_Orphan_Finder {
 
         // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
-        // 3. post_content / excerpt (sense revisions ni esborranys automàtics)
-        $found = $wpdb->get_var( $wpdb->prepare(
-            "SELECT 1 FROM {$wpdb->posts} p
-             WHERE ( p.post_content LIKE %s OR p.post_content LIKE %s OR p.post_excerpt LIKE %s OR p.post_excerpt LIKE %s )
-             AND p.post_status NOT IN ('trash','auto-draft') AND p.post_type NOT IN ('attachment','revision','nav_menu_item')
-             LIMIT 1",
-            $p1, $p2, $p1, $p2
-        ) );
-        if ( $found ) return 'post_content';
+        if ( ! $skip_posts ) {
+            // 3. post_content / excerpt (sense revisions ni esborranys automàtics)
+            $found = $wpdb->get_var( $wpdb->prepare(
+                "SELECT 1 FROM {$wpdb->posts} p
+                 WHERE ( p.post_content LIKE %s OR p.post_content LIKE %s OR p.post_excerpt LIKE %s OR p.post_excerpt LIKE %s )
+                 AND p.post_status NOT IN ('trash','auto-draft') AND p.post_type NOT IN ('attachment','revision','nav_menu_item')
+                 LIMIT 1",
+                $p1, $p2, $p1, $p2
+            ) );
+            if ( $found ) return 'post_content';
 
-        $own_a = $wpdb->esc_like( '_tsoimma' ) . '%';
-        $own_b = $wpdb->esc_like( 'tsoimma' ) . '%';
-        $own_c = '%' . $wpdb->esc_like( 'tso_image_master' ) . '%';
+            $own_a = $wpdb->esc_like( '_tsoimma' ) . '%';
+            $own_b = $wpdb->esc_like( 'tsoimma' ) . '%';
+            $own_c = '%' . $wpdb->esc_like( 'tso_image_master' ) . '%';
 
-        // 4. post_meta (ACF, Elementor...) — només posts vius, no adjunts
-        $found = $wpdb->get_var( $wpdb->prepare(
-            "SELECT 1 FROM {$wpdb->postmeta} pm
-             INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
-             WHERE ( pm.meta_value LIKE %s OR pm.meta_value LIKE %s )
-             AND pm.post_id <> %d
-             AND pm.meta_key NOT IN ('_edit_last','_edit_lock','_wp_attached_file','_wp_attachment_metadata','_wp_attachment_backup_sizes','_wp_old_slug','_wp_old_date','_wp_trash_meta_time','_wp_trash_meta_status')
-             AND pm.meta_key NOT LIKE %s AND pm.meta_key NOT LIKE %s AND pm.meta_key NOT LIKE %s
-             AND p.post_status NOT IN ('trash','auto-draft') AND p.post_type NOT IN ('attachment','revision','nav_menu_item','gal_display_source','displayed_gallery','display_type','lightbox_library','ngg_album','ngg_gallery','ngg_pictures','saved_displayed_gallery','attached_gallery')
-             LIMIT 1",
-            $p1, $p2, $attachment_id, $own_a, $own_b, $own_c
-        ) );
-        if ( $found ) return 'postmeta_url';
+            // 4. post_meta (ACF, Elementor...) — només posts vius, no adjunts
+            $found = $wpdb->get_var( $wpdb->prepare(
+                "SELECT 1 FROM {$wpdb->postmeta} pm
+                 INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+                 WHERE ( pm.meta_value LIKE %s OR pm.meta_value LIKE %s )
+                 AND pm.post_id <> %d
+                 AND pm.meta_key NOT IN ('_edit_last','_edit_lock','_wp_attached_file','_wp_attachment_metadata','_wp_attachment_backup_sizes','_wp_old_slug','_wp_old_date','_wp_trash_meta_time','_wp_trash_meta_status')
+                 AND pm.meta_key NOT LIKE %s AND pm.meta_key NOT LIKE %s AND pm.meta_key NOT LIKE %s
+                 AND p.post_status NOT IN ('trash','auto-draft') AND p.post_type NOT IN ('attachment','revision','nav_menu_item','gal_display_source','displayed_gallery','display_type','lightbox_library','ngg_album','ngg_gallery','ngg_pictures','saved_displayed_gallery','attached_gallery')
+                 LIMIT 1",
+                $p1, $p2, $attachment_id, $own_a, $own_b, $own_c
+            ) );
+            if ( $found ) return 'postmeta_url';
 
-        // 5. ID exacte a post_meta (_thumbnail_id, ACF...) — posts vius, sense claus internes
-        $found = $wpdb->get_var( $wpdb->prepare(
-            "SELECT 1 FROM {$wpdb->postmeta} pm
-             INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
-             WHERE pm.meta_value = %s
-             AND pm.post_id <> %d
-             AND pm.meta_key NOT IN ('_edit_last','_edit_lock','_wp_attached_file','_wp_attachment_metadata','_wp_attachment_backup_sizes','_wp_old_slug','_wp_old_date','_wp_trash_meta_time','_wp_trash_meta_status')
-             AND pm.meta_key NOT LIKE %s AND pm.meta_key NOT LIKE %s AND pm.meta_key NOT LIKE %s
-             AND p.post_status NOT IN ('trash','auto-draft') AND p.post_type NOT IN ('revision','nav_menu_item','gal_display_source','displayed_gallery','display_type','lightbox_library','ngg_album','ngg_gallery','ngg_pictures','saved_displayed_gallery','attached_gallery')
-             LIMIT 1",
-            (string) $attachment_id, $attachment_id, $own_a, $own_b, $own_c
-        ) );
-        if ( $found ) return 'postmeta_id';
+            // 5. ID exacte a post_meta (_thumbnail_id, ACF...) — posts vius, sense claus internes
+            $found = $wpdb->get_var( $wpdb->prepare(
+                "SELECT 1 FROM {$wpdb->postmeta} pm
+                 INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+                 WHERE pm.meta_value = %s
+                 AND pm.post_id <> %d
+                 AND pm.meta_key NOT IN ('_edit_last','_edit_lock','_wp_attached_file','_wp_attachment_metadata','_wp_attachment_backup_sizes','_wp_old_slug','_wp_old_date','_wp_trash_meta_time','_wp_trash_meta_status')
+                 AND pm.meta_key NOT LIKE %s AND pm.meta_key NOT LIKE %s AND pm.meta_key NOT LIKE %s
+                 AND p.post_status NOT IN ('trash','auto-draft') AND p.post_type NOT IN ('revision','nav_menu_item','gal_display_source','displayed_gallery','display_type','lightbox_library','ngg_album','ngg_gallery','ngg_pictures','saved_displayed_gallery','attached_gallery')
+                 LIMIT 1",
+                (string) $attachment_id, $attachment_id, $own_a, $own_b, $own_c
+            ) );
+            if ( $found ) return 'postmeta_id';
+    
+        }
 
         // 6. options (widgets, customizer) — sense transients, logs, cachés ni opcions pròpies
         $names = $wpdb->get_col( $wpdb->prepare(
@@ -230,6 +257,26 @@ class TSOIMMA_Orphan_Finder {
         ) );
         if ( $found_menu > 0 ) {
             return 'nav_menu';
+        }
+
+        // 10. Term meta / user meta holding this attachment ID (WooCommerce
+        // category thumbnails, ACF taxonomy images, avatar plugins).
+        $found = $wpdb->get_var( $wpdb->prepare(
+            "SELECT 1 FROM {$wpdb->termmeta} WHERE meta_value = %s AND meta_key NOT IN ('order','count','product_count_product_cat','product_count_product_tag') LIMIT 1",
+            (string) $attachment_id
+        ) );
+        if ( $found ) {
+            return 'termmeta_id';
+        }
+        $found = $wpdb->get_var( $wpdb->prepare(
+            "SELECT 1 FROM {$wpdb->usermeta} WHERE meta_value = %s AND meta_key NOT LIKE %s AND meta_key NOT LIKE %s AND meta_key NOT LIKE %s LIMIT 1",
+            (string) $attachment_id,
+            '%' . $wpdb->esc_like( 'user_level' ),
+            '%' . $wpdb->esc_like( 'quick_press' ) . '%',
+            $wpdb->esc_like( 'tsoimma' ) . '%'
+        ) );
+        if ( $found ) {
+            return 'usermeta_id';
         }
 
         // phpcs:enable
@@ -406,6 +453,32 @@ class TSOIMMA_Orphan_Finder {
             foreach ( preg_split( '/[,\s]+/', (string) $list, -1, PREG_SPLIT_NO_EMPTY ) as $n ) {
                 $idx['ids'][ (int) $n ] = 1;
             }
+        }
+
+        // 3c. Term meta and user meta that hold an attachment ID (WooCommerce
+        // category thumbnails, ACF taxonomy images, avatar plugins...). Numeric
+        // values of unrelated keys only make an image look "used" (safe side).
+        $vals = $wpdb->get_col(
+            "SELECT DISTINCT meta_value FROM {$wpdb->termmeta}
+             WHERE meta_value REGEXP '^[0-9]{1,10}$'
+             AND meta_key NOT IN ('order','count','product_count_product_cat','product_count_product_tag')"
+        );
+        foreach ( (array) $vals as $v ) {
+            $idx['ids'][ (int) $v ] = 1;
+        }
+        $vals = $wpdb->get_col(
+            $wpdb->prepare(
+                "SELECT DISTINCT meta_value FROM {$wpdb->usermeta}
+                 WHERE meta_value REGEXP '^[0-9]{1,10}$'
+                 AND meta_key NOT LIKE %s AND meta_key NOT LIKE %s AND meta_key NOT LIKE %s AND meta_key NOT LIKE %s",
+                '%' . $wpdb->esc_like( 'user_level' ),
+                '%' . $wpdb->esc_like( 'quick_press' ) . '%',
+                $wpdb->esc_like( 'tsoimma' ) . '%',
+                $wpdb->esc_like( 'session_tokens' )
+            )
+        );
+        foreach ( (array) $vals as $v ) {
+            $idx['ids'][ (int) $v ] = 1;
         }
 
         // 4. Term meta amb noms d'imatge
@@ -586,6 +659,478 @@ class TSOIMMA_Orphan_Finder {
         }
 
         return array_unique( $urls );
+    }
+
+    /**
+     * Imatges sense pare (post_parent = 0 o pare esborrat) que SÍ s'usen en
+     * algun lloc, cadascuna amb el lloc concret on s'usa i, si s'usa dins d'una
+     * entrada, l'entrada a la qual es pot adjuntar ('attach_to'). No es retornen
+     * les orfes (ja surten a la pestanya Orfes).
+     *
+     * Només diagnòstic (no esborra res): serveix per entendre per què un
+     * llistat de "Media sin adjuntar" no coincideix amb el d'orfes.
+     *
+     * @param int $limit  Màxim d'imatges sense adjuntar a revisar en aquest lot.
+     * @param int $offset Offset del lot.
+     * @return array{items: array, total: int, scanned: int}
+     */
+    public static function find_unattached( $limit = 100, $offset = 0 ) {
+        global $wpdb;
+
+        $limit  = max( 1, min( 200, (int) $limit ) );
+        $offset = max( 0, (int) $offset );
+
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared
+        $mime = $wpdb->esc_like( 'image/' ) . '%';
+
+        $total = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->posts} par ON par.ID = p.post_parent
+             WHERE p.post_type = 'attachment' AND p.post_status = 'inherit' AND p.post_mime_type LIKE %s
+             AND ( p.post_parent = 0 OR par.ID IS NULL )",
+            $mime
+        ) );
+
+        $ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT p.ID FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->posts} par ON par.ID = p.post_parent
+             WHERE p.post_type = 'attachment' AND p.post_status = 'inherit' AND p.post_mime_type LIKE %s
+             AND ( p.post_parent = 0 OR par.ID IS NULL )
+             ORDER BY p.ID DESC LIMIT %d OFFSET %d",
+            $mime,
+            $limit,
+            $offset
+        ) );
+        // phpcs:enable
+
+        $items = array();
+        if ( empty( $ids ) ) {
+            return array( 'items' => $items, 'total' => $total, 'scanned' => 0 );
+        }
+
+        $ids = array_map( 'intval', $ids );
+        update_meta_cache( 'post', $ids );
+        $index = self::get_index( $offset > 0 );
+
+        foreach ( $ids as $id ) {
+            $class = self::classify_unattached( $id, $index );
+            if ( 'orphan' === $class['state'] ) {
+                continue; // Orfa: ja surt a la subpestanya d'orfes.
+            }
+
+            $reason               = $class['reason'];
+            $item                 = self::build_orphan_data( $id );
+            $item['state']        = $class['state'];
+            $item['reason']       = $reason;
+            $item['ref_post']     = $class['weak_ref'] ? $class['weak_ref'] : self::find_reference_post( $id, $reason );
+            $item['attach_to']    = $class['attach_to'];
+            $item['ref_option']   = self::find_reference_option( $id, $reason );
+            $item['ref_theme_file'] = ( 'theme_file' === $reason && class_exists( 'TSOIMMA_Image_Manager' ) )
+                ? TSOIMMA_Image_Manager::find_filename_in_theme_files( $item['filename'] )
+                : '';
+            $item['parent_state'] = ( 0 === (int) wp_get_post_parent_id( $id ) ) ? 'none' : 'deleted';
+            $edit_link            = get_edit_post_link( $id, 'raw' );
+            $item['edit_url']     = $edit_link ? esc_url_raw( $edit_link ) : '';
+            $items[]              = $item;
+        }
+
+        return array( 'items' => $items, 'total' => $total, 'scanned' => count( $ids ) );
+    }
+
+    /**
+     * Entrada a la qual té sentit adjuntar la imatge: la primera entrada o
+     * pàgina PÚBLICA que l'usa DE VERITAT (primer com a imatge destacada, després
+     * dins del contingut, després en un camp amb la seva URL).
+     *
+     * @param int $attachment_id Attachment ID.
+     * @return array|null array{id:int,title:string,type:string}
+     */
+    private static function find_attach_target( $attachment_id ) {
+        foreach ( array( 'postmeta_id', 'post_content', 'postmeta_url' ) as $kind ) {
+            $ref = self::find_reference_post( $attachment_id, $kind );
+            if ( ! $ref ) {
+                continue;
+            }
+            // A number that merely equals the image ID in a random custom field
+            // (a counter, a rating...) is not a use. Only the featured image counts.
+            if ( 'postmeta_id' === $kind && '_thumbnail_id' !== $ref['meta_field'] ) {
+                continue;
+            }
+            $type = get_post_type_object( $ref['type'] );
+            if ( $type && ! empty( $type->public ) ) {
+                return array(
+                    'id'    => (int) $ref['id'],
+                    'title' => (string) $ref['title'],
+                    'type'  => (string) $ref['type'],
+                );
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Coincidència feble: un camp personalitzat d'una entrada (que no és la imatge
+     * destacada) amb un valor numèric igual a l'ID de la imatge. Sovint és una
+     * casualitat (un comptador, una puntuació...), no un ús real.
+     *
+     * @param int $attachment_id Attachment ID.
+     * @return array|null Dades de l'entrada (com find_reference_post) o null.
+     */
+    private static function find_weak_reference( $attachment_id ) {
+        $ref = self::find_reference_post( $attachment_id, 'postmeta_id' );
+        if ( $ref && '_thumbnail_id' !== $ref['meta_field'] ) {
+            return $ref;
+        }
+        return null;
+    }
+
+    /**
+     * ÚNICA classificació d'una imatge sense pare, compartida pel llistat i per
+     * la protecció d'eliminació:
+     *  - orphan   : no s'usa enlloc (surt a la subpestanya d'orfes).
+     *  - fix      : s'usa de veritat dins d'una entrada: cal adjuntar-la (no eliminar).
+     *  - inuse    : s'usa fora d'entrades (opcions, widgets, logo, avatars, tema...): res a fer.
+     *  - doubtful : només coincideix el seu número en un camp d'una entrada: potser no
+     *               és un ús real; es pot eliminar (amb còpia de seguretat).
+     *
+     * @param int   $attachment_id Attachment ID.
+     * @param array $index         Índex de referències.
+     * @return array{state:string,reason:string,attach_to:?array,weak_ref:?array}
+     */
+    private static function classify_unattached( $attachment_id, array $index ) {
+        $out = array( 'state' => 'orphan', 'reason' => '', 'attach_to' => null, 'weak_ref' => null );
+
+        $reason = self::get_reference_reason( $attachment_id );
+        // L'escaneig d'orfes usa l'índex ràpid; si la cerca directa no troba res
+        // però l'índex sí, és una coincidència d'índex (així aquest llistat i la
+        // pestanya Orfes mai no es contradiuen).
+        if ( '' === $reason && self::is_used_in_index( $attachment_id, $index ) ) {
+            $reason = 'index_match';
+        }
+        if ( '' === $reason ) {
+            return $out;
+        }
+        $out['reason'] = $reason;
+
+        $target = self::find_attach_target( $attachment_id );
+        if ( $target ) {
+            $out['state']     = 'fix';
+            $out['attach_to'] = $target;
+            return $out;
+        }
+
+        $outside = self::get_reference_reason( $attachment_id, true );
+        if ( '' !== $outside ) {
+            $out['state']  = 'inuse';
+            $out['reason'] = $outside;
+            return $out;
+        }
+
+        $weak = self::find_weak_reference( $attachment_id );
+        if ( $weak ) {
+            $out['state']    = 'doubtful';
+            $out['reason']   = 'postmeta_id';
+            $out['weak_ref'] = $weak;
+            return $out;
+        }
+
+        $out['state'] = 'inuse';
+        return $out;
+    }
+
+    /**
+     * Si es pot eliminar des de la llista "Referenciades": només les orfes i les
+     * dubtoses. Mai una imatge usada de veritat per una entrada (se n'ha
+     * d'adjuntar) ni una usada fora d'entrades (opcions, logo, avatars...).
+     *
+     * @param int $attachment_id Attachment ID.
+     * @return bool
+     */
+    public static function is_deletable_from_list( $attachment_id ) {
+        $class = self::classify_unattached( (int) $attachment_id, self::get_index( true ) );
+        return in_array( $class['state'], array( 'orphan', 'doubtful' ), true );
+    }
+
+    /**
+     * Adjunta cada imatge sense pare a l'entrada on s'usa (el mateix que el
+     * botó "Adjuntar" de la Biblioteca de mitjans): en tenir pare ja no surt a
+     * la llista de "sense adjuntar". Només es toca el camp post_parent.
+     *
+     * @param int[] $attachment_ids Attachment IDs.
+     * @return array{attached: array, errors: array}
+     */
+    public static function attach_to_posts( array $attachment_ids ) {
+        $attached = array();
+        $errors   = array();
+
+        foreach ( array_unique( array_map( 'absint', $attachment_ids ) ) as $id ) {
+            $post = $id ? get_post( $id ) : null;
+
+            if ( ! $post || 'attachment' !== $post->post_type || 0 !== strpos( (string) $post->post_mime_type, 'image/' ) ) {
+                $errors[] = array( 'id' => $id, 'error' => __( 'This is not an image from the media library.', 'tso-image-master' ) );
+                continue;
+            }
+
+            $parent = (int) $post->post_parent;
+            if ( $parent > 0 && get_post( $parent ) ) {
+                $errors[] = array( 'id' => $id, 'error' => __( 'This image is already attached to a post.', 'tso-image-master' ) );
+                continue;
+            }
+
+            $target = self::find_attach_target( $id );
+            if ( ! $target ) {
+                $errors[] = array( 'id' => $id, 'error' => __( 'This image is not used inside any post, so there is nothing to attach it to.', 'tso-image-master' ) );
+                continue;
+            }
+
+            if ( ! current_user_can( 'edit_post', $target['id'] ) ) {
+                $errors[] = array( 'id' => $id, 'error' => __( 'You are not allowed to edit that post.', 'tso-image-master' ) );
+                continue;
+            }
+
+            $result = wp_update_post( array( 'ID' => $id, 'post_parent' => $target['id'] ), true );
+            if ( is_wp_error( $result ) ) {
+                $errors[] = array( 'id' => $id, 'error' => $result->get_error_message() );
+                continue;
+            }
+
+            clean_post_cache( $id );
+            $attached[] = array(
+                'id'         => $id,
+                'post_id'    => $target['id'],
+                'post_title' => $target['title'],
+            );
+        }
+
+        return array( 'attached' => $attached, 'errors' => $errors );
+    }
+
+    /**
+     * Primer post/pàgina que referencia l'adjunt (només per als motius que
+     * viuen a posts o postmeta), per poder-hi enllaçar al diagnòstic.
+     *
+     * @param int    $attachment_id Attachment ID.
+     * @param string $reason        Motiu retornat per get_reference_reason().
+     * @return array|null array{id:int,title:string,type:string,meta_field:string,edit_url:string,view_url:string}
+     */
+    private static function find_reference_post( $attachment_id, $reason ) {
+        global $wpdb;
+
+        if ( ! in_array( $reason, array( 'post_content', 'postmeta_url', 'postmeta_id', 'site_editor' ), true ) ) {
+            return null;
+        }
+
+        $patterns = self::get_search_patterns( $attachment_id );
+        if ( count( $patterns ) < 2 ) {
+            return null;
+        }
+        list( $p1, $p2 ) = $patterns;
+
+        $post_id  = 0;
+        $meta_key = '';
+
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+        if ( 'post_content' === $reason ) {
+            $post_id = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT p.ID FROM {$wpdb->posts} p
+                 WHERE ( p.post_content LIKE %s OR p.post_content LIKE %s OR p.post_excerpt LIKE %s OR p.post_excerpt LIKE %s )
+                 AND p.post_status NOT IN ('trash','auto-draft') AND p.post_type NOT IN ('attachment','revision','nav_menu_item')
+                 LIMIT 1",
+                $p1, $p2, $p1, $p2
+            ) );
+        } elseif ( 'site_editor' === $reason ) {
+            $post_id = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT ID FROM {$wpdb->posts}
+                 WHERE post_type IN ('wp_template','wp_template_part','wp_block') AND post_status != 'trash'
+                 AND ( post_content LIKE %s OR post_content LIKE %s )
+                 LIMIT 1",
+                $p1, $p2
+            ) );
+        } elseif ( 'postmeta_url' === $reason ) {
+            $row = $wpdb->get_row( $wpdb->prepare(
+                "SELECT p.ID AS post_id, pm.meta_key FROM {$wpdb->postmeta} pm
+                 INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+                 WHERE ( pm.meta_value LIKE %s OR pm.meta_value LIKE %s ) AND pm.post_id <> %d
+                 AND p.post_status NOT IN ('trash','auto-draft') AND p.post_type NOT IN ('attachment','revision','nav_menu_item')
+                 LIMIT 1",
+                $p1, $p2, $attachment_id
+            ) );
+            if ( $row ) {
+                $post_id  = (int) $row->post_id;
+                $meta_key = (string) $row->meta_key;
+            }
+        } else {
+            $row = $wpdb->get_row( $wpdb->prepare(
+                "SELECT p.ID AS post_id, pm.meta_key FROM {$wpdb->postmeta} pm
+                 INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+                 WHERE pm.meta_value = %s AND pm.post_id <> %d
+                 AND p.post_status NOT IN ('trash','auto-draft') AND p.post_type NOT IN ('revision','nav_menu_item')
+                 ORDER BY ( pm.meta_key = '_thumbnail_id' ) DESC
+                 LIMIT 1",
+                (string) $attachment_id, $attachment_id
+            ) );
+            if ( $row ) {
+                $post_id  = (int) $row->post_id;
+                $meta_key = (string) $row->meta_key;
+            }
+        }
+        // phpcs:enable
+
+        if ( $post_id <= 0 ) {
+            return null;
+        }
+
+        $edit_link = get_edit_post_link( $post_id, 'raw' );
+        $view_url  = '';
+        if ( 'publish' === get_post_status( $post_id ) && is_post_type_viewable( get_post_type( $post_id ) ) ) {
+            $permalink = get_permalink( $post_id );
+            $view_url  = $permalink ? esc_url_raw( $permalink ) : '';
+        }
+
+        return array(
+            'id'       => $post_id,
+            'title'    => get_the_title( $post_id ),
+            'type'     => get_post_type( $post_id ),
+            'meta_field' => $meta_key,
+            'edit_url' => $edit_link ? esc_url_raw( $edit_link ) : '',
+            'view_url' => $view_url,
+        );
+    }
+
+    /**
+     * Lloc concret d'una referència que viu a una opció: widget (amb títol i
+     * zona), mod del Personalitzador, avatar per defecte o opció genèrica.
+     *
+     * @param int    $attachment_id Attachment ID.
+     * @param string $reason        Motiu retornat per get_reference_reason().
+     * @return array|null array{name:string,kind:string,title:string,zone:string,inactive:bool,mod:string,url:string}
+     */
+    private static function find_reference_option( $attachment_id, $reason ) {
+        global $wpdb;
+
+        $name = '';
+        if ( 0 === strpos( $reason, 'option_id:' ) ) {
+            $name = substr( $reason, strlen( 'option_id:' ) );
+        } elseif ( 0 === strpos( $reason, 'option_filename:' ) ) {
+            $name = substr( $reason, strlen( 'option_filename:' ) );
+        } elseif ( 'option_url' === $reason ) {
+            $patterns = self::get_search_patterns( $attachment_id );
+            if ( count( $patterns ) < 2 ) {
+                return null;
+            }
+            list( $p1, $p2 ) = $patterns;
+            // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+            $names = $wpdb->get_col( $wpdb->prepare(
+                "SELECT option_name FROM {$wpdb->options} WHERE ( option_value LIKE %s OR option_value LIKE %s ) LIMIT 200",
+                $p1, $p2
+            ) );
+            // phpcs:enable
+            foreach ( (array) $names as $candidate ) {
+                if ( ! TSOIMMA_Image_Manager::is_excluded_option( $candidate ) ) {
+                    $name = (string) $candidate;
+                    break;
+                }
+            }
+        }
+
+        if ( '' === $name ) {
+            return null;
+        }
+
+        $rel  = get_post_meta( $attachment_id, '_wp_attached_file', true );
+        $stem = is_string( $rel ) ? preg_replace( '/\.[^.\/]+$/', '', $rel ) : '';
+        $by_id = ( 0 === strpos( $reason, 'option_id:' ) );
+
+        $out = array(
+            'name'     => $name,
+            'kind'     => 'option',
+            'title'    => '',
+            'zone'     => '',
+            'inactive' => false,
+            'mod'      => '',
+            'url'      => '',
+        );
+
+        if ( in_array( $name, array( 'wpupa_attachment_id', 'avatar_default_wp_user_avatar', 'avatar_default' ), true ) ) {
+            $out['kind'] = 'avatar';
+            $out['url']  = admin_url( 'options-discussion.php' );
+            return $out;
+        }
+
+        if ( 0 === strpos( $name, 'widget_' ) ) {
+            $out['kind'] = 'widget';
+            $out['url']  = admin_url( 'widgets.php' );
+            $value       = get_option( $name );
+            if ( is_array( $value ) ) {
+                $sidebars = get_option( 'sidebars_widgets', array() );
+                foreach ( $value as $number => $instance ) {
+                    if ( ! is_int( $number ) || ! is_array( $instance ) || ! self::value_mentions( $instance, $stem, $attachment_id, $by_id ) ) {
+                        continue;
+                    }
+                    $out['title'] = isset( $instance['title'] ) && is_string( $instance['title'] ) ? $instance['title'] : '';
+                    $widget_id    = substr( $name, strlen( 'widget_' ) ) . '-' . $number;
+                    foreach ( (array) $sidebars as $sidebar_id => $widgets ) {
+                        if ( is_array( $widgets ) && in_array( $widget_id, $widgets, true ) ) {
+                            $registered = isset( $GLOBALS['wp_registered_sidebars'][ $sidebar_id ]['name'] )
+                                ? (string) $GLOBALS['wp_registered_sidebars'][ $sidebar_id ]['name']
+                                : (string) $sidebar_id;
+                            $out['zone']     = $registered;
+                            $out['inactive'] = ( 'wp_inactive_widgets' === $sidebar_id );
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+            return $out;
+        }
+
+        if ( 0 === strpos( $name, 'theme_mods_' ) ) {
+            $out['kind'] = 'theme_mod';
+            $out['url']  = admin_url( 'customize.php' );
+            $value       = get_option( $name );
+            if ( is_array( $value ) ) {
+                foreach ( $value as $mod => $mod_value ) {
+                    if ( self::value_mentions( $mod_value, $stem, $attachment_id, $by_id ) ) {
+                        $out['mod'] = (string) $mod;
+                        break;
+                    }
+                }
+            }
+            return $out;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Si un valor d'opció (recursiu) menciona la imatge pel nom de fitxer
+     * (o, si $by_id, per l'ID exacte).
+     *
+     * @param mixed  $value Valor.
+     * @param string $stem  Ruta relativa sense extensió (2014/09/foto).
+     * @param int    $id    Attachment ID.
+     * @param bool   $by_id Cal comparar també per ID.
+     * @return bool
+     */
+    private static function value_mentions( $value, $stem, $id, $by_id ) {
+        if ( is_array( $value ) || is_object( $value ) ) {
+            foreach ( (array) $value as $inner ) {
+                if ( self::value_mentions( $inner, $stem, $id, $by_id ) ) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if ( $by_id && ( is_int( $value ) || ( is_string( $value ) && preg_match( '/^\d{1,10}$/', $value ) ) ) && (int) $value === (int) $id ) {
+            return true;
+        }
+        if ( ! is_string( $value ) || '' === $stem ) {
+            return false;
+        }
+        $value = str_replace( '\\', '', $value );
+        return false !== stripos( $value, $stem . '.' )
+            || (bool) preg_match( '/' . preg_quote( $stem, '/' ) . '-\d+x\d+/i', $value );
     }
 
     /**

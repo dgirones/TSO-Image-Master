@@ -5,7 +5,7 @@ Tags: image optimization, webp, avif, media library, pdf compression
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.0.9
+Stable tag: 2.1.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -13,19 +13,17 @@ Auto-converts images to WebP, AVIF, JPG or PNG, compresses PDFs, and repairs you
 
 == Description ==
 
-Most image plugins only compress. TSO Image Master also fixes what goes wrong. It automatically converts every upload to WebP, AVIF, JPG or PNG (with an undo backup) and compresses your PDFs. Then it helps you repair the rest of your media library: broken image URLs with one-click fix and undo, safe renaming that updates every link, orphan images and extra files, duplicates, unused image sizes that waste disk space, missing or hyphenated alt text, and oversized files.
+Most image plugins only compress. TSO Image Master also fixes what goes wrong. It automatically converts every upload to WebP, AVIF, JPG or PNG (with an undo backup) and compresses your PDFs. Then it helps you repair the rest of your media library: broken image URLs with one-click fix and undo, safe renaming that updates every link, orphan and still-referenced images, extra files, duplicates, unused image sizes that waste disk space, missing or hyphenated alt text, and oversized files.
 
 It provides the following features from a single admin screen:
 
-**Overview** — Site health metrics (image count, missing alt, TSO backups, space saved, server engines). Bulk-fill missing or weak alt text. Scan for duplicate image files. Configure backup retention and watch the background optimize queue.
+**Overview** — Site health metrics (image count, missing alt, TSO backups, space saved, server engines). Bulk-fill missing or weak alt text. Scan for duplicate image files. Configure backup retention (backups of deleted images are never purged automatically) and watch the background optimize queue.
 
 **Image Optimizer** — Convert images to WebP, AVIF (when GD supports it), JPG, or PNG. Set quality and dimensions, replace originals, and update content links (posts, custom fields, options, widgets and Elementor pages). Bulk optimize runs in the background via WP-Cron (5 images per batch). Choose how many images to show per page (21–105). Requires PHP GD (WebP strongly recommended).
 
-**Orphaned Image Finder** — Detects Media Library images that are not referenced in posts, pages, widgets, meta, theme Customizer settings, FSE templates/parts/patterns, term meta, or menu items. Paginated batch scanning helps avoid timeouts on large sites.
+**Orphan Images** — Three sub-tabs. *Orphans* detects Media Library images not used in posts, pages, widgets, meta, Customizer settings, FSE templates/parts/patterns, term or user meta, or menus; paginated scanning avoids timeouts on large sites. *Referenced* lists images without a parent post that are still in use and shows exactly where, so you can attach them to their post or delete them. *Extra files* scans uploads for files WordPress does not know about (double extensions like image.jpg.webp, plugin backups, temporary files) and shows which TSO backups can still revert an image. Every deletion saves a backup of the original first.
 
-**Rogue File Scanner** — Scans the uploads directory for physical files WordPress does not know about: double-extension files (e.g. image.jpg.webp), plugin backup files, temporary files, and other unregistered images that waste disk space.
-
-**Image Sizes** — Finds image sizes (thumbnails) left behind by old plugins or themes that WordPress no longer registers or uses, grouped by size. Delete a whole size in one click: every deletion saves a backup zip you can download, restore or delete, and files used by another size or by the main image are never removed.
+**Image Sizes** — Finds image sizes (thumbnails) left behind by old plugins or themes that WordPress no longer registers or uses, grouped by size. Delete a whole size in one click: every deletion saves a backup zip you can download, restore or delete, and files used by another size or by the main image are never removed. Sizes turned off in TSO Swiss Knife are marked, and thumbnail, medium and large can never be deleted.
 
 **SEO & File Names** — Edit title, alt text, caption, and description for any image. Rename files using SEO-friendly slugs (lowercase, no accents, hyphens instead of spaces). All internal links are updated automatically.
 
@@ -69,7 +67,7 @@ If you would like to contribute a translation into another language, you can do 
 2. Activate the plugin through the **Plugins** screen in WordPress.
 3. Go to **Image Master** in the admin sidebar to start using the plugin.
 4. (Optional) To enable PDF compression, install GhostScript on your server. Ask your hosting provider for assistance if needed.
-5. Requires PHP GD to WebP images.Ask your hosting provider for assistance if needed.
+5. WebP output requires PHP GD. Ask your hosting provider for assistance if needed.
 
 == Frequently Asked Questions ==
 
@@ -79,7 +77,7 @@ Only if you check the "Replace original" option. When replacing, the plugin save
 
 = Can backups be deleted automatically? =
 
-Yes. On the Overview tab you can set backup retention by maximum age (days) and/or maximum total size (MB). A daily cron purges old or oversized TSO backups. Set both to `0` to disable automatic purge. You can also run **Purge now** from Overview.
+Yes. On the Overview tab you can set backup retention by maximum age (days) and/or maximum total size (MB). A daily cron purges old or oversized TSO backups (the backup zips made by the Image Sizes tab are never purged automatically: delete them manually from that tab). Set both to `0` to disable automatic purge. You can also run **Purge now** from Overview.
 
 = What happens to my images if I uninstall the plugin? =
 
@@ -141,6 +139,20 @@ On Overview, **Scan duplicates** groups Media Library files with the same MD5 ha
 
 For releases before 2.0.0, see CHANGELOG.txt in the plugin folder.
 
+= 2.1.1 =
+* Improved: The "URLs" tab is now called "Repairs" and has three sub-tabs: the inconsistent URL detector and the attachment repairs (broken paths, mime types, ghost attachments), moved from Auto-optimization, and a third one with the removal backups; the tab bar stays on one line.
+* Fixed: Repairs tab: texts of the repair tools and their messages are translated, MIME and ghost repairs report errors, the summary updates after fixing URLs, and restored backups can no longer be undone twice.
+* Fixed: History now shows file name and icon for URL repairs, and logs path repairs, MIME repairs, ghost attachment deletions and removal backup deletions; it can be searched by the file names involved.
+
+= 2.1.0 =
+* New: Orphan Images now has three sub-tabs (Orphans, Referenced, Extra files). Referenced lists images without a parent post that are still in use and shows where; they can be attached to their post or deleted.
+* Improved: Every deletion from Orphans and Referenced saves a backup of the original first; Orphans re-checks each image on the server, deletes in batches of 100, and also recognises images used as category/term or user images.
+* Improved: Extra files no longer flags image-editor originals or WebP/AVIF files of existing images, tells apart backups that can revert an image from backups of deleted images, and the automatic retention never removes the latter.
+* New: Image Sizes marks the sizes turned off in TSO Swiss Knife and explains the difference between its quarantine and this plugin's backup zip.
+* Fixed: Image Sizes works with capital-letter size names, the backups list shows every size zip, the Space column matches what is really freed, and zips no longer fail when two images share a size file.
+* Improved: Image Sizes scans and deletes faster on big libraries (batched scan with progress, cache purged once); thumbnail, medium and large are never deletable.
+* Fixed: Your choices (quality, format, replace original, PDF quality, batch size, SEO filters) are remembered per user, the 24-hour "Extra files" delete list works with Redis/Memcached, and buttons and sub-tab headers line up.
+
 = 2.0.9 =
 * Improved: New plugin description that highlights automatic WebP/AVIF/JPG/PNG conversion, PDF compression and library repair tools.
 * Fixed: URL Detector now repairs old links (e.g. .png) of images that were converted and later renamed, instead of offering to delete them.
@@ -152,9 +164,3 @@ For releases before 2.0.0, see CHANGELOG.txt in the plugin folder.
 * Improved: SEO tab lists images that need SEO first, asks to remove hyphens from the alt text (one-click button) and fixes the "SEO" button.
 * Improved: Orphan images are labelled and listed last in SEO and Optimize; "Extra files" ignores other TSO plugins' backups (Swiss Knife).
 
-= 2.0.7 =
-* New: URL Detector now repairs links to images renamed with the plugin instead of offering to delete them, and every "Remove from content" saves a backup with an Undo button.
-* Fixed: Renaming an image now also updates links written as http://, without www or as relative paths, which were left broken before.
-* Fixed: Image Sizes module strings now fully translated to Catalan and Spanish.
-* Fixed: URL Detector no longer corrupts serialized or escaped custom fields/options, or other fields that share the same key, when fixing or removing links.
-* Fixed: Renaming an image never overwrites an existing file, and edited posts refresh their cached content.

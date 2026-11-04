@@ -353,8 +353,8 @@ msgstr "PDFs"
 msgid "Auto-optimization"
 msgstr "Auto-optimització"
 
-msgid "URLs"
-msgstr "URLs"
+msgid "Repairs"
+msgstr "Reparacions"
 
 msgid "History"
 msgstr "Historial"
@@ -852,3 +852,86 @@ msgstr "Ressaltant l'adjunt #%d a l'editor de blocs."
 #, php-format
 msgid "Highlighting attachment #%d in code."
 msgstr "Ressaltant l'adjunt #%d al codi."
+
+msgid "Orphan images"
+msgstr "Imatges òrfenes"
+
+msgid "Referenced"
+msgstr "Referenciades"
+
+msgid "Extra files"
+msgstr "Fitxers extra"
+
+msgid "This is not an image from the media library."
+msgstr "Això no és una imatge de la biblioteca de mitjans."
+
+msgid "This image is attached to a post, so it was not deleted."
+msgstr "Aquesta imatge està adjuntada a una entrada, per això no s'ha eliminat."
+
+msgid "The backup could not be made, so the image was not deleted."
+msgstr "No s'ha pogut fer la còpia de seguretat, per això no s'ha eliminat la imatge."
+
+msgid "This image is already attached to a post."
+msgstr "Aquesta imatge ja està adjuntada a una entrada."
+
+msgid "This image is not used inside any post, so there is nothing to attach it to."
+msgstr "Aquesta imatge no s'usa dins de cap entrada, així que no hi ha on adjuntar-la."
+
+msgid "You are not allowed to edit that post."
+msgstr "No tens permís per editar aquesta entrada."
+
+msgid "This image is in use, so it cannot be deleted from here."
+msgstr "Aquesta imatge està en ús, així que no es pot eliminar des d'aquí."
+
+msgid "Inconsistent URL detector"
+msgstr "Detector d'URLs inconsistents"
+
+msgid "Repair attachments"
+msgstr "Reparar adjunts"
+
+msgid "Removal backups"
+msgstr "Còpies de seguretat"
+
+#, php-format
+msgid "ID %1$d: file not found (%2$s)"
+msgstr "ID %1$d: fitxer no trobat (%2$s)"
+
+#, php-format
+msgid "ID %1$d: could not determine the real MIME type (%2$s)"
+msgstr "ID %1$d: no s'ha pogut determinar el tipus MIME real (%2$s)"
+
+msgid "File does not exist on disk"
+msgstr "El fitxer no existeix al disc"
+
+msgid "Empty file (0 bytes)"
+msgstr "Fitxer buit (0 bytes)"
+
+msgid "MIME type application/x-empty"
+msgstr "Tipus MIME application/x-empty"
+
+#, php-format
+msgid "ID %d: not a valid attachment."
+msgstr "ID %d: no és un adjunt vàlid."
+
+#, php-format
+msgid "ID %1$d (%2$s): real file with content, not deleted for safety."
+msgstr "ID %1$d (%2$s): fitxer real amb contingut, no eliminat per seguretat."
+
+#, php-format
+msgid "ID %d: the attachment could not be deleted."
+msgstr "ID %d: no s'ha pogut eliminar l'adjunt."
+
+#, php-format
+msgid "URL outside the uploads folder: %s"
+msgstr "URL fora de la carpeta uploads: %s"
+
+#, php-format
+msgid "Target file not found: %s"
+msgstr "Fitxer de destinació no trobat: %s"
+
+#, php-format
+msgid "The file still exists on disk: %s"
+msgstr "El fitxer encara existeix al disc: %s"
+
+msgid "The backup could not be created; nothing was modified."
+msgstr "No s'ha pogut crear la còpia de seguretat; no s'ha modificat res."

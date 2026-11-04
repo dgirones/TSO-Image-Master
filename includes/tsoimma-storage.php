@@ -262,6 +262,10 @@ function tsoimma_get_ajax_action_names() {
 		'tsoimma_optimize_thumbnails',
 		'tsoimma_optimize_bulk',
 		'tsoimma_find_orphans',
+		'tsoimma_find_unattached',
+		'tsoimma_delete_unattached',
+		'tsoimma_save_ui_prefs',
+		'tsoimma_attach_unattached',
 		'tsoimma_delete_images',
 		'tsoimma_rename_image',
 		'tsoimma_update_seo',
@@ -312,6 +316,21 @@ function tsoimma_get_ajax_action_names() {
 		'tsoimma_restore_url_backup',
 		'tsoimma_delete_url_backup',
 	);
+}
+
+/**
+ * Image sizes turned off for new uploads in TSO Swiss Knife (read-only
+ * detection; returns an empty list when that plugin is not installed or has
+ * nothing disabled, so this plugin works the same with or without it).
+ *
+ * @return string[]
+ */
+function tsoimma_get_swiss_knife_disabled_sizes() {
+	$stored = get_option( 'tsosk_disabled_image_sizes', array() ); // Other plugin's option, read-only.
+	if ( ! is_array( $stored ) ) {
+		return array();
+	}
+	return array_values( array_filter( array_map( 'strval', $stored ) ) );
 }
 
 /**
@@ -439,4 +458,97 @@ function tsoimma_get_upload_auto_choice() {
 		return 'off';
 	}
 	return '';
+}
+
+/**
+ * Per-user interface choices that are remembered everywhere (Optimize tab, image
+ * window, PDFs, orphan scan, SEO...). Anything not listed here is ignored.
+ *
+ * @return array<string, array<string, mixed>>
+ */
+function tsoimma_ui_prefs_schema() {
+	return array(
+		'opt_format'    => array( 'type' => 'enum', 'values' => array( 'webp', 'avif', 'jpg', 'png', 'original' ) ),
+		'opt_quality'   => array( 'type' => 'int', 'min' => 50, 'max' => 100 ),
+		'opt_replace'   => array( 'type' => 'bool' ),
+		'pdf_quality'   => array( 'type' => 'enum', 'values' => array( '72', '96', '150', '300' ) ),
+		'pdf_replace'   => array( 'type' => 'bool' ),
+		'orphan_limit'  => array( 'type' => 'enum', 'values' => array( '0', '100', '200', '500' ) ),
+		'alt_used_only' => array( 'type' => 'bool' ),
+		'seo_sort'      => array( 'type' => 'enum', 'values' => array( 'seo', 'filesize', 'date', 'modified' ) ),
+	);
+}
+
+/**
+ * Validates one interface choice against the schema.
+ *
+ * @param string $key   Preference key.
+ * @param mixed  $value Raw value.
+ * @return int|bool|string|null Clean value, or null when the key or value is not allowed.
+ */
+function tsoimma_sanitize_ui_pref( $key, $value ) {
+	$schema = tsoimma_ui_prefs_schema();
+	if ( ! isset( $schema[ $key ] ) || is_array( $value ) || is_object( $value ) ) {
+		return null;
+	}
+	$rule = $schema[ $key ];
+
+	if ( 'bool' === $rule['type'] ) {
+		return in_array( (string) $value, array( '1', 'true', 'on' ), true ) || true === $value;
+	}
+	if ( 'int' === $rule['type'] ) {
+		if ( ! is_numeric( $value ) ) {
+			return null;
+		}
+		return max( $rule['min'], min( $rule['max'], (int) $value ) );
+	}
+
+	$value = sanitize_text_field( (string) $value );
+	return in_array( $value, $rule['values'], true ) ? $value : null;
+}
+
+/**
+ * @param int $user_id User ID (default: current user).
+ * @return array<string, int|bool|string>
+ */
+function tsoimma_get_ui_prefs( $user_id = 0 ) {
+	$user_id = $user_id ? absint( $user_id ) : get_current_user_id();
+	if ( ! $user_id ) {
+		return array();
+	}
+	$saved = get_user_meta( $user_id, 'tsoimma_ui_prefs', true );
+	if ( ! is_array( $saved ) ) {
+		return array();
+	}
+	$clean = array();
+	foreach ( $saved as $key => $value ) {
+		$ok = tsoimma_sanitize_ui_pref( (string) $key, $value );
+		if ( null !== $ok ) {
+			$clean[ $key ] = $ok;
+		}
+	}
+	return $clean;
+}
+
+/**
+ * Merges the given choices into the current user's saved ones.
+ *
+ * @param array<string, mixed> $input   Raw key => value pairs.
+ * @param int                  $user_id User ID (default: current user).
+ * @return array<string, int|bool|string> All saved choices.
+ */
+function tsoimma_update_ui_prefs( array $input, $user_id = 0 ) {
+	$user_id = $user_id ? absint( $user_id ) : get_current_user_id();
+	if ( ! $user_id ) {
+		return array();
+	}
+	$prefs = tsoimma_get_ui_prefs( $user_id );
+	foreach ( $input as $key => $value ) {
+		$ok = tsoimma_sanitize_ui_pref( sanitize_key( (string) $key ), $value );
+		if ( null !== $ok ) {
+			$prefs[ sanitize_key( (string) $key ) ] = $ok;
+		}
+	}
+	update_user_meta( $user_id, 'tsoimma_ui_prefs', $prefs );
+	return $prefs;
 }

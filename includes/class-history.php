@@ -644,14 +644,18 @@ class TSOIMMA_History {
     }
 
     /**
-     * Log a global (not tied to one attachment) URL Detector action.
+     * Log a Repairs-tab action (URL detector, attachment repairs): one row per run.
      *
-     * @param string               $action_type url_fix|url_remove|url_restore.
-     * @param array<string, mixed> $details     Counts and a short list of URLs.
+     * The optional attachment ID only gives the row a thumbnail (the first affected
+     * attachment); it can be 0 when the files no longer exist.
+     *
+     * @param string               $action_type    url_fix|url_remove|url_restore|url_backup_delete|repair_paths|repair_mime|ghost_delete.
+     * @param array<string, mixed> $details        Counts and a short list of names.
+     * @param int                  $attachment_id  Optional attachment the row is shown with.
      * @return bool
      */
-    public static function log_url_action( $action_type, $details ) {
-        return self::log( 0, $action_type, $details );
+    public static function log_url_action( $action_type, $details, $attachment_id = 0 ) {
+        return self::log( absint( $attachment_id ), $action_type, $details );
     }
 
     /**
@@ -1086,11 +1090,28 @@ class TSOIMMA_History {
             return true;
         }
 
+        $names = array();
         foreach ( array( 'filename', 'old_filename', 'new_filename' ) as $key ) {
-            if ( empty( $details[ $key ] ) ) {
-                continue;
+            if ( ! empty( $details[ $key ] ) ) {
+                $names[] = (string) $details[ $key ];
             }
-            $base = pathinfo( (string) $details[ $key ], PATHINFO_FILENAME );
+        }
+        // Repairs-tab rows list their files in "files" (names) and "pairs" (old, new).
+        if ( ! empty( $details['files'] ) && is_array( $details['files'] ) ) {
+            foreach ( $details['files'] as $name ) {
+                $names[] = (string) $name;
+            }
+        }
+        if ( ! empty( $details['pairs'] ) && is_array( $details['pairs'] ) ) {
+            foreach ( $details['pairs'] as $pair ) {
+                foreach ( (array) $pair as $name ) {
+                    $names[] = (string) $name;
+                }
+            }
+        }
+
+        foreach ( $names as $name ) {
+            $base = pathinfo( $name, PATHINFO_FILENAME );
             if ( $base !== '' && self::starts_with_utf8( $base, $search ) ) {
                 return true;
             }
@@ -1291,16 +1312,20 @@ class TSOIMMA_History {
 
     private static function action_label( $type ) {
         $map = array(
-            'optimize'      => 'Optimitzada',
-            'auto_optimize' => 'Auto-optimitzada',
-            'rename'        => 'Reanomenada',
-            'seo_update'    => 'SEO actualitzat',
-            'delete'        => 'Eliminada',
-            'pdf_compress'  => 'PDF comprimit',
-            'revert'        => 'Revertida',
-            'url_fix'       => 'URL reparades',
-            'url_remove'    => 'URL eliminades',
-            'url_restore'   => 'URL restaurades',
+            'optimize'          => 'Optimitzada',
+            'auto_optimize'     => 'Auto-optimitzada',
+            'rename'            => 'Reanomenada',
+            'seo_update'        => 'SEO actualitzat',
+            'delete'            => 'Eliminada',
+            'pdf_compress'      => 'PDF comprimit',
+            'revert'            => 'Revertida',
+            'url_fix'           => 'URL reparades',
+            'url_remove'        => 'URL eliminades',
+            'url_restore'       => 'URL restaurades',
+            'url_backup_delete' => 'Còpia eliminada',
+            'repair_paths'      => 'Paths reparats',
+            'repair_mime'       => 'MIME reparats',
+            'ghost_delete'      => 'Fantasmes eliminats',
         );
         return isset( $map[ $type ] ) ? $map[ $type ] : $type;
     }

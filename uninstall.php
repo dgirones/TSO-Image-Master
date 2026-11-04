@@ -109,6 +109,16 @@ foreach ( $tsoimma_meta_keys as $tsoimma_meta_key ) {
 
 // ── Remove per-user upload checkbox preference ────────────────────
 delete_metadata( 'user', 0, 'tsoimma_upload_auto_choice', '', true );
+delete_metadata( 'user', 0, 'tsoimma_ui_prefs', '', true );
+
+// ── Delete the per-user "Extra files" delete allowlists ───────────
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+$wpdb->query(
+    $wpdb->prepare(
+        "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+        $wpdb->esc_like( 'tsoimma_rogue_del_' ) . '%'
+    )
+);
 
 // ── Delete any remaining upload transients ────────────────────────
 // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching

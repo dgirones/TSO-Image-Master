@@ -2,6 +2,44 @@
 
 Full release history for TSO Image Master. readme.txt (for WordPress.org) keeps only the 3 most recent versions in its own Changelog section; older versions live only here.
 
+= 2.1.1 =
+* Improved: The "URLs" tab is now called "Repairs" and has three sub-tabs: the inconsistent URL detector and the attachment repairs (broken paths, mime types, ghost attachments), moved from Auto-optimization, and a third one with the removal backups; the tab bar stays on one line.
+* Fixed: Repairs tab: texts of the repair tools and their messages are translated, MIME and ghost repairs report errors, the summary updates after fixing URLs, and restored backups can no longer be undone twice.
+* Fixed: History now shows file name and icon for URL repairs, and logs path repairs, MIME repairs, ghost attachment deletions and removal backup deletions; it can be searched by the file names involved.
+
+= 2.1.0 =
+* Fixed: Orphan images are now backed up before they are deleted, re-checked on the server as still unused, and deleted in batches of 100.
+* Fixed: Images used as a category/term or user image (ID stored in term meta or user meta) are no longer listed as orphans.
+* Fixed: Extra files no longer lists the original-image copies (image editor) and WebP/AVIF files of existing images as unregistered.
+* Improved: Backups of deleted images are never removed by the automatic retention; Extra files tells them apart from backups that can still revert an image, and deleting one updates the Overview counter.
+* New: Image Sizes marks the sizes that are turned off in TSO Swiss Knife and explains the difference between its quarantine and this plugin's backup zip.
+* Fixed: The Image Sizes "Space" column no longer counts files shared with the main image or another size, so it matches what is really freed.
+* Fixed: Size-cleanup backups no longer fail when two images share the same size file.
+* Improved: Image Sizes scans big media libraries in short batches with progress, instead of one long request.
+* Improved: Deleting a whole size is faster on big libraries (the file list is built once) and the site cache is purged once at the end instead of after every batch.
+* Fixed: Image Sizes now works with size names that contain capital letters (they could not be listed or deleted before).
+* Fixed: The backups list always shows every size-cleanup zip, even on sites with thousands of per-image backups.
+* Fixed: Texts and FAQ now say that size-cleanup zips are not removed by the automatic retention.
+* Improved: Thumbnail, medium and large sizes can never be deleted from Image Sizes, even if another plugin turns them off.
+* New: "Referenced" sub-tab inside Orphan Images that lists images with no parent post that are still in use, with the exact post, widget, Customizer setting or theme file where each one is used.
+* New: Referenced images without a parent can be deleted one by one or by selection; a backup of each original is saved first in the backups folder and shows up under "Extra files".
+* New: Referenced images used inside a post can be attached to it with one click (or in bulk), so they get a parent and stop being listed.
+* Improved: In "Referenced", images really used by a post only offer "Attach", images used by site settings, widgets, logo or avatars only show "In use", and images that merely match a number in a post field (possible false positives) can be deleted; the server enforces the same rules.
+* Improved: In "Referenced", the "Doubtful" group (possible false positives you can delete) is listed first.
+* Fixed: Deleting scanned files from "Extra files" no longer fails with "not in the last scan" on sites with an external object cache (Redis, Memcached): the 24-hour delete list is now kept in the database.
+* Fixed: Your choices are now remembered everywhere: quality, format and "replace original" (Optimize tab and image window share one value), PDF quality, orphan batch size, SEO sort and the "only used in content" filter are saved per user and restored on the next visit; until you pick your own, format and quality start from the Auto-optimize values.
+* Improved: Auto-optimize settings are saved as soon as you change them.
+* Fixed: Switching between the Orphan Images sub-tabs no longer shows two blue buttons overlapping for a moment.
+* Improved: Buttons have the same height everywhere and the scan button lines up with the batch-size selector; side-by-side buttons get a gap.
+* New: "Extra files" is now a sub-tab next to the orphan and referenced ones, and the referenced thumbnails enlarge on hover.
+* Fixed: The orphan scan now double-checks every candidate, so an image can no longer appear both as an orphan and as a referenced image.
+* Fixed: The "Referenced" results (table, summary and buttons) now switch language together with the rest of the interface.
+* Improved: The three Orphan Images sub-tab headers keep the same height when you switch between them.
+* Improved: The blue scan buttons of the three Orphan Images sub-tabs now sit at the same position.
+* Improved: The scan button of the orphan finder no longer sticks to the batch-size selector.
+* Improved: The Orphan Images sub-tab headers are more compact: the batch-size selector and the scan button share one row.
+* Changed: Deleting referenced images no longer asks for confirmation first (the backup is still made before deleting).
+
 = 2.0.9 =
 * Improved: New plugin description that highlights automatic WebP/AVIF/JPG/PNG conversion, PDF compression and library repair tools.
 * Fixed: URL Detector now repairs old links (e.g. .png) of images that were converted and later renamed, instead of offering to delete them.

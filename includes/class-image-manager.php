@@ -603,9 +603,11 @@ class TSOIMMA_Image_Manager {
      * Elimina permanentment un o diversos attachments i els seus fitxers.
      *
      * @param int|array $attachment_ids
+     * @param bool      $keep_backup     Keep the optimizer's own backup file of each image (used when
+     *                                   a fresh backup was just made by delete_with_backup()).
      * @return array  [ 'deleted' => [...], 'errors' => [...] ]
      */
-    public static function delete( $attachment_ids ) {
+    public static function delete( $attachment_ids, $keep_backup = false ) {
         if ( ! is_array( $attachment_ids ) ) {
             $attachment_ids = array( $attachment_ids );
         }
@@ -624,7 +626,7 @@ class TSOIMMA_Image_Manager {
             // Cal llegir el path ABANS de cridar wp_delete_attachment (que esborraria
             // el postmeta _tso_im_backup_file i perdríem la referència).
             $stored_backup = tsoimma_get_attachment_meta( $id, 'backup_file' );
-            $safe_backup   = TSOIMMA_Optimizer::resolve_backup_path( $stored_backup, false );
+            $safe_backup   = $keep_backup ? false : TSOIMMA_Optimizer::resolve_backup_path( $stored_backup, false );
             if ( false !== $safe_backup ) {
                 if ( file_exists( $safe_backup ) ) {
                     wp_delete_file( $safe_backup );
@@ -671,6 +673,141 @@ class TSOIMMA_Image_Manager {
         }
 
         return array( 'deleted' => $deleted, 'errors' => $errors );
+    }
+
+    /**
+     * Deletes UNATTACHED images (no parent post, or a deleted parent) after
+     * backing up each original into the usual backup folder
+     * (uploads/tso-image-master/…/<name>_tso_im_backup.<ext>), where the
+     * "Extra files" and "View backups" lists find it. An image whose backup
+     * fails is NOT deleted.
+     *
+     * @param int[] $attachment_ids Attachment IDs.
+     * @return array{deleted: array, errors: array}
+     */
+    public static function delete_with_backup( array $attachment_ids ) {
+        $ready  = array();
+        $backup = array();
+        $errors = array();
+
+        foreach ( array_unique( array_map( 'absint', $attachment_ids ) ) as $id ) {
+            $post = $id ? get_post( $id ) : null;
+
+            if ( ! $post || 'attachment' !== $post->post_type || 0 !== strpos( (string) $post->post_mime_type, 'image/' ) ) {
+                $errors[] = array( 'id' => $id, 'error' => __( 'This is not an image from the media library.', 'tso-image-master' ) );
+                continue;
+            }
+
+            // Only images without a parent post: this action is the cleanup of
+            // the "Unattached" list, not a way to delete any attachment.
+            $parent = (int) $post->post_parent;
+            if ( $parent > 0 && get_post( $parent ) ) {
+                $errors[] = array( 'id' => $id, 'error' => __( 'This image is attached to a post, so it was not deleted.', 'tso-image-master' ) );
+                continue;
+            }
+
+            // Only images that are not really used may be deleted from the
+            // "Referenced" list: a post's featured/content image must be attached
+            // instead, and site settings, widgets, logo, avatars... are never deleted.
+            if ( ! TSOIMMA_Orphan_Finder::is_deletable_from_list( $id ) ) {
+                $errors[] = array( 'id' => $id, 'error' => __( 'This image is in use, so it cannot be deleted from here.', 'tso-image-master' ) );
+                continue;
+            }
+
+            $file = get_attached_file( $id );
+            if ( $file && file_exists( $file ) ) {
+                $made = TSOIMMA_Optimizer::backup_file_before_delete( $file );
+                if ( ! $made['ok'] ) {
+                    $errors[] = array( 'id' => $id, 'error' => __( 'The backup could not be made, so the image was not deleted.', 'tso-image-master' ) );
+                    continue;
+                }
+                $backup[ $id ] = $made['relative_path'];
+            } else {
+                // Nothing on disk to back up (the media record is orphaned from its file).
+                $backup[ $id ] = '';
+            }
+            $ready[] = $id;
+        }
+
+        $result = empty( $ready )
+            ? array( 'deleted' => array(), 'errors' => array() )
+            : self::delete( $ready, true );
+
+        foreach ( $result['deleted'] as $i => $row ) {
+            $result['deleted'][ $i ]['backup'] = isset( $backup[ $row['id'] ] ) ? $backup[ $row['id'] ] : '';
+        }
+
+        // A backup was made but the deletion failed: keep no stray copy.
+        foreach ( $result['errors'] as $row ) {
+            if ( ! empty( $backup[ $row['id'] ] ) ) {
+                $base = wp_normalize_path( trailingslashit( wp_upload_dir()['basedir'] ) );
+                TSOIMMA_Optimizer::delete_backup_file( $base . $backup[ $row['id'] ] );
+            }
+        }
+
+        $result['errors'] = array_merge( $errors, $result['errors'] );
+        return $result;
+    }
+
+    /**
+     * Deletes images listed as ORPHANS (not used anywhere) after backing up each
+     * original into the usual backup folder. The server re-checks every ID
+     * (it must still be an orphan right now, the list may be minutes old) and an
+     * image whose backup fails is NOT deleted. At most 100 images per call.
+     *
+     * @param int[] $attachment_ids Attachment IDs.
+     * @return array{deleted: array, errors: array}
+     */
+    public static function delete_orphans_with_backup( array $attachment_ids ) {
+        $ids     = array_slice( array_values( array_unique( array_filter( array_map( 'absint', $attachment_ids ) ) ) ), 0, 100 );
+        $orphans = TSOIMMA_Orphan_Finder::orphan_id_set( $ids, true );
+        $ready   = array();
+        $backup  = array();
+        $errors  = array();
+
+        foreach ( $ids as $id ) {
+            $post = get_post( $id );
+            if ( ! $post || 'attachment' !== $post->post_type || 0 !== strpos( (string) $post->post_mime_type, 'image/' ) ) {
+                $errors[] = array( 'id' => $id, 'error' => __( 'This is not an image from the media library.', 'tso-image-master' ) );
+                continue;
+            }
+            if ( ! isset( $orphans[ $id ] ) ) {
+                $errors[] = array( 'id' => $id, 'error' => __( 'This image is in use, so it cannot be deleted from here.', 'tso-image-master' ) );
+                continue;
+            }
+            $file = get_attached_file( $id );
+            if ( $file && file_exists( $file ) ) {
+                $made = TSOIMMA_Optimizer::backup_file_before_delete( $file );
+                if ( ! $made['ok'] ) {
+                    $errors[] = array( 'id' => $id, 'error' => __( 'The backup could not be made, so the image was not deleted.', 'tso-image-master' ) );
+                    continue;
+                }
+                $backup[ $id ] = $made['relative_path'];
+            } else {
+                $backup[ $id ] = '';
+            }
+            $ready[] = $id;
+        }
+
+        $result = empty( $ready )
+            ? array( 'deleted' => array(), 'errors' => array() )
+            : self::delete( $ready, true );
+
+        foreach ( $result['deleted'] as $i => $row ) {
+            $result['deleted'][ $i ]['backup'] = isset( $backup[ $row['id'] ] ) ? $backup[ $row['id'] ] : '';
+        }
+        foreach ( $result['errors'] as $row ) {
+            if ( ! empty( $backup[ $row['id'] ] ) ) {
+                $base = wp_normalize_path( trailingslashit( wp_upload_dir()['basedir'] ) );
+                TSOIMMA_Optimizer::delete_backup_file( $base . $backup[ $row['id'] ] );
+            }
+        }
+        if ( ! empty( $result['deleted'] ) && class_exists( 'TSOIMMA_Dashboard' ) ) {
+            TSOIMMA_Dashboard::flush_backup_stats_cache();
+        }
+
+        $result['errors'] = array_merge( $errors, $result['errors'] );
+        return $result;
     }
 
     /**

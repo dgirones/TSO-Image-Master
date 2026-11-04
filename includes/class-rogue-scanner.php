@@ -72,6 +72,7 @@ class TSOIMMA_Rogue_Scanner {
 
         // Escanejar tots els fitxers físics
         $all_files = self::scan_directory( $base_path );
+        $active_backups = self::get_active_backup_paths();
 
         $rogue   = array();
         $by_type = array( 'known_pattern' => 0, 'unregistered' => 0 );
@@ -107,6 +108,11 @@ class TSOIMMA_Rogue_Scanner {
             // 1. Comprovar patrons coneguts
             foreach ( self::$known_patterns as $pattern => $code ) {
                 if ( preg_match( $pattern, $filename ) ) {
+                    // A TSO backup is either one an image can still be reverted from
+                    // (referenced by attachment meta) or the leftover copy of a deleted image.
+                    if ( 'tso_backup' === $code ) {
+                        $code = isset( $active_backups[ $norm_path ] ) ? 'tso_backup_active' : 'tso_backup_deleted';
+                    }
                     $reason_code = $code;
                     $reason      = self::reason_label_from_code( $code );
                     $priority    = in_array( $code, array( 'double_extension', 'tso_temp' ), true ) ? 'high' : 'normal';
@@ -167,6 +173,8 @@ class TSOIMMA_Rogue_Scanner {
         $labels = array(
             'double_extension'   => 'Doble extensió (.jpg.webp)',
             'tso_backup'         => 'Backup TSO',
+            'tso_backup_active'  => 'Backup TSO actiu (permet revertir una imatge)',
+            'tso_backup_deleted' => 'Backup d\'una imatge esborrada',
             'tso_temp'           => 'Temporal TSO',
             'tso_pdf_compressed' => 'PDF comprimit TSO',
             'generic_backup'     => 'Backup genèric (.bk)',
@@ -191,7 +199,7 @@ class TSOIMMA_Rogue_Scanner {
         $rows = $wpdb->get_results(  // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
             "SELECT post_id, meta_key, meta_value
              FROM {$wpdb->postmeta}
-             WHERE meta_key IN ('_wp_attached_file', '_wp_attachment_metadata')
+             WHERE meta_key IN ('_wp_attached_file', '_wp_attachment_metadata', '_wp_attachment_backup_sizes')
              AND meta_value != ''"
         );
         $by_attachment = array();
@@ -207,6 +215,20 @@ class TSOIMMA_Rogue_Scanner {
             $attached_rel = isset( $attachment_meta['_wp_attached_file'] ) ? (string) $attachment_meta['_wp_attached_file'] : '';
             if ( $attached_rel !== '' ) {
                 $registered[ wp_normalize_path( $base_norm . ltrim( $attached_rel, '/' ) ) ] = true;
+            }
+
+            // Originals kept by the WordPress image editor ("Restore original image").
+            if ( ! empty( $attachment_meta['_wp_attachment_backup_sizes'] ) && '' !== $attached_rel ) {
+                $backup_sizes = maybe_unserialize( $attachment_meta['_wp_attachment_backup_sizes'] ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_unserialize
+                if ( is_array( $backup_sizes ) ) {
+                    $backup_dir = dirname( $attached_rel );
+                    $backup_abs = ( '.' === $backup_dir || '' === $backup_dir ) ? $base_norm : $base_norm . trailingslashit( ltrim( $backup_dir, '/' ) );
+                    foreach ( $backup_sizes as $backup_size ) {
+                        if ( is_array( $backup_size ) && ! empty( $backup_size['file'] ) ) {
+                            $registered[ wp_normalize_path( $backup_abs . ltrim( (string) $backup_size['file'], '/' ) ) ] = true;
+                        }
+                    }
+                }
             }
 
             if ( empty( $attachment_meta['_wp_attachment_metadata'] ) ) {
@@ -239,6 +261,27 @@ class TSOIMMA_Rogue_Scanner {
                         } else {
                             $registered[ wp_normalize_path( $thumb_dir . $size_file ) ] = true;
                         }
+                    }
+                }
+            }
+
+            // Alternative formats (WebP/AVIF "sources") of the main file and of every size.
+            $source_lists = array();
+            if ( ! empty( $meta['sources'] ) && is_array( $meta['sources'] ) ) {
+                $source_lists[] = $meta['sources'];
+            }
+            if ( ! empty( $meta['sizes'] ) && is_array( $meta['sizes'] ) ) {
+                foreach ( $meta['sizes'] as $size ) {
+                    if ( ! empty( $size['sources'] ) && is_array( $size['sources'] ) ) {
+                        $source_lists[] = $size['sources'];
+                    }
+                }
+            }
+            foreach ( $source_lists as $source_list ) {
+                foreach ( $source_list as $source ) {
+                    if ( is_array( $source ) && ! empty( $source['file'] ) ) {
+                        $source_file = ltrim( (string) $source['file'], '/' );
+                        $registered[ wp_normalize_path( ( false !== strpos( $source_file, '/' ) ? $base_norm : $thumb_dir ) . $source_file ) ] = true;
                     }
                 }
             }
@@ -288,6 +331,28 @@ class TSOIMMA_Rogue_Scanner {
         }
 
         return $registered;
+    }
+
+    /**
+     * Normalized absolute paths of the TSO backups that an attachment still
+     * points at (its "Revert to original" copy).
+     *
+     * @return array<string,bool>
+     */
+    public static function get_active_backup_paths() {
+        global $wpdb;
+        $set  = array();
+        $rows = $wpdb->get_col( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+            $wpdb->prepare(
+                "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key IN (%s, %s) AND meta_value != ''",
+                tsoimma_get_attachment_meta_key( 'backup_file' ),
+                tsoimma_get_attachment_meta_key_legacy( 'backup_file' )
+            )
+        );
+        foreach ( (array) $rows as $path ) {
+            $set[ wp_normalize_path( (string) $path ) ] = true;
+        }
+        return $set;
     }
 
     private static function is_pdf_preview_filename( $filename ) {
@@ -358,7 +423,7 @@ class TSOIMMA_Rogue_Scanner {
     }
 
     /**
-     * Transient TTL for rogue delete allowlist (per admin user).
+     * How long a scan keeps its files deletable (per admin user).
      */
     const DELETE_ALLOWLIST_TTL = DAY_IN_SECONDS;
 
@@ -383,14 +448,36 @@ class TSOIMMA_Rogue_Scanner {
             );
         }
 
-        $key     = self::delete_allowlist_transient_key( $user_id );
-        $allowed = get_transient( $key );
-        $timeout = (int) get_option( '_transient_timeout_' . $key, 0 );
+        $data = self::read_delete_allowlist( $user_id );
 
         return array(
-            'expires' => $timeout,
-            'count'   => is_array( $allowed ) ? count( $allowed ) : 0,
+            'expires' => $data['expires'],
+            'count'   => count( $data['paths'] ),
         );
+    }
+
+    /**
+     * The allowlist lives in the database (an option that is not autoloaded) with an
+     * explicit expiry, NOT in a transient: with an external object cache (Redis,
+     * Memcached, LiteSpeed Object Cache) a transient can disappear within seconds,
+     * which made deleting scanned files fail with "not in the last scan".
+     *
+     * @param int $user_id User ID.
+     * @return array{expires:int,paths:array<string,bool>}
+     */
+    private static function read_delete_allowlist( $user_id ) {
+        $empty = array( 'expires' => 0, 'paths' => array() );
+        $data  = get_option( self::delete_allowlist_transient_key( $user_id ), array() );
+
+        if ( ! is_array( $data ) || empty( $data['paths'] ) || ! is_array( $data['paths'] ) ) {
+            return $empty;
+        }
+        $expires = isset( $data['expires'] ) ? (int) $data['expires'] : 0;
+        if ( $expires < time() ) {
+            return $empty;
+        }
+
+        return array( 'expires' => $expires, 'paths' => $data['paths'] );
     }
 
     /**
@@ -416,10 +503,13 @@ class TSOIMMA_Rogue_Scanner {
             }
         }
 
-        set_transient(
+        update_option(
             self::delete_allowlist_transient_key( $user_id ),
-            $allowed,
-            self::DELETE_ALLOWLIST_TTL
+            array(
+                'expires' => time() + self::DELETE_ALLOWLIST_TTL,
+                'paths'   => $allowed,
+            ),
+            false
         );
     }
 
@@ -433,8 +523,9 @@ class TSOIMMA_Rogue_Scanner {
             return false;
         }
 
-        $allowed = get_transient( self::delete_allowlist_transient_key( $user_id ) );
-        if ( ! is_array( $allowed ) ) {
+        $data    = self::read_delete_allowlist( $user_id );
+        $allowed = $data['paths'];
+        if ( empty( $allowed ) ) {
             return false;
         }
 

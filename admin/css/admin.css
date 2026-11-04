@@ -161,8 +161,8 @@
     border-radius: var(--imp-radius); margin-bottom: 20px;
 }
 .imp-tab {
-    flex: 0 0 auto; min-width: 0; padding: 9px 16px; border: none; background: transparent;
-    color: var(--imp-text-muted); font-family: var(--imp-font); font-size: 15px;
+    flex: 0 1 auto; min-width: 0; padding: 9px clamp(7px, 1vw, 16px); border: none; background: transparent;
+    color: var(--imp-text-muted); font-family: var(--imp-font); font-size: clamp(13px, 1.05vw, 15px);
     font-weight: 600; border-radius: var(--imp-radius-sm); cursor: pointer;
     transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 5px;
     white-space: nowrap; letter-spacing: -0.01em;
@@ -397,7 +397,7 @@
 /* ===== BUTTONS ===== */
 .imp-btn {
     display: inline-flex; align-items: center; gap: 6px;
-    padding: 9px 18px; border-radius: var(--imp-radius-sm); border: none;
+    padding: 9px 18px; border-radius: var(--imp-radius-sm); border: 1px solid transparent; box-sizing: border-box;
     font-family: var(--imp-font); font-size: 14px; font-weight: 600;
     cursor: pointer; transition: all .2s; line-height: 1; white-space: nowrap;
     text-decoration: none;
@@ -1374,6 +1374,8 @@
 .imp-history-action.seo_update    { background: rgba(6,214,160,.15); color: var(--imp-success); }
 .imp-history-action.url_fix, .imp-history-action.url_restore { background: rgba(6,214,160,.15); color: var(--imp-success); }
 .imp-history-action.url_remove     { background: rgba(255,209,102,.15); color: var(--imp-warn); }
+.imp-history-action.repair_paths, .imp-history-action.repair_mime { background: rgba(6,214,160,.15); color: var(--imp-success); }
+.imp-history-action.url_backup_delete, .imp-history-action.ghost_delete { background: rgba(255,77,109,.15); color: var(--imp-danger); }
 .imp-history-action.delete        { background: rgba(255,77,109,.15); color: var(--imp-danger); }
 .imp-history-action.pdf_compress  { background: rgba(255,255,255,.08); color: var(--imp-text-muted); }
 .imp-history-action.dup_merge_rewrite  { background: rgba(108,99,255,.2); color: #a599ff; }
@@ -1746,3 +1748,80 @@
 
 .imp-alt-hint { margin-top: 6px; font-size: 12px; color: var(--imp-warn); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .imp-alt-hint[hidden] { display: none; }
+
+
+/* ===== ORPHANS: sub-tabs + unattached diagnostic ===== */
+.imp-subtabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.imp-subtab {
+    padding: 7px 14px; border: 1px solid var(--imp-border); background: transparent;
+    color: var(--imp-text-muted); font-family: var(--imp-font); font-size: 14px;
+    font-weight: 600; border-radius: var(--imp-radius-sm); cursor: pointer;
+}
+.imp-subtab:hover  { background: var(--imp-surface2); color: var(--imp-text); }
+.imp-subtab.active { background: var(--imp-accent); border-color: var(--imp-accent); color: #fff; }
+.imp-unatt-ref { font-size: 13px; }
+.imp-unatt-ref code { font-family: var(--imp-mono); font-size: 12px; }
+.imp-history-table .imp-thumb-sm.imp-unatt-thumb { width: 48px; height: 48px; }
+
+/* Orphans tab: the three sub-tab headers share one grid cell, so the block
+   always has the height of the tallest one and does not jump when switching. */
+.imp-subpanel-stack { display: grid; margin-bottom: 20px; }
+.imp-subpanel { grid-area: 1 / 1; display: flex; visibility: hidden; }
+.imp-subpanel.is-active { visibility: visible; }
+.imp-subpanel > .imp-panel { flex: 1; margin-bottom: 0; }
+.imp-subpanel > .imp-panel { display: flex; flex-direction: column; }
+.imp-subpanel > .imp-panel > .imp-btn { margin-top: auto; align-self: flex-start; }
+/* Orphans header: batch-size select + scan button on ONE row, pinned to the bottom like the other buttons. */
+.imp-subpanel > .imp-panel > .imp-settings-grid { margin-top: auto; margin-bottom: 0; }
+
+/* Compact sub-tab headers (less blank space above and below). */
+.imp-subtabs { margin-bottom: 12px; }
+.imp-subpanel-stack { margin-bottom: 14px; }
+.imp-subpanel > .imp-panel { padding: 14px 20px; }
+.imp-subpanel .imp-panel-title { margin-bottom: 4px; }
+.imp-subpanel .imp-panel-desc { margin-bottom: 10px; line-height: 1.5; }
+
+/* "Referenced" table: group heading rows. */
+.imp-history-table tr.imp-unatt-group td { background: var(--imp-surface2); font-size: 12px; font-weight: 700; padding: 8px 14px; }
+
+/* Buttons that sit next to each other directly inside a panel get a real gap. */
+.imp-panel > .imp-btn + .imp-btn { margin-left: 10px; }
+.imp-panel > .imp-btn { vertical-align: middle; }
+
+/* Orphans header: scan button and batch-size select share exactly the same height. */
+.imp-subpanel .imp-settings-grid .imp-btn,
+.imp-subpanel .imp-settings-grid .imp-csel-trigger { height: 40px; box-sizing: border-box; }
+
+/* Switching sub-tabs: the panel that is hiding must vanish at once. Otherwise the
+   "transition: all" of the buttons keeps them visible for ~0.2 s on top of the new
+   panel's button (two blue buttons drawn over each other). */
+.imp-subpanel:not(.is-active),
+.imp-subpanel:not(.is-active) * { transition: none !important; }
+
+/* ===== REPAIRS TAB: attachment repair blocks ===== */
+.imp-repair-list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.imp-repair-block {
+    padding: 14px 16px; background: var(--imp-surface2);
+    border: 1px solid var(--imp-border); border-radius: var(--imp-radius-sm);
+}
+.imp-repair-desc { margin: 0 0 12px; font-size: 13px; line-height: 1.5; color: var(--imp-text-muted); }
+.imp-repair-title-warn   { color: var(--imp-warn); }
+.imp-repair-title-danger { color: var(--imp-danger); }
+.imp-repair-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.imp-repair-result { font-size: 13px; line-height: 1.4; }
+.imp-ghost-list { margin-top: 12px; }
+.imp-ghost-actions { margin-top: 10px; }
+.imp-ghost-row {
+    display: flex; align-items: center; gap: 8px; padding: 6px 0;
+    border-bottom: 1px solid var(--imp-border);
+}
+.imp-ghost-row .imp-ghost-check { cursor: pointer; }
+.imp-ghost-name {
+    font-family: var(--imp-mono); font-size: 12px; flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.imp-ghost-reason { font-size: 11px; color: var(--imp-danger); flex-shrink: 0; }
+
+/* Removal backups list: keep the action buttons on one line and aligned right. */
+#imp-url-backups-list .imp-history-table td:last-child { white-space: nowrap; text-align: right; }
+#imp-url-backups-list .imp-history-table td:last-child .imp-btn + .imp-btn { margin-left: 6px; }

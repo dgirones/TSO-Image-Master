@@ -357,8 +357,8 @@ msgstr "PDFs"
 msgid "Auto-optimization"
 msgstr "Auto-optimización"
 
-msgid "URLs"
-msgstr "URLs"
+msgid "Repairs"
+msgstr "Reparaciones"
 
 msgid "History"
 msgstr "Historial"
@@ -859,3 +859,86 @@ msgstr "Resaltando el adjunto #%d en el editor de bloques."
 #, php-format
 msgid "Highlighting attachment #%d in code."
 msgstr "Resaltando el adjunto #%d en el código."
+
+msgid "Orphan images"
+msgstr "Imágenes huérfanas"
+
+msgid "Referenced"
+msgstr "Referenciadas"
+
+msgid "Extra files"
+msgstr "Archivos extra"
+
+msgid "This is not an image from the media library."
+msgstr "Esto no es una imagen de la biblioteca de medios."
+
+msgid "This image is attached to a post, so it was not deleted."
+msgstr "Esta imagen está adjunta a una entrada, por eso no se ha eliminado."
+
+msgid "The backup could not be made, so the image was not deleted."
+msgstr "No se ha podido hacer la copia de seguridad, por eso no se ha eliminado la imagen."
+
+msgid "This image is already attached to a post."
+msgstr "Esta imagen ya está adjunta a una entrada."
+
+msgid "This image is not used inside any post, so there is nothing to attach it to."
+msgstr "Esta imagen no se usa dentro de ninguna entrada, así que no hay dónde adjuntarla."
+
+msgid "You are not allowed to edit that post."
+msgstr "No tienes permiso para editar esa entrada."
+
+msgid "This image is in use, so it cannot be deleted from here."
+msgstr "Esta imagen está en uso, así que no se puede eliminar desde aquí."
+
+msgid "Inconsistent URL detector"
+msgstr "Detector de URLs inconsistentes"
+
+msgid "Repair attachments"
+msgstr "Reparar adjuntos"
+
+msgid "Removal backups"
+msgstr "Copias de seguridad"
+
+#, php-format
+msgid "ID %1$d: file not found (%2$s)"
+msgstr "ID %1$d: archivo no encontrado (%2$s)"
+
+#, php-format
+msgid "ID %1$d: could not determine the real MIME type (%2$s)"
+msgstr "ID %1$d: no se ha podido determinar el tipo MIME real (%2$s)"
+
+msgid "File does not exist on disk"
+msgstr "El archivo no existe en disco"
+
+msgid "Empty file (0 bytes)"
+msgstr "Archivo vacío (0 bytes)"
+
+msgid "MIME type application/x-empty"
+msgstr "Tipo MIME application/x-empty"
+
+#, php-format
+msgid "ID %d: not a valid attachment."
+msgstr "ID %d: no es un adjunto válido."
+
+#, php-format
+msgid "ID %1$d (%2$s): real file with content, not deleted for safety."
+msgstr "ID %1$d (%2$s): archivo real con contenido, no eliminado por seguridad."
+
+#, php-format
+msgid "ID %d: the attachment could not be deleted."
+msgstr "ID %d: no se ha podido eliminar el adjunto."
+
+#, php-format
+msgid "URL outside the uploads folder: %s"
+msgstr "URL fuera de la carpeta uploads: %s"
+
+#, php-format
+msgid "Target file not found: %s"
+msgstr "Archivo de destino no encontrado: %s"
+
+#, php-format
+msgid "The file still exists on disk: %s"
+msgstr "El archivo todavía existe en disco: %s"
+
+msgid "The backup could not be created; nothing was modified."
+msgstr "No se ha podido crear la copia de seguridad; no se ha modificado nada."

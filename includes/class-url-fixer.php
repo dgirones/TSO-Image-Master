@@ -469,14 +469,16 @@ class TSOIMMA_URL_Fixer {
 
             if ( ! self::is_uploads_media_url( $old ) || ! self::is_uploads_media_url( $new ) ) {
                 $path     = wp_parse_url( $old, PHP_URL_PATH );
-                $errors[] = 'URL fora de uploads: ' . basename( '' !== $path ? (string) $path : $old );
+                /* translators: %s: file name */
+                $errors[] = sprintf( __( 'URL outside the uploads folder: %s', 'tso-image-master' ), basename( '' !== $path ? (string) $path : $old ) );
                 $skipped++;
                 continue;
             }
 
             $new_path = self::uploads_path_from_url( $new, true );
             if ( null === $new_path ) {
-                $errors[] = 'Fitxer desti no trobat: ' . basename( $new );
+                /* translators: %s: file name */
+                $errors[] = sprintf( __( 'Target file not found: %s', 'tso-image-master' ), basename( $new ) );
                 $skipped++;
                 continue;
             }
@@ -534,13 +536,15 @@ class TSOIMMA_URL_Fixer {
 
             if ( ! self::is_uploads_media_url( $url ) ) {
                 $path     = wp_parse_url( $url, PHP_URL_PATH );
-                $errors[] = 'URL fora de uploads: ' . basename( '' !== $path ? (string) $path : $url );
+                /* translators: %s: file name */
+                $errors[] = sprintf( __( 'URL outside the uploads folder: %s', 'tso-image-master' ), basename( '' !== $path ? (string) $path : $url ) );
                 $skipped++;
                 continue;
             }
 
             if ( null !== self::uploads_path_from_url( $url, true ) ) {
-                $errors[] = 'El fitxer encara existeix al disc: ' . basename( $url );
+                /* translators: %s: file name */
+                $errors[] = sprintf( __( 'The file still exists on disk: %s', 'tso-image-master' ), basename( $url ) );
                 $skipped++;
                 continue;
             }
@@ -577,7 +581,7 @@ class TSOIMMA_URL_Fixer {
 
         $backup_file = self::write_removal_backup( $would, $snap );
         if ( '' === $backup_file ) {
-            $result['errors'][]  = 'No s\'ha pogut crear la còpia de seguretat; no s\'ha modificat res.';
+            $result['errors'][]  = __( 'The backup could not be created; nothing was modified.', 'tso-image-master' );
             $result['skipped']  += count( $would );
             return $result;
         }

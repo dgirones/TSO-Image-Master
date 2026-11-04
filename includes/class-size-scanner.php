@@ -23,6 +23,24 @@ class TSOIMMA_Size_Scanner {
 	private const MANIFEST_NAME = 'tso-manifest.json';
 
 	/**
+	 * Sanitizes an image size name WITHOUT lowercasing it: add_image_size()
+	 * accepts mixed-case names (e.g. "MyTheme_Hero") and sanitize_key() would
+	 * turn them into a name that no attachment metadata contains. Only
+	 * characters valid in a size name / folder name are kept, and a name made
+	 * only of dots is rejected (no path traversal through the backup folder).
+	 *
+	 * @param string $size_name Raw size name.
+	 * @return string
+	 */
+	public static function sanitize_size_name( $size_name ) {
+		$size_name = preg_replace( '/[^A-Za-z0-9_\-.]/', '', (string) $size_name );
+		if ( null === $size_name || '' === trim( $size_name, '.' ) ) {
+			return '';
+		}
+		return $size_name;
+	}
+
+	/**
 	 * Noms de mida que WordPress generaria ARA MATEIX per a una pujada nova.
 	 *
 	 * No n'hi ha prou amb wp_get_registered_image_subsizes(): aquesta funció
@@ -69,7 +87,7 @@ class TSOIMMA_Size_Scanner {
 	 * @return bool
 	 */
 	private static function is_core_protected_size_name( $size_name ) {
-		return (bool) preg_match( '/^site_icon-\d+$/', (string) $size_name );
+		return (bool) preg_match( '/^(site_icon-\d+|thumbnail|medium|large)$/', (string) $size_name );
 	}
 
 	/**
@@ -91,84 +109,155 @@ class TSOIMMA_Size_Scanner {
 
 	/**
 	 * Escaneja tota la biblioteca de mitjans i agrupa els fitxers de mida
-	 * generats per nom de mida.
+	 * generats per nom de mida (execució d'una sola vegada; el navegador
+	 * fa servir scan_batch() per lots).
 	 *
 	 * @return array{sizes: array, total_images: int, registered_names: string[]}
 	 */
 	public static function scan() {
-		$registered_names = self::get_registered_size_names();
-
 		$by_name      = array();
 		$total_images = 0;
 		$offset       = 0;
 
 		do {
-			$ids = get_posts(
-				array(
-					'post_type'      => 'attachment',
-					'post_mime_type' => 'image',
-					'post_status'    => 'inherit',
-					'posts_per_page' => self::SCAN_BATCH,
-					'offset'         => $offset,
-					'fields'         => 'ids',
-					'orderby'        => 'ID',
-					'order'          => 'ASC',
-					'no_found_rows'  => true,
-				)
-			);
-			$batch_count = count( $ids );
-			if ( ! $batch_count ) {
-				break;
-			}
-			update_meta_cache( 'post', $ids );
+			$batch         = self::scan_batch( $offset, self::SCAN_BATCH );
+			$by_name       = self::merge_scan_rows( $by_name, $batch['rows'] );
+			$total_images += $batch['count'];
+			$offset        = $batch['next_offset'];
+		} while ( ! $batch['done'] );
 
-			foreach ( $ids as $id ) {
-				$meta = wp_get_attachment_metadata( $id );
-				if ( empty( $meta['sizes'] ) || ! is_array( $meta['sizes'] ) ) {
+		return array(
+			'sizes'            => self::finalize_scan_rows( $by_name ),
+			'total_images'     => $total_images,
+			'registered_names' => self::get_registered_size_names(),
+		);
+	}
+
+	/**
+	 * Scans ONE slice of the media library so the browser can walk the
+	 * whole library in several short requests (no PHP time-limit risk on
+	 * big sites) and show progress.
+	 *
+	 * @param int $offset Attachment offset.
+	 * @param int $limit  Attachments per slice.
+	 * @return array{rows: array, count: int, next_offset: int, done: bool}
+	 */
+	public static function scan_batch( $offset, $limit = 300 ) {
+		$offset           = max( 0, (int) $offset );
+		$limit            = min( 1000, max( 1, (int) $limit ) );
+		$registered_names = self::get_registered_size_names();
+		$by_name          = array();
+
+		$ids = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'post_mime_type' => 'image',
+				'post_status'    => 'inherit',
+				'posts_per_page' => $limit,
+				'offset'         => $offset,
+				'fields'         => 'ids',
+				'orderby'        => 'ID',
+				'order'          => 'ASC',
+				'no_found_rows'  => true,
+			)
+		);
+		$count = count( $ids );
+		if ( $count ) {
+			update_meta_cache( 'post', $ids );
+		}
+
+		foreach ( $ids as $id ) {
+			$meta = wp_get_attachment_metadata( $id );
+			if ( empty( $meta['sizes'] ) || ! is_array( $meta['sizes'] ) ) {
+				continue;
+			}
+			$file = get_attached_file( $id );
+			if ( ! $file ) {
+				continue;
+			}
+			$dir = trailingslashit( dirname( $file ) );
+
+			// WordPress points several size names with the same dimensions at
+			// ONE physical file. Deleting a size whose file is also used by the
+			// main/original image or by a size that stays (registered or
+			// protected) frees nothing, and a file shared only by orphan sizes
+			// frees its bytes once. Count bytes the same way so the "Space"
+			// column matches what is really recovered.
+			$main_base     = wp_basename( $file );
+			$orig_base     = ! empty( $meta['original_image'] ) ? wp_basename( (string) $meta['original_image'] ) : '';
+			$kept_files    = array();
+			$counted_files = array();
+			foreach ( $meta['sizes'] as $other_name => $other_data ) {
+				if ( ! empty( $other_data['file'] ) && ( in_array( (string) $other_name, $registered_names, true ) || self::is_core_protected_size_name( (string) $other_name ) ) ) {
+					$kept_files[ $other_data['file'] ] = true;
+				}
+			}
+
+			foreach ( $meta['sizes'] as $size_name => $size_data ) {
+				$size_name = (string) $size_name;
+				if ( '' === $size_name || empty( $size_data['file'] ) ) {
 					continue;
 				}
-				$file = get_attached_file( $id );
-				$dir  = $file ? trailingslashit( dirname( $file ) ) : '';
+				// Count only sizes whose file actually exists on disk (see
+				// list_for_size()): a stale metadata entry is not something
+				// the admin can delete.
+				$path = $dir . $size_data['file'];
+				if ( ! file_exists( $path ) ) {
+					continue;
+				}
 
-				foreach ( $meta['sizes'] as $size_name => $size_data ) {
-					$size_name = (string) $size_name;
-					if ( '' === $size_name || empty( $size_data['file'] ) ) {
-						continue;
-					}
-					// Count only sizes whose file actually exists on disk — a
-					// stale metadata entry pointing at an already-missing file
-					// is not something the admin can delete, and counting it
-					// anyway inflated the total compared to a real disk audit
-					// (e.g. TSO Swiss Knife's "Auditoria de mides d'imatge",
-					// which only counts files it finds on disk).
-					if ( '' === $dir ) {
-						continue;
-					}
-					$path = $dir . $size_data['file'];
-					if ( ! file_exists( $path ) ) {
-						continue;
-					}
-
-					if ( ! isset( $by_name[ $size_name ] ) ) {
-						$by_name[ $size_name ] = array(
-							'name'       => $size_name,
-							'count'      => 0,
-							'bytes'      => 0,
-							'width'      => isset( $size_data['width'] ) ? (int) $size_data['width'] : 0,
-							'height'     => isset( $size_data['height'] ) ? (int) $size_data['height'] : 0,
-							'registered' => in_array( $size_name, $registered_names, true ),
-							'protected'  => self::is_core_protected_size_name( $size_name ),
-						);
-					}
-					++$by_name[ $size_name ]['count'];
-					$by_name[ $size_name ]['bytes'] += filesize( $path );
+				if ( ! isset( $by_name[ $size_name ] ) ) {
+					$by_name[ $size_name ] = array(
+						'name'       => $size_name,
+						'count'      => 0,
+						'bytes'      => 0,
+						'width'      => isset( $size_data['width'] ) ? (int) $size_data['width'] : 0,
+						'height'     => isset( $size_data['height'] ) ? (int) $size_data['height'] : 0,
+						'registered' => in_array( $size_name, $registered_names, true ),
+						'protected'  => self::is_core_protected_size_name( $size_name ),
+					);
+				}
+				++$by_name[ $size_name ]['count'];
+				$is_orphan_size = ! $by_name[ $size_name ]['registered'] && ! $by_name[ $size_name ]['protected'];
+				$stays          = $size_data['file'] === $main_base || $size_data['file'] === $orig_base || ( $is_orphan_size && isset( $kept_files[ $size_data['file'] ] ) );
+				if ( ! $stays && ! isset( $counted_files[ $size_data['file'] ] ) ) {
+					$by_name[ $size_name ]['bytes']      += filesize( $path );
+					$counted_files[ $size_data['file'] ] = true;
 				}
 			}
+		}
 
-			$total_images += $batch_count;
-			$offset       += self::SCAN_BATCH;
-		} while ( self::SCAN_BATCH === $batch_count );
+		return array(
+			'rows'        => array_values( $by_name ),
+			'count'       => $count,
+			'next_offset' => $offset + $count,
+			'done'        => $count < $limit,
+		);
+	}
 
+	/**
+	 * @param array $by_name Accumulated rows keyed by size name.
+	 * @param array $rows    Rows from scan_batch().
+	 * @return array
+	 */
+	private static function merge_scan_rows( $by_name, $rows ) {
+		foreach ( $rows as $row ) {
+			$name = (string) $row['name'];
+			if ( ! isset( $by_name[ $name ] ) ) {
+				$by_name[ $name ] = $row;
+				continue;
+			}
+			$by_name[ $name ]['count'] += (int) $row['count'];
+			$by_name[ $name ]['bytes'] += (int) $row['bytes'];
+		}
+		return $by_name;
+	}
+
+	/**
+	 * @param array $by_name Rows keyed by size name.
+	 * @return array
+	 */
+	private static function finalize_scan_rows( $by_name ) {
 		$sizes = array_values( $by_name );
 		foreach ( $sizes as &$row ) {
 			$row['bytes_h'] = size_format( $row['bytes'] );
@@ -181,12 +270,7 @@ class TSOIMMA_Size_Scanner {
 				return $b['bytes'] <=> $a['bytes'];
 			}
 		);
-
-		return array(
-			'sizes'            => $sizes,
-			'total_images'     => $total_images,
-			'registered_names' => $registered_names,
-		);
+		return $sizes;
 	}
 
 	/**
@@ -200,7 +284,7 @@ class TSOIMMA_Size_Scanner {
 	public static function list_for_size( $size_name, $limit = 60, $offset = 0 ) {
 		global $wpdb;
 
-		$size_name = sanitize_key( $size_name );
+		$size_name = self::sanitize_size_name( $size_name );
 		$limit     = max( 1, (int) $limit );
 		$offset    = max( 0, (int) $offset );
 
@@ -291,7 +375,7 @@ class TSOIMMA_Size_Scanner {
 	public static function get_all_ids_for_size( $size_name ) {
 		global $wpdb;
 
-		$size_name = sanitize_key( $size_name );
+		$size_name = self::sanitize_size_name( $size_name );
 		if ( '' === $size_name ) {
 			return array();
 		}
@@ -336,7 +420,7 @@ class TSOIMMA_Size_Scanner {
 	 * @return array{deleted: array, errors: array, bytes_freed: int, bytes_freed_h: string}
 	 */
 	public static function delete_size_files( $size_name, $attachment_ids ) {
-		$size_name = sanitize_key( $size_name );
+		$size_name = self::sanitize_size_name( $size_name );
 		$deleted   = array();
 		$errors    = array();
 		$bytes     = 0;
@@ -463,23 +547,14 @@ class TSOIMMA_Size_Scanner {
 			);
 		}
 
-		if ( ! empty( $deleted ) ) {
-			if ( function_exists( 'wp_cache_flush' ) ) {
-				wp_cache_flush();
-			}
-			do_action( 'litespeed_purge_all' ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Third-party LiteSpeed Cache integration hook, name is defined by that plugin.
-			if ( function_exists( 'rocket_clean_domain' ) ) {
-				rocket_clean_domain();
-			}
-			if ( function_exists( 'w3tc_flush_all' ) ) {
-				w3tc_flush_all();
-			}
-			if ( function_exists( 'wpfc_clear_all_cache' ) ) {
-				wpfc_clear_all_cache();
-			}
-			if ( class_exists( 'TSOIMMA_Dashboard' ) ) {
-				TSOIMMA_Dashboard::flush_backup_stats_cache();
-			}
+		// Only the touched attachments' caches are cleared here. The heavy
+		// site-wide purge (object cache + page-cache plugins) runs ONCE at
+		// the end of the whole operation, from the AJAX handler.
+		foreach ( $deleted as $deleted_item ) {
+			clean_attachment_cache( (int) $deleted_item['id'] );
+		}
+		if ( ! empty( $deleted ) && class_exists( 'TSOIMMA_Dashboard' ) ) {
+			TSOIMMA_Dashboard::flush_backup_stats_cache();
 		}
 
 		return array(
@@ -594,6 +669,7 @@ class TSOIMMA_Size_Scanner {
 			'items'   => array(),
 		);
 
+		$added_entries = array();
 		foreach ( $candidates as $candidate ) {
 			// Store each file under its path relative to uploads/ (e.g.
 			// 2026/09/photo-320x240.jpg) so the zip mirrors the real folder
@@ -604,12 +680,17 @@ class TSOIMMA_Size_Scanner {
 			// Fallback for files outside uploads/: prefix with the attachment
 			// ID so identical generated names never collide in the archive.
 			$entry_name = ( '' !== $relative ) ? $relative : $candidate['id'] . '__' . wp_basename( $candidate['path'] );
-			if ( ! $zip->addFile( $candidate['path'], $entry_name ) ) {
+			// Two attachments can point at the very same physical file: store
+			// it once (the manifest still lists every attachment) so the
+			// verification below does not reject the whole batch.
+			if ( ! isset( $added_entries[ $entry_name ] ) && ! $zip->addFile( $candidate['path'], $entry_name ) ) {
 				$zip->close();
 				self::delete_file_quietly( $zip_path );
 				$result['error'] = __( 'A file could not be added to the backup zip, so nothing was deleted.', 'tso-image-master' );
 				return $result;
 			}
+
+			$added_entries[ $entry_name ] = true;
 
 			$size_meta = isset( $candidate['meta']['sizes'][ $size_name ] ) && is_array( $candidate['meta']['sizes'][ $size_name ] )
 				? $candidate['meta']['sizes'][ $size_name ]
@@ -642,7 +723,7 @@ class TSOIMMA_Size_Scanner {
 		if ( $count >= 0 ) {
 			$check->close();
 		}
-		if ( $count < count( $candidates ) + 1 ) {
+		if ( $count < count( $added_entries ) + 1 ) {
 			self::delete_file_quietly( $zip_path );
 			$result['error'] = __( 'The backup zip did not pass verification, so nothing was deleted.', 'tso-image-master' );
 			return $result;
@@ -677,13 +758,13 @@ class TSOIMMA_Size_Scanner {
 		$basedir    = wp_normalize_path( trailingslashit( $upload_dir['basedir'] ) );
 
 		$items     = array();
-		$size_name = sanitize_key( wp_basename( dirname( $zip_path ) ) );
+		$size_name = self::sanitize_size_name( wp_basename( dirname( $zip_path ) ) );
 		$raw       = $zip->getFromName( self::MANIFEST_NAME );
 		if ( false !== $raw ) {
 			$manifest = json_decode( $raw, true );
 			if ( is_array( $manifest ) && ! empty( $manifest['items'] ) && is_array( $manifest['items'] ) ) {
 				if ( ! empty( $manifest['size'] ) ) {
-					$size_name = sanitize_key( $manifest['size'] );
+					$size_name = self::sanitize_size_name( $manifest['size'] );
 				}
 				$items = $manifest['items'];
 			}

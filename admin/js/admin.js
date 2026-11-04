@@ -78,12 +78,15 @@
             page: 1, perPage: readStoredPerPage(), search: '', totalPages: 1
         },
         orphans: { found: [] },
+        unattached: { items: [] },
+        unattachedSelected: new Set(),
         orphanSelected: new Set(),
         dashboard: { altPage: 1, altSelected: new Set(), altDraftById: {}, engines: {}, overviewLoaded: false, altListLoaded: false, altListCacheKey: '', dirty: false, xhrOverview: null, xhrAlt: null },
         currentModalId: null,
         imgCacheTs: {}
     };
     var refreshUrlFixerUi = null;
+    var ghostReasonRefresh = null;
     var hoverPreviewLoadId = 0;
 
     function hideImgHoverPreview() {
@@ -103,6 +106,7 @@
         initThemeSwitcher();
         initLanguageSwitcher();
         initImpCustomSelects();
+        initPrefs();
         applyPerPage(readStoredPerPage(), false);
         initTabs();
         initDashboard();
@@ -112,6 +116,7 @@
         initSearch();
         initOptimizeTab();
         initOrphansTab();
+        initUnattachedTab();
         initSizesTab();
         initSeoTab();
         initModal();
@@ -142,7 +147,7 @@
             rogue_desc: 'Escaneja fitxers a <code>uploads/</code> que WordPress no té registrats: <strong>còpies de seguretat TSO</strong> (<code>_tso_im_backup</code>), temporals (<code>_tso_im_opt</code>), doble extensió (<code>.jpg.webp</code>), backups antics (<code>.bk</code>), etc. Revisa abans d\'eliminar les còpies de seguretat.',
             rename_btn: '✏️ Reanomenar fitxer',
             repair_paths: '🔧 Reparar imatges amb path trencat',
-            mime_fix_btn: '🔧 Reparar mime types incorrectes',
+            mime_fix_btn: '🔧 Reparar tipus MIME incorrectes',
             scan_ghosts: 'Escanejar adjunts fantasma',
             delete_ghosts: 'Eliminar seleccionats',
             ghost_found_singular: 'adjunt fantasma trobat.',
@@ -206,6 +211,8 @@
             preset_small: 'Petit',
             rogue_reason_double_extension: 'Doble extensió (.jpg.webp)',
             rogue_reason_tso_backup: 'Backup TSO',
+            rogue_reason_tso_backup_active: 'Backup TSO actiu (permet revertir)',
+            rogue_reason_tso_backup_deleted: 'Backup d\'una imatge esborrada',
             rogue_reason_tso_temp: 'Temporal TSO',
             rogue_reason_tso_pdf_compressed: 'PDF comprimit TSO',
             rogue_reason_generic_backup: 'Backup genèric (.bk)',
@@ -229,7 +236,7 @@
             tab_pdf: 'PDFs',
             tab_auto: 'Auto-optimització',
             tab_history: 'Historial',
-            tab_urls: 'URLs',
+            tab_urls: 'Reparacions',
             opt_config_title: 'Configuració d\'Optimització',
             format_label: 'Format de sortida',
             quality_label: 'Qualitat',
@@ -239,6 +246,59 @@
             bulk_optimize: 'Optimitzar seleccionades',
             bulk_replace_label: 'Reemplaça l\'original i actualitza tots els links',
             orphans_title: 'Trobar Imatges Òrfenes',
+            unatt_title: 'Imatges referenciades',
+            unatt_desc: 'Imatges sense entrada pare (o amb el pare esborrat) però que <strong>sí s\'usen</strong> en algun lloc, i on. Les orfes de veritat no surten aquí: són a «Imatges òrfenes».<br>Pots eliminar-les d\'una en una o per selecció: <strong>abans es fa una còpia de seguretat de l\'original, que trobaràs a «Fitxers extra».</strong>',
+            unatt_scan: '🔍 Analitzar referenciades',
+            unatt_summary: '{n} referenciades sense pare',
+            unatt_none: '✓ No s\'ha trobat cap imatge referenciada sense pare.',
+            unatt_col_file: 'Fitxer',
+            unatt_group_doubtful: 'Dubtoses: només coincideix el número d\'ID en un camp d\'una entrada; si no la fas servir, pots eliminar-la ({n})',
+            unatt_weak_hint: 'només coincideix el número d\'ID: potser no és un ús real',
+            unatt_no_attach: 'En ús',
+            unatt_group_fixable: 'Es poden arreglar: adjunta-les a la seva entrada ({n})',
+            unatt_group_inuse: 'En ús fora d\'entrades: no cal fer res ({n})',
+            unatt_attach_selected: 'Adjuntar seleccionades',
+            unatt_attach_one: 'Adjuntar',
+            unatt_attach_tip: 'Adjunta aquesta imatge a «{post}»: tindrà pare i ja no sortirà en aquesta llista.',
+            unatt_attached_ok: '✓ {n} imatge(s) adjuntada(es) a la seva entrada: ja no surten aquí.',
+            unatt_selected: '{n} seleccionades',
+            unatt_delete_selected: 'Eliminar seleccionades',
+            unatt_delete_one: 'Eliminar',
+            unatt_deleted_ok: '✓ {n} imatge(s) eliminada(es). Còpia de seguretat feta: la trobaràs a «Fitxers extra».',
+            unatt_col_parent: 'Pare',
+            unatt_col_used_in: 'On s\'usa',
+            unatt_parent_none: 'Sense pare',
+            unatt_parent_deleted: 'Pare esborrat',
+            unatt_go_media: 'Obrir a la Biblioteca',
+            ur_content_of: 'Dins el contingut de',
+            ur_featured_of: 'Imatge destacada de',
+            ur_field_of: 'Camp «{key}» de',
+            ur_template: 'Plantilla o patró:',
+            ur_widget: 'Widget',
+            ur_widget_zone: 'zona',
+            ur_widget_inactive: 'inactiu',
+            ur_theme_mod: 'Personalitzador',
+            ur_avatar: 'Avatar per defecte (Ajustes > Debat)',
+            ur_option: 'Opció',
+            ur_option_name: 'opció',
+            ur_theme_file: 'Fitxer del tema:',
+            ur_custom_logo: 'Logo del lloc',
+            ur_site_icon: 'Icona del lloc',
+            ur_termmeta: 'Metadada d\'una categoria o etiqueta',
+            ur_nav_menu: 'Element d\'un menú',
+            ur_termmeta_id: 'Imatge d\'una categoria o terme (ID)',
+            ur_usermeta_id: 'Imatge d\'un usuari (ID)',
+            ur_index_match: 'Coincidència de nom a l\'índex ràpid (opcions o tema)',
+            ur_postmeta_url: 'Camp personalitzat de',
+            ur_postmeta_id: 'Camp de',
+            ur_post_content: 'Dins el contingut de',
+            ur_option_url: 'Opció, widget o Personalitzador',
+            ur_option_id: 'Opció',
+            ur_option_filename: 'Opció',
+            ur_site_editor: 'Plantilla o patró:',
+            orph_subtab_orphans: 'Imatges òrfenes',
+            orph_subtab_unattached: 'Referenciades',
+            orph_subtab_extra: 'Fitxers extra',
             orphans_desc: 'Imatges de la biblioteca que <strong>no estan referenciades</strong> a cap article, pàgina, widget ni metadada.',
             orphan_limit_label: 'Imatges a escanejar per lot',
             all_slow: 'Totes (lent)',
@@ -289,8 +349,8 @@
             auto_title: 'Auto-optimització en pujar imatges',
             auto_desc: 'En activar aquesta opció, <strong>cada imatge nova que puges</strong> s\'optimitza automàticament amb la configuració triada.',
             save_config: '💾 Guardar configuració',
-            mime_fix_title: 'Reparació de tipus mime',
-            mime_fix_desc: 'Detecta i repara adjunts amb extensió .webp però mime type incorrecte (image/jpeg). Soluciona imatges invisibles a la Mediateca.',
+            mime_fix_title: 'Reparació de tipus MIME',
+            mime_fix_desc: 'Detecta i repara adjunts amb extensió .webp però tipus MIME incorrecte (image/jpeg). Soluciona imatges invisibles a la Mediateca.',
             auto_stats_title: 'Estadístiques d\'auto-optimització',
             auto_history_title: 'Historial d\'auto-optimització',
             auto_history_hint: 'Les auto-optimitzacions es registren a la pestanya <strong>Historial</strong> (filtre 🤖 Auto-optimitzades).',
@@ -312,6 +372,18 @@
             clear_all: '🗑️ Netejar tot',
             save_btn: '💾 Guardar',
             url_title: '🔗 Detector d\'URLs inconsistents',
+            url_subtab_detector: 'Detector d\'URLs inconsistents',
+            url_subtab_repairs: 'Reparar adjunts',
+            repairs_title: '🔧 Reparació d\'adjunts',
+            repairs_desc: 'Eines per arreglar adjunts de la biblioteca de medis que han quedat amb dades incorrectes després d\'optimitzar o convertir imatges.',
+            ghost_reason_missing: 'El fitxer no existeix al disc',
+            ghost_reason_empty: 'Fitxer buit (0 bytes)',
+            ghost_reason_xempty: 'Tipus MIME application/x-empty',
+            repair_n_errors: '{n} amb errors.',
+            repair_unresolved: '{n} no tenen cap fitxer .webp/.avif al disc: fes servir «Escanejar adjunts fantasma».',
+            confirm_fix_urls: 'Reparar {n} URL(s) al contingut?',
+            url_subtab_backups: 'Còpies de seguretat',
+            url_backups_empty: 'Encara no hi ha còpies de seguretat d\'eliminacions.',
             url_desc: 'Detecta URLs d\'imatges a entrades i pàgines que <strong>apunten a fitxers que ja no existeixen</strong> al servidor — normalment per conversions de JPG a WebP. Pot actualitzar-les automàticament a tota la base de dades.',
             url_obsolete: 'URL obsoleta → nova correcta',
             scan_web: '🔍 Escanejar tot el lloc',
@@ -459,7 +531,7 @@
             tab_pdf: 'PDFs',
             tab_auto: 'Auto-optimización',
             tab_history: 'Historial',
-            tab_urls: 'URLs',
+            tab_urls: 'Reparaciones',
             opt_config_title: 'Configuración de Optimización',
             format_label: 'Formato de salida',
             fmt_webp: 'WebP (recomendado)',
@@ -472,6 +544,59 @@
             bulk_optimize: 'Optimizar seleccionadas',
             bulk_replace_label: 'Reemplaza el original y actualiza todos los enlaces',
             orphans_title: 'Buscar Imágenes Huérfanas',
+            unatt_title: 'Imágenes referenciadas',
+            unatt_desc: 'Imágenes sin entrada padre (o con el padre borrado) pero que <strong>sí se usan</strong> en algún sitio, y dónde. Las huérfanas de verdad no salen aquí: están en «Imágenes huérfanas».<br>Puedes eliminarlas una a una o por selección: <strong>antes se hace una copia de seguridad del original, que encontrarás en «Archivos extra».</strong>',
+            unatt_scan: '🔍 Analizar referenciadas',
+            unatt_summary: '{n} referenciadas sin padre',
+            unatt_none: '✓ No se ha encontrado ninguna imagen referenciada sin padre.',
+            unatt_col_file: 'Archivo',
+            unatt_group_doubtful: 'Dudosas: solo coincide el número de ID en un campo de una entrada; si no la usas, puedes eliminarla ({n})',
+            unatt_weak_hint: 'solo coincide el número de ID: quizá no es un uso real',
+            unatt_no_attach: 'En uso',
+            unatt_group_fixable: 'Se pueden arreglar: adjúntalas a su entrada ({n})',
+            unatt_group_inuse: 'En uso fuera de entradas: no hay nada que hacer ({n})',
+            unatt_attach_selected: 'Adjuntar seleccionadas',
+            unatt_attach_one: 'Adjuntar',
+            unatt_attach_tip: 'Adjunta esta imagen a «{post}»: tendrá padre y ya no saldrá en esta lista.',
+            unatt_attached_ok: '✓ {n} imagen(es) adjuntada(s) a su entrada: ya no salen aquí.',
+            unatt_selected: '{n} seleccionadas',
+            unatt_delete_selected: 'Eliminar seleccionadas',
+            unatt_delete_one: 'Eliminar',
+            unatt_deleted_ok: '✓ {n} imagen(es) eliminada(s). Copia de seguridad hecha: la encontrarás en «Archivos extra».',
+            unatt_col_parent: 'Padre',
+            unatt_col_used_in: 'Dónde se usa',
+            unatt_parent_none: 'Sin padre',
+            unatt_parent_deleted: 'Padre borrado',
+            unatt_go_media: 'Abrir en la Biblioteca',
+            ur_content_of: 'Dentro del contenido de',
+            ur_featured_of: 'Imagen destacada de',
+            ur_field_of: 'Campo «{key}» de',
+            ur_template: 'Plantilla o patrón:',
+            ur_widget: 'Widget',
+            ur_widget_zone: 'zona',
+            ur_widget_inactive: 'inactivo',
+            ur_theme_mod: 'Personalizador',
+            ur_avatar: 'Avatar por defecto (Ajustes > Debate)',
+            ur_option: 'Opción',
+            ur_option_name: 'opción',
+            ur_theme_file: 'Archivo del tema:',
+            ur_custom_logo: 'Logo del sitio',
+            ur_site_icon: 'Icono del sitio',
+            ur_termmeta: 'Metadato de una categoría o etiqueta',
+            ur_nav_menu: 'Elemento de un menú',
+            ur_termmeta_id: 'Imagen de una categoría o término (ID)',
+            ur_usermeta_id: 'Imagen de un usuario (ID)',
+            ur_index_match: 'Coincidencia de nombre en el índice rápido (opciones o tema)',
+            ur_postmeta_url: 'Campo personalizado de',
+            ur_postmeta_id: 'Campo de',
+            ur_post_content: 'Dentro del contenido de',
+            ur_option_url: 'Opción, widget o Personalizador',
+            ur_option_id: 'Opción',
+            ur_option_filename: 'Opción',
+            ur_site_editor: 'Plantilla o patrón:',
+            orph_subtab_orphans: 'Imágenes huérfanas',
+            orph_subtab_unattached: 'Referenciadas',
+            orph_subtab_extra: 'Archivos extra',
             orphans_desc: 'Imágenes de la biblioteca que <strong>no están referenciadas</strong> en ninguna entrada, página, widget ni metadato.',
             orphan_limit_label: 'Imágenes a escanear por lote',
             all_slow: 'Todas (lento)',
@@ -525,8 +650,8 @@
             auto_desc: 'Al activar esta opción, <strong>cada imagen nueva que subas</strong> se optimizará automáticamente con la configuración elegida.',
             save_config: '💾 Guardar configuración',
             repair_paths: '🔧 Reparar imágenes con ruta rota',
-            mime_fix_title: 'Reparación de tipo mime',
-            mime_fix_desc: 'Detecta y repara adjuntos con extensión .webp pero mime type incorrecto (image/jpeg). Soluciona imágenes invisibles en la biblioteca de medios.',
+            mime_fix_title: 'Reparación de tipo MIME',
+            mime_fix_desc: 'Detecta y repara adjuntos con extensión .webp pero tipo MIME incorrecto (image/jpeg). Soluciona imágenes invisibles en la biblioteca de medios.',
             auto_stats_title: 'Estadísticas de auto-optimización',
             auto_history_title: 'Historial de auto-optimización',
             auto_history_hint: 'Las auto-optimizaciones se registran en la pestaña <strong>Historial</strong> (filtro 🤖 Auto-optimizadas).',
@@ -557,7 +682,19 @@
             retention_saved: '¡Guardado!',
             retention_invalid: 'Valor inválido. Usa 0 para desactivar, o entre 1 y 3650 días.',
             save_btn: '💾 Guardar',
-            url_title: '🔗 Detector de URLs Inconsistentes',
+            url_title: '🔗 Detector de URLs inconsistentes',
+            url_subtab_detector: 'Detector de URLs inconsistentes',
+            url_subtab_repairs: 'Reparar adjuntos',
+            repairs_title: '🔧 Reparación de adjuntos',
+            repairs_desc: 'Herramientas para arreglar adjuntos de la biblioteca de medios que han quedado con datos incorrectos tras optimizar o convertir imágenes.',
+            ghost_reason_missing: 'El archivo no existe en disco',
+            ghost_reason_empty: 'Archivo vacío (0 bytes)',
+            ghost_reason_xempty: 'Tipo MIME application/x-empty',
+            repair_n_errors: '{n} con errores.',
+            repair_unresolved: '{n} no tienen ningún archivo .webp/.avif en disco: usa «Escanear adjuntos fantasma».',
+            confirm_fix_urls: '¿Reparar {n} URL(s) en el contenido?',
+            url_subtab_backups: 'Copias de seguridad',
+            url_backups_empty: 'Todavía no hay copias de seguridad de eliminaciones.',
             url_desc: 'Detecta URLs de imágenes en entradas y páginas que <strong>apuntan a archivos que ya no existen</strong> en el servidor — normalmente por conversiones de JPG a WebP. Puede actualizarlas automáticamente en toda la base de datos.',
             url_obsolete: 'URL obsoleta → nueva correcta',
             scan_web: '🔍 Escanear toda la web',
@@ -642,6 +779,8 @@
             ,preset_small: 'Pequeño'
             ,rogue_reason_double_extension: 'Doble extensión (.jpg.webp)'
             ,rogue_reason_tso_backup: 'Backup TSO'
+            ,rogue_reason_tso_backup_active: 'Backup TSO activo (permite revertir)'
+            ,rogue_reason_tso_backup_deleted: 'Backup de una imagen borrada'
             ,rogue_reason_tso_temp: 'Temporal TSO'
             ,rogue_reason_tso_pdf_compressed: 'PDF comprimido TSO'
             ,rogue_reason_generic_backup: 'Backup genérico (.bk)'
@@ -781,7 +920,7 @@
             tab_pdf: 'PDFs',
             tab_auto: 'Auto-optimization',
             tab_history: 'History',
-            tab_urls: 'URLs',
+            tab_urls: 'Repairs',
             opt_config_title: 'Optimization Settings',
             format_label: 'Output format',
             fmt_webp: 'WebP (recommended)',
@@ -794,6 +933,59 @@
             bulk_optimize: 'Optimize selected',
             bulk_replace_label: 'Replace the original and update all links',
             orphans_title: 'Find Orphan Images',
+            unatt_title: 'Referenced images',
+            unatt_desc: 'Images with no parent post (or a deleted parent) that <strong>are used</strong> somewhere, and where. True orphans are not listed here: they are under “Orphan images”.<br>You can delete them one by one or by selection: <strong>a backup of the original is made first, and you will find it under “Extra files”.</strong>',
+            unatt_scan: '🔍 Analyze referenced',
+            unatt_summary: '{n} referenced, no parent',
+            unatt_none: '✓ No referenced image without a parent was found.',
+            unatt_col_file: 'File',
+            unatt_group_doubtful: 'Doubtful: only the ID number matches a field of a post; if you do not use it, you can delete it ({n})',
+            unatt_weak_hint: 'only the ID number matches: it may not be a real use',
+            unatt_no_attach: 'In use',
+            unatt_group_fixable: 'Can be fixed: attach them to their post ({n})',
+            unatt_group_inuse: 'Used outside posts: nothing to do ({n})',
+            unatt_attach_selected: 'Attach selected',
+            unatt_attach_one: 'Attach',
+            unatt_attach_tip: 'Attach this image to “{post}”: it will have a parent and no longer appear in this list.',
+            unatt_attached_ok: '✓ {n} image(s) attached to their post: they no longer appear here.',
+            unatt_selected: '{n} selected',
+            unatt_delete_selected: 'Delete selected',
+            unatt_delete_one: 'Delete',
+            unatt_deleted_ok: '✓ {n} image(s) deleted. Backup made: you will find it under “Extra files”.',
+            unatt_col_parent: 'Parent',
+            unatt_col_used_in: 'Used in',
+            unatt_parent_none: 'No parent',
+            unatt_parent_deleted: 'Parent deleted',
+            unatt_go_media: 'Open in Media Library',
+            ur_content_of: 'Inside the content of',
+            ur_featured_of: 'Featured image of',
+            ur_field_of: 'Field “{key}” of',
+            ur_template: 'Template or pattern:',
+            ur_widget: 'Widget',
+            ur_widget_zone: 'area',
+            ur_widget_inactive: 'inactive',
+            ur_theme_mod: 'Customizer',
+            ur_avatar: 'Default avatar (Settings > Discussion)',
+            ur_option: 'Option',
+            ur_option_name: 'option',
+            ur_theme_file: 'Theme file:',
+            ur_custom_logo: 'Site logo',
+            ur_site_icon: 'Site icon',
+            ur_termmeta: 'Category or tag metadata',
+            ur_nav_menu: 'Menu item',
+            ur_termmeta_id: 'Category or term image (ID)',
+            ur_usermeta_id: 'User image (ID)',
+            ur_index_match: 'File name match in the quick index (options or theme)',
+            ur_postmeta_url: 'Custom field of',
+            ur_postmeta_id: 'Field of',
+            ur_post_content: 'Inside the content of',
+            ur_option_url: 'Option, widget or Customizer',
+            ur_option_id: 'Option',
+            ur_option_filename: 'Option',
+            ur_site_editor: 'Template or pattern:',
+            orph_subtab_orphans: 'Orphan images',
+            orph_subtab_unattached: 'Referenced',
+            orph_subtab_extra: 'Extra files',
             orphans_desc: 'Images in the media library that are <strong>not referenced</strong> in any post, page, widget or metadata.',
             orphan_limit_label: 'Images to scan per batch',
             all_slow: 'All (slow)',
@@ -847,8 +1039,8 @@
             auto_desc: 'When enabled, <strong>every new uploaded image</strong> is optimized automatically with the selected settings.',
             save_config: '💾 Save settings',
             repair_paths: '🔧 Repair images with broken path',
-            mime_fix_title: 'Mime type repair',
-            mime_fix_desc: 'Detect and repair attachments with .webp extension but incorrect mime type (image/jpeg). Fixes invisible images in Media Library.',
+            mime_fix_title: 'MIME type repair',
+            mime_fix_desc: 'Detect and repair attachments with .webp extension but incorrect MIME type (image/jpeg). Fixes invisible images in Media Library.',
             auto_stats_title: 'Auto-optimization statistics',
             auto_history_title: 'Auto-optimization history',
             auto_history_hint: 'Auto-optimizations are logged under the <strong>History</strong> tab (filter 🤖 Auto-optimized).',
@@ -879,7 +1071,19 @@
             retention_saved: 'Saved!',
             retention_invalid: 'Invalid value. Use 0 to disable, or between 1 and 3650 days.',
             save_btn: '💾 Save',
-            url_title: '🔗 Inconsistent URL Detector',
+            url_title: '🔗 Inconsistent URL detector',
+            url_subtab_detector: 'Inconsistent URL detector',
+            url_subtab_repairs: 'Repair attachments',
+            repairs_title: '🔧 Attachment repairs',
+            repairs_desc: 'Tools to fix Media Library attachments left with wrong data after optimizing or converting images.',
+            ghost_reason_missing: 'File does not exist on disk',
+            ghost_reason_empty: 'Empty file (0 bytes)',
+            ghost_reason_xempty: 'MIME type application/x-empty',
+            repair_n_errors: '{n} with errors.',
+            repair_unresolved: '{n} have no .webp/.avif file on disk: use "Scan ghost attachments".',
+            confirm_fix_urls: 'Fix {n} URL(s) in the content?',
+            url_subtab_backups: 'Removal backups',
+            url_backups_empty: 'No removal backups yet.',
             url_desc: 'Detects image URLs in posts/pages that <strong>point to files that no longer exist</strong> on the server — typically after JPG to WebP conversions. It can update links automatically across the database.',
             url_obsolete: 'Obsolete URL → corrected URL',
             scan_web: '🔍 Scan entire website',
@@ -964,6 +1168,8 @@
             ,preset_small: 'Small'
             ,rogue_reason_double_extension: 'Double extension (.jpg.webp)'
             ,rogue_reason_tso_backup: 'TSO backup'
+            ,rogue_reason_tso_backup_active: 'Active TSO backup (allows revert)'
+            ,rogue_reason_tso_backup_deleted: 'Backup of a deleted image'
             ,rogue_reason_tso_temp: 'TSO temporary file'
             ,rogue_reason_tso_pdf_compressed: 'TSO compressed PDF'
             ,rogue_reason_generic_backup: 'Generic backup (.bk)'
@@ -1120,7 +1326,7 @@
                 revert_btn: 'Revertir al original',
                 del_backup: 'Eliminar copia de seguridad',
                 backup_available: 'Copia de seguridad disponible',
-                repair_paths: 'Reparar rutas rotas',
+                repair_paths: '🔧 Reparar rutas rotas',
                 loading_images: 'Cargando imágenes...',
                 loading_pdfs: 'Cargando PDFs...',
                 loading_data: 'Cargando...',
@@ -1298,6 +1504,7 @@
                 sizes_show_backups: 'Ver copias de seguridad',
                 sizes_backups_title: 'Copias de seguridad guardadas',
                 sizes_backups_desc: 'Se guardan dentro de uploads/tso-image-master/. La retención automática del Resumen no los elimina: bórralos manualmente cuando ya no los necesites.',
+                sizes_sk_notice: 'Las medidas marcadas "Swiss Knife" no están sin usar: están desactivadas para nuevas subidas en TSO Swiss Knife. Allí los archivos existentes van a una cuarentena de 30 días; aquí se eliminan con un zip de copia que no se purga automáticamente. Usa uno de los dos para cada medida.',
                 sizes_backups_loading: 'Cargando...',
                 sizes_no_backups: 'No se han encontrado copias de seguridad.',
                 sizes_backups_count_label: 'copia(s) de seguridad',
@@ -1317,7 +1524,7 @@
                 confirm_url_restore: '¿Deshacer esta eliminación y devolver el contenido a como estaba? Los contenidos editados después no se tocan.',
                 url_restore_done: 'elemento(s) restaurado(s)',
                 url_restore_skipped: 'omitido(s)',
-                url_backup_saved: 'Copia de seguridad guardada: puedes deshacerlo en "Copias de seguridad de eliminaciones".',
+                url_backup_saved: 'Copia de seguridad guardada: puedes deshacerlo en la subpestaña "Copias de seguridad".',
                 sizes_backups_delete: 'Eliminar',
                 confirm_delete_backup: 'Eliminar permanentemente la copia de seguridad "{name}"? Esta acción NO se puede deshacer.',
                 sizes_desc: 'Agrupa todos los ficheros generados por plugins/temas antiguos que ya no están registrados ni en uso actualmente en WordPress. Nunca toca el fichero original ni los demás tamaños.',
@@ -1351,9 +1558,17 @@
                 action_url_fix: 'URL reparadas',
                 action_url_remove: 'URL eliminadas',
                 action_url_restore: 'URL restauradas',
+                action_url_backup_delete: 'Copia eliminada',
+                action_repair_paths: 'Rutas reparadas',
+                action_repair_mime: 'MIME reparados',
+                action_ghost_delete: 'Fantasmas eliminados',
                 filter_url_fix: '🔗 URL reparadas',
                 filter_url_remove: '🧹 URL eliminadas',
                 filter_url_restore: '♻️ URL restauradas',
+                filter_url_backup_delete: '🗑️ Copias eliminadas',
+                filter_repair_paths: '🔧 Rutas reparadas',
+                filter_repair_mime: '🔧 MIME reparados',
+                filter_ghost_delete: '👻 Fantasmas eliminados',
                 hist_updated_in: 'Actualizado en',
                 hist_posts: 'entradas',
                 hist_revisions: 'revisiones',
@@ -1362,6 +1577,10 @@
                 hist_none_updated: 'ningún contenido usaba la URL antigua',
                 hist_empty_value: '(vacío)',
                 hist_url_count: 'URL',
+                hist_att_count: 'adjuntos',
+                hist_att_one: 'adjunto',
+                hist_url_one: 'URL',
+                hist_more: '+{n} más',
                 hist_skipped: 'omitidas',
                 hist_backup: 'Copia de seguridad',
                 hist_deleted_file: 'Archivo eliminado',
@@ -1395,7 +1614,7 @@
                 revert_btn: 'Revert to original',
                 del_backup: 'Delete backup',
                 backup_available: 'Backup available',
-                repair_paths: 'Repair broken paths',
+                repair_paths: '🔧 Repair broken paths',
                 loading_images: 'Loading images...',
                 loading_pdfs: 'Loading PDFs...',
                 loading_data: 'Loading...',
@@ -1475,7 +1694,7 @@
                 alt_unhyphen_btn: 'Remove hyphens and save',
                 alt_hyphen_text: 'Alt text: remove the hyphens for SEO',
                 url_fixed_ok: 'URLs fixed correctly.',
-                mime_fix_btn: '🔧 Fix incorrect mime types',
+                mime_fix_btn: '🔧 Fix incorrect MIME types',
                 mime_fixed: 'attachments repaired.',
                 mime_no_issues: 'No issues found. All attachments are correct.',
                 scan_ghosts: 'Scan ghost attachments',
@@ -1573,6 +1792,7 @@
                 sizes_show_backups: 'View backups',
                 sizes_backups_title: 'Saved backups',
                 sizes_backups_desc: 'Saved inside uploads/tso-image-master/. The automatic retention on the Overview tab does not remove them: delete them manually when you no longer need them.',
+                sizes_sk_notice: 'Sizes marked "Swiss Knife" are not unused: they are turned off for new uploads in TSO Swiss Knife. There, existing files go to a 30-day quarantine; here they are deleted with a backup zip that is never purged automatically. Use one of the two for each size.',
                 sizes_backups_loading: 'Loading...',
                 sizes_no_backups: 'No backup files found.',
                 sizes_backups_count_label: 'backup file(s)',
@@ -1592,7 +1812,7 @@
                 confirm_url_restore: 'Undo this removal and put the content back as it was? Content edited afterwards is left untouched.',
                 url_restore_done: 'item(s) restored',
                 url_restore_skipped: 'skipped',
-                url_backup_saved: 'Backup saved: you can undo it under "Removal backups".',
+                url_backup_saved: 'Backup saved: you can undo it in the "Removal backups" sub-tab.',
                 sizes_backups_delete: 'Delete',
                 confirm_delete_backup: 'Permanently delete backup "{name}"? This CANNOT be undone.',
                 sizes_desc: 'Groups every file generated by old plugins/themes that is no longer registered or in use in WordPress. Never touches the original file or the other sizes.',
@@ -1626,9 +1846,17 @@
                 action_url_fix: 'URLs fixed',
                 action_url_remove: 'URLs removed',
                 action_url_restore: 'URLs restored',
+                action_url_backup_delete: 'Backup deleted',
+                action_repair_paths: 'Paths repaired',
+                action_repair_mime: 'MIME types repaired',
+                action_ghost_delete: 'Ghosts deleted',
                 filter_url_fix: '🔗 URLs fixed',
                 filter_url_remove: '🧹 URLs removed',
                 filter_url_restore: '♻️ URLs restored',
+                filter_url_backup_delete: '🗑️ Backups deleted',
+                filter_repair_paths: '🔧 Paths repaired',
+                filter_repair_mime: '🔧 MIME types repaired',
+                filter_ghost_delete: '👻 Ghosts deleted',
                 hist_updated_in: 'Updated in',
                 hist_posts: 'posts',
                 hist_revisions: 'revisions',
@@ -1637,6 +1865,10 @@
                 hist_none_updated: 'no content used the old URL',
                 hist_empty_value: '(empty)',
                 hist_url_count: 'URLs',
+                hist_att_count: 'attachments',
+                hist_att_one: 'attachment',
+                hist_url_one: 'URL',
+                hist_more: '+{n} more',
                 hist_skipped: 'skipped',
                 hist_backup: 'Backup',
                 hist_deleted_file: 'File deleted',
@@ -1670,7 +1902,7 @@
                 revert_btn: 'Revertir a l\'original',
                 del_backup: 'Eliminar còpia de seguretat',
                 backup_available: 'Còpia de seguretat disponible',
-                repair_paths: 'Reparar paths trencats',
+                repair_paths: '🔧 Reparar paths trencats',
                 loading_images: 'Carregant imatges...',
                 loading_pdfs: 'Carregant PDFs...',
                 loading_data: 'Carregant...',
@@ -1895,6 +2127,7 @@
                 sizes_show_backups: 'Veure còpies de seguretat',
                 sizes_backups_title: 'Còpies de seguretat desades',
                 sizes_backups_desc: 'Es desen dins uploads/tso-image-master/. La retenció automàtica del Resum no els elimina: esborra\'ls manualment quan ja no els necessitis.',
+                sizes_sk_notice: 'Les mides marcades "Swiss Knife" no estan sense ús: estan desactivades per a noves pujades a TSO Swiss Knife. Allà els fitxers existents van a una quarantena de 30 dies; aquí s\'esborren amb un zip de còpia que no es purga automàticament. Fes servir un dels dos per a cada mida.',
                 sizes_backups_loading: 'Carregant...',
                 sizes_no_backups: 'No s\'han trobat còpies de seguretat.',
                 sizes_backups_count_label: 'còpia(es) de seguretat',
@@ -1914,7 +2147,7 @@
                 confirm_url_restore: 'Desfer aquesta eliminació i tornar el contingut a com estava? Els continguts editats després no es toquen.',
                 url_restore_done: 'element(s) restaurat(s)',
                 url_restore_skipped: 'omès(os)',
-                url_backup_saved: 'Còpia de seguretat desada: pots desfer-ho a "Còpies de seguretat d\'eliminacions".',
+                url_backup_saved: 'Còpia de seguretat desada: pots desfer-ho a la subpestanya "Còpies de seguretat".',
                 sizes_backups_delete: 'Eliminar',
                 confirm_delete_backup: 'Eliminar permanentment la còpia de seguretat "{name}"? Aquesta acció NO es pot desfer.',
                 sizes_desc: 'Agrupa tots els fitxers generats per antics plugins/temes que ja no estan registrats ni en ús actualment a WordPress. Mai toca el fitxer original ni les altres mides.',
@@ -1948,9 +2181,17 @@
                 action_url_fix: 'URL reparades',
                 action_url_remove: 'URL eliminades',
                 action_url_restore: 'URL restaurades',
+                action_url_backup_delete: 'Còpia eliminada',
+                action_repair_paths: 'Paths reparats',
+                action_repair_mime: 'MIME reparats',
+                action_ghost_delete: 'Fantasmes eliminats',
                 filter_url_fix: '🔗 URL reparades',
                 filter_url_remove: '🧹 URL eliminades',
                 filter_url_restore: '♻️ URL restaurades',
+                filter_url_backup_delete: '🗑️ Còpies eliminades',
+                filter_repair_paths: '🔧 Paths reparats',
+                filter_repair_mime: '🔧 MIME reparats',
+                filter_ghost_delete: '👻 Fantasmes eliminats',
                 hist_updated_in: 'Actualitzat a',
                 hist_posts: 'entrades',
                 hist_revisions: 'revisions',
@@ -1959,6 +2200,10 @@
                 hist_none_updated: 'cap contingut feia servir l\'URL antiga',
                 hist_empty_value: '(buit)',
                 hist_url_count: 'URL',
+                hist_att_count: 'adjunts',
+                hist_att_one: 'adjunt',
+                hist_url_one: 'URL',
+                hist_more: '+{n} més',
                 hist_skipped: 'omeses',
                 hist_backup: 'Còpia de seguretat',
                 hist_deleted_file: 'Fitxer eliminat',
@@ -2371,9 +2616,10 @@
     function refreshDynamicI18nBits() {
         // Buttons whose text is mutated after async actions.
         $('#imp-fix-orphan-meta').text(uiText('repair_paths', '🔧 Repair broken paths'));
-        $('#imp-fix-mime-mismatch').text(uiText('mime_fix_btn', '🔧 Fix incorrect mime types'));
+        $('#imp-fix-mime-mismatch').text(uiText('mime_fix_btn', '🔧 Fix incorrect MIME types'));
         $('#imp-scan-ghosts').text('🔍 ' + uiText('scan_ghosts', 'Scan ghost attachments'));
-        $('#imp-delete-ghosts').text('🗑 ' + uiText('delete_ghosts', 'Delete selected'));
+        $('#imp-delete-ghosts').find('span').text(uiText('delete_ghosts', 'Delete selected'));
+        if (typeof ghostReasonRefresh === 'function') ghostReasonRefresh();
         $('#imp-scan-rogue').text(uiText('scan_rogue', '🔍 Scan extra upload files'));
         $('#imp-save-rename').text(uiText('rename_btn', '✏️ Rename file'));
         $('#imp-alt-grid .imp-alt-manual-hint').text(uiText('dash_alt_manual_hint', 'Write alt text…'));
@@ -2391,6 +2637,9 @@
         refreshStoredResult('#imp-ghost-delete-result');
         if (typeof refreshUrlFixerUi === 'function') refreshUrlFixerUi();
         if (typeof window.tsoimmaRefreshRogueUi === 'function') window.tsoimmaRefreshRogueUi();
+        // "Referenced" results are built in JS at scan time: repaint them so
+        // the table, summary and buttons follow the UI language switch.
+        if ($('#imp-unattached-result').is(':visible')) renderUnattached();
         // Re-render PDF rows/badges in the selected UI language.
         if ($('#tab-pdf').is(':visible')) loadPdfs();
         // Re-render history tables/stats in current UI language.
@@ -2405,19 +2654,29 @@
         var kind = $el.data('kind');
         if (!kind) return;
         var count = parseInt($el.data('count') || 0, 10);
+        var nErr  = parseInt($el.data('errors') || 0, 10);
+        var errTxt = nErr ? uiText('repair_n_errors', '{n} with errors.').replace('{n}', nErr) : '';
 
         if (kind === 'repaired') {
-            $el.text('✓ ' + count + ' ' + uiText('repaired_msg', 'images repaired.'));
-        } else if (kind === 'mime_fixed') {
-            $el.text('✓ ' + count + ' ' + uiText('mime_fixed', 'attachments repaired.'));
-        } else if (kind === 'mime_no_issues') {
-            $el.text('✓ ' + uiText('mime_no_issues', 'No issues found. All attachments are correct.'));
+            var unresolved = parseInt($el.data('unresolved') || 0, 10);
+            $el.text('✓ ' + count + ' ' + uiText('repaired_msg', 'images repaired.') +
+                (unresolved ? ' ' + uiText('repair_unresolved', '{n} have no .webp/.avif file on disk: use "Scan ghost attachments".').replace('{n}', unresolved) : ''));
+        } else if (kind === 'mime_result') {
+            if (count > 0) {
+                $el.text('✓ ' + count + ' ' + uiText('mime_fixed', 'attachments repaired.') + (errTxt ? ' ⚠ ' + errTxt : ''));
+            } else if (nErr) {
+                $el.text('⚠ ' + errTxt);
+            } else {
+                $el.text('✓ ' + uiText('mime_no_issues', 'No issues found. All attachments are correct.'));
+            }
+        } else if (kind === 'ghost_remaining') {
+            $el.text(count + ' ' + uiText('remaining_label', 'remaining') + '.');
         } else if (kind === 'ghost_none') {
             $el.text('✓ ' + uiText('no_ghosts', 'No ghost attachments found.'));
         } else if (kind === 'ghost_found') {
             $el.text(count + ' ' + (count > 1 ? uiText('ghost_found_plural', 'ghost attachments found.') : uiText('ghost_found_singular', 'ghost attachment found.')));
         } else if (kind === 'ghost_deleted') {
-            $el.text('✓ ' + count + ' ' + uiText('ghost_deleted_ok', 'deleted successfully.'));
+            $el.text('✓ ' + count + ' ' + uiText('ghost_deleted_ok', 'deleted successfully.') + (errTxt ? ' ⚠ ' + errTxt : ''));
         }
     }
 
@@ -4107,23 +4366,309 @@
             var ids = Array.from(state.orphanSelected);
             if (!ids.length) { alert(L.no_selection || 'Select at least one image.'); return; }
             if (!confirm(L.confirm_delete || 'Delete selected images? This cannot be undone.')) return;
-            ajax('tsoimma_delete_images', { ids: ids }, function(data) {
-                var msg = '✓ ' + data.deleted.length + ' ' + (L.images_deleted || 'images deleted.');
-                if (data.errors && data.errors.length) {
-                    msg += '\n' + (L.errors_label || 'Errors:') + '\n' + data.errors.map(function(e) { return 'ID ' + e.id + ': ' + e.error; }).join('\n');
+            var allDeleted = [], allErrors = [], pos = 0, BATCH = 100;
+            var $btn = $(this).prop('disabled', true);
+            function finish() {
+                $btn.prop('disabled', false);
+                var msg = '✓ ' + allDeleted.length + ' ' + (L.images_deleted || 'images deleted.');
+                if (allErrors.length) {
+                    msg += '\n' + (L.errors_label || 'Errors:') + '\n' + allErrors.slice(0, 20).map(function(e) { return 'ID ' + e.id + ': ' + e.error; }).join('\n');
+                    if (allErrors.length > 20) { msg += '\n… (' + allErrors.length + ')'; }
                 }
                 alert(msg);
-                // Only drop the ones the backend actually reports as deleted
-                // — wp_delete_attachment() can fail per-ID, and blindly
-                // removing every attempted ID would hide a still-existing
-                // orphan from the admin as if it had been cleaned up.
-                var deletedIds = data.deleted.map(function(d) { return d.id; });
+                // Only drop the ones the backend actually reports as deleted.
+                var deletedIds = allDeleted.map(function(d) { return d.id; });
                 state.orphans.found = state.orphans.found.filter(function(o) { return deletedIds.indexOf(o.id) === -1; });
                 state.orphanSelected.clear();
                 renderOrphansGrid();
                 markDashboardDirty();
-            }, function(err) { alert((L.error_prefix || 'Error: ') + err); });
+            }
+            function step() {
+                if (pos >= ids.length) { finish(); return; }
+                var chunk = ids.slice(pos, pos + BATCH);
+                pos += BATCH;
+                ajax('tsoimma_delete_images', { ids: chunk }, function(data) {
+                    allDeleted = allDeleted.concat(data.deleted || []);
+                    allErrors = allErrors.concat(data.errors || []);
+                    step();
+                }, function(err) {
+                    allErrors.push({ id: '-', error: String(err) });
+                    finish();
+                });
+            }
+            step();
         });
+    }
+
+    // ================================================================
+    // ORPHANS TAB: "Referenced" sub-tab (images without a parent post that are still used)
+    // Lists images with no parent post that ARE used somewhere, and where.
+    // ================================================================
+    function initUnattachedTab() {
+        $(document).on('click', '.imp-subtab', function() {
+            var target = $(this).data('subtab');
+            var $tab   = $(this).closest('.imp-tab-content');
+            // Each tab has its own sub-tabs: only touch the ones of the tab that was clicked.
+            $tab.find('.imp-subtab').removeClass('active');
+            $(this).addClass('active');
+            if ($tab.is('#tab-urlfixer')) {
+                $('#imp-urls-detector-pane').toggle(target === 'urls-detector');
+                $('#imp-urls-repairs-pane').toggle(target === 'urls-repairs');
+                $('#imp-urls-backups-pane').toggle(target === 'urls-backups');
+                return;
+            }
+            $('#imp-orphans-pane').toggle(target === 'orphans');
+            $('#imp-unattached-pane').toggle(target === 'unattached');
+            $('#imp-extra-pane').toggle(target === 'extra');
+            $tab.find('.imp-subpanel').removeClass('is-active').filter('[data-subpanel="' + target + '"]').addClass('is-active');
+        });
+        $('#imp-scan-unattached').on('click', function() {
+            scanUnattached(0, []);
+        });
+        $('#imp-unatt-select-all').on('click', function() {
+            state.unattached.items.filter(function(i) { return i.state === 'fix' || i.state === 'doubtful'; }).forEach(function(i) { state.unattachedSelected.add(i.id); });
+            $('#imp-unattached-table-wrap .imp-unatt-cb').prop('checked', true);
+            updateUnattachedSelection();
+        });
+        $('#imp-unatt-deselect').on('click', function() {
+            state.unattachedSelected.clear();
+            $('#imp-unattached-table-wrap .imp-unatt-cb').prop('checked', false);
+            updateUnattachedSelection();
+        });
+        $(document).on('change', '.imp-unatt-cb', function() {
+            var id = parseInt($(this).val(), 10);
+            if ($(this).is(':checked')) { state.unattachedSelected.add(id); } else { state.unattachedSelected.delete(id); }
+            updateUnattachedSelection();
+        });
+        $('#imp-unatt-delete-selected').on('click', function() {
+            var ids = selectedUnattachedByState('doubtful');
+            if (!ids.length) { alert(L.no_selection || 'Select at least one image.'); return; }
+            deleteUnattached(ids);
+        });
+        $(document).on('click', '.imp-unatt-delete-one', function() {
+            deleteUnattached([parseInt($(this).data('id'), 10)]);
+        });
+        $('#imp-unatt-attach-selected').on('click', function() {
+            var ids = selectedUnattachedByState('fix');
+            if (!ids.length) { alert(L.no_selection || 'Select at least one image.'); return; }
+            attachUnattached(ids);
+        });
+        $(document).on('click', '.imp-unatt-attach-one', function() {
+            attachUnattached([parseInt($(this).data('id'), 10)]);
+        });
+    }
+
+    // Gives each image a parent: attaches it to the post where it is used
+    // (same as "Attach" in the Media Library), so it stops being listed here.
+    function attachUnattached(ids) {
+        ajax('tsoimma_attach_unattached', { ids: ids }, function(data) {
+            var attached    = data.attached || [];
+            var attachedIds = attached.map(function(a) { return a.id; });
+            var out = '';
+            if (attached.length) {
+                out = uiText('unatt_attached_ok', '✓ {n} image(s) attached.').replace('{n}', attached.length) + '\n' +
+                    attached.map(function(a) { return 'ID ' + a.id + ' → ' + (a.post_title || ('#' + a.post_id)); }).join('\n');
+            }
+            if (data.errors && data.errors.length) {
+                out += (out ? '\n\n' : '') + (L.errors_label || 'Errors:') + '\n' +
+                    data.errors.map(function(e) { return 'ID ' + e.id + ': ' + e.error; }).join('\n');
+            }
+            // Only drop the ones the server really attached.
+            state.unattached.items = state.unattached.items.filter(function(i) { return attachedIds.indexOf(i.id) === -1; });
+            attachedIds.forEach(function(id) { state.unattachedSelected.delete(id); });
+            renderUnattached();
+            if (out) { alert(out); }
+        }, function(err) { alert((L.error_prefix || 'Error: ') + err); });
+    }
+
+    // Selected ids whose row is in the given state: "fix" rows can only be
+    // attached, "doubtful" rows can only be deleted.
+    function selectedUnattachedByState(stateName) {
+        return state.unattached.items
+            .filter(function(i) { return state.unattachedSelected.has(i.id) && i.state === stateName; })
+            .map(function(i) { return i.id; });
+    }
+
+    function updateUnattachedSelection() {
+        var n = state.unattachedSelected.size;
+        $('#imp-unatt-selected').text(uiText('unatt_selected', '{n} selected').replace('{n}', n));
+        $('#imp-unatt-delete-selected').prop('disabled', selectedUnattachedByState('doubtful').length === 0);
+        $('#imp-unatt-attach-selected').prop('disabled', selectedUnattachedByState('fix').length === 0);
+    }
+
+    // Deletes unattached images; the server backs up each original first
+    // (uploads/tso-image-master/…_tso_im_backup.*, found under "Extra files").
+    function deleteUnattached(ids) {
+        ajax('tsoimma_delete_unattached', { ids: ids }, function(data) {
+            var deleted    = data.deleted || [];
+            var deletedIds = deleted.map(function(d) { return d.id; });
+            var out = '';
+            if (deleted.length) {
+                out = uiText('unatt_deleted_ok', '✓ {n} image(s) deleted.').replace('{n}', deleted.length);
+            }
+            if (data.errors && data.errors.length) {
+                out += (out ? '\n\n' : '') + (L.errors_label || 'Errors:') + '\n' +
+                    data.errors.map(function(e) { return 'ID ' + e.id + ': ' + e.error; }).join('\n');
+            }
+            // Only drop the ones the server really deleted.
+            state.unattached.items = state.unattached.items.filter(function(i) { return deletedIds.indexOf(i.id) === -1; });
+            deletedIds.forEach(function(id) { state.unattachedSelected.delete(id); });
+            renderUnattached();
+            markDashboardDirty();
+            if (out) { alert(out); }
+        }, function(err) { alert((L.error_prefix || 'Error: ') + err); });
+    }
+
+    function scanUnattached(offset, accumulated) {
+        var batch = 100;
+        $('#imp-unattached-loading').show();
+        $('#imp-unattached-result').hide();
+        ajax('tsoimma_find_unattached', { limit: batch, offset: offset }, function(data) {
+            accumulated = accumulated.concat(data.items || []);
+            var scanned = offset + (data.scanned || 0);
+            $('#imp-unattached-progress-text').text(uiText('scanning_msg', 'Scanning') + ' ' + scanned + '/' + data.total + '...');
+            if ((data.scanned || 0) === batch && scanned < data.total) {
+                setTimeout(function() { scanUnattached(scanned, accumulated); }, 100);
+                return;
+            }
+            $('#imp-unattached-loading').hide();
+            state.unattached.items = accumulated;
+            state.unattachedSelected.clear();
+            renderUnattached();
+            $('#imp-unattached-result').show();
+        }, function(err) {
+            $('#imp-unattached-loading').hide();
+            alert(uiText('error_prefix', 'Error: ') + err);
+        });
+    }
+
+    // Where the image is used, as concrete as the server could determine.
+    function unattachedReasonHtml(item) {
+        var kind = String(item.reason || '').split(':')[0];
+        var rp   = item.ref_post;
+        var ro   = item.ref_option;
+        var link = function(url, text) {
+            return url ? '<a href="' + escHtml(url) + '" target="_blank" rel="noopener">' + escHtml(text) + '</a>' : escHtml(text);
+        };
+        var muted = function(text) { return ' <span class="imp-text-muted">(' + escHtml(text) + ')</span>'; };
+
+        if (rp) {
+            var title = rp.title || ('#' + rp.id);
+            var label;
+            if (kind === 'postmeta_id' && rp.meta_field === '_thumbnail_id') {
+                label = uiText('ur_featured_of', 'Featured image of');
+            } else if ((kind === 'postmeta_id' || kind === 'postmeta_url') && rp.meta_field) {
+                label = uiText('ur_field_of', 'Field "{key}" of').replace('{key}', rp.meta_field);
+            } else if (kind === 'site_editor') {
+                label = uiText('ur_template', 'Template or pattern:');
+            } else {
+                label = uiText('ur_content_of', 'Inside the content of');
+            }
+            return escHtml(label) + ' ' + link(rp.edit_url || rp.view_url, title) +
+                muted((rp.type || '') + ' #' + parseInt(rp.id, 10)) +
+                (item.state === 'doubtful' ? ' <span class="imp-text-muted">⚠ ' + escHtml(uiText('unatt_weak_hint', 'only the ID number matches: it may not be a real use')) + '</span>' : '');
+        }
+
+        if (ro) {
+            var nameNote = muted(uiText('ur_option_name', 'option') + ' ' + ro.name);
+            if (ro.kind === 'widget') {
+                var w = uiText('ur_widget', 'Widget') + (ro.title ? ' «' + ro.title + '»' : '');
+                if (ro.zone) {
+                    w += ' — ' + uiText('ur_widget_zone', 'area') + ': ' + ro.zone;
+                    if (ro.inactive) { w += ' (' + uiText('ur_widget_inactive', 'inactive') + ')'; }
+                }
+                return link(ro.url, w) + nameNote;
+            }
+            if (ro.kind === 'theme_mod') {
+                return link(ro.url, uiText('ur_theme_mod', 'Customizer') + (ro.mod ? ': ' + ro.mod : '')) + nameNote;
+            }
+            if (ro.kind === 'avatar') {
+                return link(ro.url, uiText('ur_avatar', 'Default avatar')) + nameNote;
+            }
+            return escHtml(uiText('ur_option', 'Option')) + ' <code>' + escHtml(ro.name) + '</code>';
+        }
+
+        if (kind === 'theme_file' && item.ref_theme_file) {
+            return escHtml(uiText('ur_theme_file', 'Theme file:')) + ' <code>' + escHtml(item.ref_theme_file) + '</code>';
+        }
+        return escHtml(uiText('ur_' + kind, kind));
+    }
+
+    function renderUnattached() {
+        var rows = state.unattached.items;
+        $('#imp-unattached-summary').text(
+            uiText('unatt_summary', '{n} referenced, no parent').replace('{n}', rows.length)
+        );
+        updateUnattachedSelection();
+
+        var wrap = $('#imp-unattached-table-wrap');
+        if (!rows.length) {
+            wrap.html('<div class="imp-loading" style="color:var(--imp-success)">' + escHtml(uiText('unatt_none', 'No referenced image without a parent was found.')) + '</div>');
+            return;
+        }
+
+        var html = '<div class="imp-history-table-container"><table class="imp-history-table"><thead><tr>' +
+            '<th></th><th></th><th>ID</th>' +
+            '<th>' + escHtml(uiText('unatt_col_file', 'File')) + '</th>' +
+            '<th>' + escHtml(uiText('unatt_col_parent', 'Parent')) + '</th>' +
+            '<th>' + escHtml(uiText('unatt_col_used_in', 'Used in')) + '</th>' +
+            '<th></th>' +
+            '</tr></thead><tbody>';
+        var fixable   = rows.filter(function(i) { return i.state === 'fix'; });
+        var doubtful  = rows.filter(function(i) { return i.state === 'doubtful'; });
+        var inUse     = rows.filter(function(i) { return i.state !== 'fix' && i.state !== 'doubtful'; });
+        var groupRow = function(key, fallback, n) {
+            return '<tr class="imp-unatt-group"><td colspan="7">' + escHtml(uiText(key, fallback).replace('{n}', n)) + '</td></tr>';
+        };
+        var rowHtml = function(item) {
+            var parentTxt = item.parent_state === 'deleted'
+                ? uiText('unatt_parent_deleted', 'Parent deleted')
+                : uiText('unatt_parent_none', 'No parent');
+            var id = parseInt(item.id, 10);
+            var idCell = item.edit_url
+                ? '<a href="' + escHtml(item.edit_url) + '" target="_blank" rel="noopener" title="' + escHtml(uiText('unatt_go_media', 'Open in Media Library')) + '">' + id + '</a>'
+                : String(id);
+
+            // fix      : really used by a post -> only "Attach" (never delete).
+            // doubtful : only the ID number matches a post field -> only "Delete".
+            // in use   : settings, widgets, logo, avatars... -> just an "in use" note.
+            var checkCell = '', actionCell;
+            var checkbox = '<input type="checkbox" class="imp-unatt-cb" value="' + id + '"' + (state.unattachedSelected.has(item.id) ? ' checked' : '') + '>';
+            if (item.state === 'fix' && item.attach_to) {
+                var tip = uiText('unatt_attach_tip', 'Attach this image to "{post}"').replace('{post}', item.attach_to.title || ('#' + item.attach_to.id));
+                checkCell = checkbox;
+                actionCell = '<button type="button" class="imp-btn imp-btn-primary imp-btn-sm imp-unatt-attach-one" data-id="' + id + '" title="' + escHtml(tip) + '">🔗 ' +
+                    escHtml(uiText('unatt_attach_one', 'Attach')) + '</button>';
+            } else if (item.state === 'doubtful') {
+                checkCell = checkbox;
+                actionCell = '<button type="button" class="imp-btn imp-btn-danger imp-btn-sm imp-unatt-delete-one" data-id="' + id + '">🗑️ ' + escHtml(uiText('unatt_delete_one', 'Delete')) + '</button>';
+            } else {
+                actionCell = '<span class="imp-text-muted" style="font-size:12px">✓ ' + escHtml(uiText('unatt_no_attach', 'In use')) + '</span>';
+            }
+            return '<tr>' +
+                '<td>' + checkCell + '</td>' +
+                '<td>' + (item.thumb ? '<img class="imp-thumb-sm imp-unatt-thumb" loading="lazy" src="' + escHtml(cacheBustUrl(item.thumb, item.id)) + '" data-full-url="' + escHtml(item.url || item.thumb) + '" alt="">' : '') + '</td>' +
+                '<td>' + idCell + '</td>' +
+                '<td style="font-family:var(--imp-mono);font-size:12px">' + escHtml(item.filename) + '</td>' +
+                '<td>' + escHtml(parentTxt) + '</td>' +
+                '<td class="imp-unatt-ref">' + unattachedReasonHtml(item) + '</td>' +
+                '<td style="white-space:nowrap">' + actionCell + '</td>' +
+                '</tr>';
+        };
+        if (doubtful.length) {
+            html += groupRow('unatt_group_doubtful', 'Doubtful: only the ID number matches a field of a post; delete it if you do not use it ({n})', doubtful.length);
+            doubtful.forEach(function(item) { html += rowHtml(item); });
+        }
+        if (fixable.length) {
+            html += groupRow('unatt_group_fixable', 'Can be fixed: attach them to their post ({n})', fixable.length);
+            fixable.forEach(function(item) { html += rowHtml(item); });
+        }
+        if (inUse.length) {
+            html += groupRow('unatt_group_inuse', 'Used outside posts: nothing to do ({n})', inUse.length);
+            inUse.forEach(function(item) { html += rowHtml(item); });
+        }
+        html += '</tbody></table></div>';
+        wrap.html(html);
     }
 
     function scanOrphans(limit, offset, accumulated) {
@@ -4306,7 +4851,7 @@
                 var reasonLabel = uiText('rogue_reason_' + (f.reason_code || ''), f.reason || '');
                 var badge = f.priority === 'high'
                     ? '<span class="imp-rogue-badge imp-rogue-badge-high">! ' + escHtml(reasonLabel) + '</span>'
-                    : (f.reason_code === 'tso_backup' || f.reason_code === 'generic_backup' || f.reason_code === 'tso_pdf_compressed'
+                    : (f.reason_code === 'tso_backup' || f.reason_code === 'tso_backup_active' || f.reason_code === 'tso_backup_deleted' || f.reason_code === 'generic_backup' || f.reason_code === 'tso_pdf_compressed'
                         ? '<span class="imp-rogue-badge imp-rogue-badge-info">💾 ' + escHtml(reasonLabel) + '</span>'
                         : '<span class="imp-rogue-badge imp-rogue-badge-low">' + escHtml(reasonLabel) + '</span>');
                 html += '<div class="imp-rogue-card' + sel + '" data-path="' + escHtml(f.path) + '">' +
@@ -4344,6 +4889,7 @@
     // ================================================================
     function initSizesTab() {
         var sizesFound      = [];
+        var swissKnifeSizes = [];
         var lastTotalImages = 0;
         var detailSizeName  = '';
         var detailItems     = [];
@@ -4357,18 +4903,49 @@
             btn.prop('disabled', true);
             $('#imp-sizes-result, #imp-sizes-detail').hide();
             $('#imp-sizes-loading').show();
-            ajax('tsoimma_scan_sizes', {}, function(data) {
-                btn.prop('disabled', false);
-                $('#imp-sizes-loading').hide();
-                sizesFound      = data.sizes || [];
-                lastTotalImages = data.total_images || 0;
-                renderSizesTable();
-                $('#imp-sizes-result').show();
-            }, function(err) {
-                btn.prop('disabled', false);
-                $('#imp-sizes-loading').hide();
-                alert((L.error_prefix || 'Error: ') + err);
-            });
+            // Walk the library in short slices (one request per slice) so a
+            // big media library never hits the server time limit.
+            var acc = {};
+            var scanned = 0;
+            var registeredNames = [];
+            var loadingMsg = $('#imp-sizes-loading p');
+            var baseMsg = loadingMsg.text();
+            function scanStep(offset) {
+                ajax('tsoimma_scan_sizes', { offset: offset, limit: 300 }, function(data) {
+                    (data.rows || []).forEach(function(row) {
+                        if (acc[row.name]) {
+                            acc[row.name].count += row.count;
+                            acc[row.name].bytes += row.bytes;
+                        } else {
+                            acc[row.name] = row;
+                        }
+                    });
+                    scanned += (data.count || 0);
+                    registeredNames = data.registered_names || registeredNames;
+                    swissKnifeSizes = data.swiss_knife_sizes || swissKnifeSizes;
+                    if (!data.done) {
+                        loadingMsg.text(baseMsg + ' ' + scanned);
+                        scanStep(data.next_offset);
+                        return;
+                    }
+                    loadingMsg.text(baseMsg);
+                    btn.prop('disabled', false);
+                    $('#imp-sizes-loading').hide();
+                    sizesFound = Object.keys(acc).map(function(k) {
+                        acc[k].bytes_h = formatBytes(acc[k].bytes);
+                        return acc[k];
+                    }).sort(function(a, b) { return b.bytes - a.bytes; });
+                    lastTotalImages = scanned;
+                    renderSizesTable();
+                    $('#imp-sizes-result').show();
+                }, function(err) {
+                    loadingMsg.text(baseMsg);
+                    btn.prop('disabled', false);
+                    $('#imp-sizes-loading').hide();
+                    alert((L.error_prefix || 'Error: ') + err);
+                });
+            }
+            scanStep(0);
         });
 
         // Toggle + (lazy) load the "where are my backups" panel — the
@@ -4524,9 +5101,12 @@
                 '<th>' + uiText('sizes_col_space', 'Space') + '</th>' +
                 '<th></th>' +
                 '</tr></thead><tbody>';
+            var skCount = 0;
             deletable.forEach(function(row) {
+                var fromSk = swissKnifeSizes.indexOf(row.name) !== -1;
+                if (fromSk) { skCount++; }
                 html += '<tr>' +
-                    '<td style="font-family:var(--imp-mono);font-size:12px">' + escHtml(row.name) + '</td>' +
+                    '<td style="font-family:var(--imp-mono);font-size:12px">' + escHtml(row.name) + (fromSk ? ' <span class="imp-badge-orphan" style="background:var(--imp-accent2)">Swiss Knife</span>' : '') + '</td>' +
                     '<td>' + (row.width || row.height ? (row.width + '×' + row.height) : '—') + '</td>' +
                     '<td>' + row.count + '</td>' +
                     '<td>' + escHtml(row.bytes_h) + '</td>' +
@@ -4537,6 +5117,11 @@
                     '</tr>';
             });
             html += '</tbody></table></div>';
+            if (skCount) {
+                html = '<div class="imp-panel-desc" style="margin-bottom:12px;padding:10px 12px;border-left:3px solid var(--imp-warn);">⚠ ' +
+                    escHtml(uiText('sizes_sk_notice', 'Sizes marked "Swiss Knife" are not unused: they are turned off for new uploads in TSO Swiss Knife. There, existing files go to a 30-day quarantine; here they are deleted with a backup zip that is never purged automatically. Use one of the two for each size.')) +
+                    '</div>' + html;
+            }
             wrap.html(html);
         }
 
@@ -4562,9 +5147,12 @@
             var agg = { deleted: [], errors: [], bytes_freed: 0, zips: [], backup_error: '', fatal: '' };
             var pos = 0;
             function step() {
+                // "fresh" makes the server rebuild its list on the first
+                // batch; "final" tells it this is the last batch so the
+                // heavy site-wide cache purge runs only once.
                 var payload = ids
-                    ? { size: sizeName, ids: ids.slice(pos, pos + SIZE_BATCH) }
-                    : { size: sizeName, all: 1, limit: SIZE_BATCH };
+                    ? { size: sizeName, ids: ids.slice(pos, pos + SIZE_BATCH), final: (pos + SIZE_BATCH >= ids.length) ? 1 : 0 }
+                    : { size: sizeName, all: 1, limit: SIZE_BATCH, fresh: (pos === 0) ? 1 : 0 };
                 ajax('tsoimma_delete_size_files', payload, function(data) {
                     agg.deleted     = agg.deleted.concat(data.deleted || []);
                     agg.errors      = agg.errors.concat(data.errors || []);
@@ -5550,12 +6138,13 @@
         $('#imp-fix-orphan-meta').on('click', function() {
             var $btn = $(this);
             var $res = $('#imp-fix-orphan-result');
-            $btn.prop('disabled', true).text(L.btn_repairing || '⏳ Repairing...');
+            $btn.prop('disabled', true).text('⏳ ' + uiText('btn_repairing', 'Repairing...'));
             $res.hide();
             ajax('tsoimma_fix_orphan_meta', {}, function(data) {
                 $btn.prop('disabled', false).text(uiText('repair_paths', '🔧 Repair broken paths'));
-                $res.data('kind', 'repaired').data('count', (data.fixed || 0));
-                $res.show().css('color', 'var(--imp-success)').html('✓ ' + (data.fixed || 0) + ' ' + uiText('repaired_msg', 'images repaired.'));
+                $res.data('kind', 'repaired').data('count', (data.fixed || 0)).data('unresolved', (data.unresolved || 0));
+                $res.show().css('color', 'var(--imp-success)');
+                refreshStoredResult('#imp-fix-orphan-result');
             }, function(err) {
                 $btn.prop('disabled', false).text(uiText('repair_paths', '🔧 Repair broken paths'));
                 $res.removeData('kind').removeData('count');
@@ -5564,6 +6153,11 @@
         });
         $('#imp-auto-quality').on('input', function() { $('#imp-auto-quality-val').text($(this).val()); });
         $('#imp-auto-enabled').on('change', function() { updateAutoToggleUI($(this).is(':checked')); });
+        $(document).on('change input', '#imp-auto-enabled, #imp-auto-format, #imp-auto-quality, #imp-auto-skip-kb, #imp-auto-fill-alt, .imp-auto-src-format', function() {
+            if (!autoAutosaveReady) { return; }
+            clearTimeout(autoAutosaveTimer);
+            autoAutosaveTimer = setTimeout(function() { $('#imp-save-auto').trigger('click'); }, 700);
+        });
         $('#imp-save-auto').on('click', function() {
             var selectedSourceFormats = $('.imp-auto-src-format:checked').map(function() { return $(this).val(); }).get();
             ajax('tsoimma_save_auto_settings', {
@@ -5583,17 +6177,18 @@
         $('#imp-fix-mime-mismatch').on('click', function() {
             var $btn = $(this);
             var $res = $('#imp-fix-mime-result');
-            $btn.prop('disabled', true).text(L.btn_repairing || '⏳ Repairing...');
+            $btn.prop('disabled', true).text('⏳ ' + uiText('btn_repairing', 'Repairing...'));
             $res.hide();
             ajax('tsoimma_fix_mime_mismatch', {}, function(data) {
-                $btn.prop('disabled', false).text(uiText('mime_fix_btn', '🔧 Fix incorrect mime types'));
-                var mimeMsg = data.fixed > 0
-                    ? '✓ ' + data.fixed + ' ' + uiText('mime_fixed', 'attachments repaired.')
-                    : '✓ ' + uiText('mime_no_issues', 'No issues found. All attachments are correct.');
-                $res.data('kind', data.fixed > 0 ? 'mime_fixed' : 'mime_no_issues').data('count', (data.fixed || 0));
-                $res.show().css('color', 'var(--imp-success)').text(mimeMsg);
+                $btn.prop('disabled', false).text(uiText('mime_fix_btn', '🔧 Fix incorrect MIME types'));
+                var nErr = (data.errors || []).length;
+                $res.data('kind', 'mime_result').data('count', (data.fixed || 0)).data('errors', nErr);
+                // Details of what could not be repaired go in the tooltip (server text is translated).
+                $res.attr('title', (data.errors || []).slice(0, 20).join('\n'));
+                $res.show().css('color', nErr ? 'var(--imp-warn)' : 'var(--imp-success)');
+                refreshStoredResult('#imp-fix-mime-result');
             }, function(err) {
-                $btn.prop('disabled', false).text(uiText('mime_fix_btn', '🔧 Fix incorrect mime types'));
+                $btn.prop('disabled', false).text(uiText('mime_fix_btn', '🔧 Fix incorrect MIME types'));
                 $res.removeData('kind').removeData('count');
                 $res.show().css('color', 'var(--imp-danger)').text((L.error_prefix || 'Error: ') + err);
             });
@@ -5605,7 +6200,7 @@
         $('#imp-scan-ghosts').on('click', function() {
             var $btn = $(this);
             var $res = $('#imp-ghost-scan-result');
-            $btn.prop('disabled', true).text(L.btn_scanning || '⏳ Scanning...');
+            $btn.prop('disabled', true).text('⏳ ' + uiText('btn_scanning', 'Scanning...'));
             $res.hide();
             $('#imp-ghost-list').hide().empty();
             $('#imp-ghost-actions').hide();
@@ -5615,7 +6210,7 @@
                 $btn.prop('disabled', false).text('🔍 ' + uiText('scan_ghosts', 'Scan ghost attachments'));
                 if (!data.total) {
                     $res.data('kind', 'ghost_none').data('count', 0);
-                    $res.show().css('color', 'var(--imp-success)').html('✓ ' + uiText('no_ghosts', 'No ghost attachments found.'));
+                    $res.show().css('color', 'var(--imp-success)').text('✓ ' + uiText('no_ghosts', 'No ghost attachments found.'));
                     return;
                 }
                 $res.data('kind', 'ghost_found').data('count', data.total);
@@ -5630,14 +6225,26 @@
             });
         });
 
+        function ghostReasonText(code, fallback) {
+            var keys = { missing: 'ghost_reason_missing', empty: 'ghost_reason_empty', xempty: 'ghost_reason_xempty' };
+            return keys[code] ? uiText(keys[code], fallback || '') : (fallback || '');
+        }
+        ghostReasonRefresh = function() {
+            $('#imp-ghost-list .imp-ghost-row').each(function() {
+                var code = $(this).data('reason');
+                $(this).find('.imp-ghost-reason').text(ghostReasonText(code, $(this).find('.imp-ghost-reason').text()));
+            });
+        };
+
         function renderGhostList(ghosts) {
             var $list = $('#imp-ghost-list');
             $list.empty();
             ghosts.forEach(function(g) {
-                var $row = $('<div class="imp-ghost-row" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--imp-border);">' +
-                    '<input type="checkbox" class="imp-ghost-check" data-id="' + g.id + '" style="cursor:pointer;">' +
-                    '<span style="font-family:var(--imp-mono);font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escHtml(g.meta_path) + '">' + escHtml(g.filename) + '</span>' +
-                    '<span style="font-size:11px;color:var(--imp-danger);flex-shrink:0;">' + escHtml(g.reason) + '</span>' +
+                var reason = ghostReasonText(g.reason_code, g.reason);
+                var $row = $('<div class="imp-ghost-row" data-reason="' + escHtml(g.reason_code || '') + '">' +
+                    '<input type="checkbox" class="imp-ghost-check" data-id="' + parseInt(g.id, 10) + '">' +
+                    '<span class="imp-ghost-name" title="' + escHtml(g.meta_path) + '">' + escHtml(g.filename) + '</span>' +
+                    '<span class="imp-ghost-reason">' + escHtml(reason) + '</span>' +
                     '</div>');
                 $list.append($row);
             });
@@ -5649,6 +6256,12 @@
                 else ghostSelected.delete(id);
                 updateGhostToolbar();
             });
+            updateGhostToolbar();
+        }
+
+        function setGhostDeleteLabel($btn) {
+            $btn.prop('disabled', false).html('🗑️ <span data-i18n="delete_ghosts"></span>')
+                .find('span').text(uiText('delete_ghosts', 'Delete selected'));
             updateGhostToolbar();
         }
 
@@ -5671,17 +6284,18 @@
 
         $('#imp-delete-ghosts').on('click', function() {
             if (!ghostSelected.size) return;
-            if (!confirm((L.confirm_delete_ghosts || 'Delete') + ' ' + ghostSelected.size + ' ' + (L.ghost_confirm_suffix || 'ghost attachment(s)? This removes the database records.'))) return;
+            if (!confirm(uiText('confirm_delete_ghosts', 'Delete') + ' ' + ghostSelected.size + ' ' + uiText('ghost_confirm_suffix', 'ghost attachment(s)? This removes the database records.'))) return;
             var $btn = $(this);
             var $res = $('#imp-ghost-delete-result');
-            $btn.prop('disabled', true).text(L.btn_deleting || '⏳ Deleting...');
+            $btn.prop('disabled', true).text('⏳ ' + uiText('btn_deleting', 'Deleting...'));
             $res.hide();
             ajax('tsoimma_delete_ghost_attachments', { ids: Array.from(ghostSelected) }, function(data) {
-                $btn.prop('disabled', false).text('🗑 ' + uiText('delete_ghosts', 'Delete selected'));
-                var msg = '✓ ' + data.deleted + ' ' + (L.ghost_deleted_ok || 'deleted successfully.');
-                if (data.errors && data.errors.length) msg += ' ' + (L.errors_label || 'Errors:') + ' ' + data.errors.join(', ');
-                $res.data('kind', 'ghost_deleted').data('count', data.deleted || 0);
-                $res.show().css('color', data.errors && data.errors.length ? 'var(--imp-warn)' : 'var(--imp-success)').html(msg);
+                setGhostDeleteLabel($btn);
+                var nErr = (data.errors || []).length;
+                $res.data('kind', 'ghost_deleted').data('count', data.deleted || 0).data('errors', nErr);
+                $res.attr('title', (data.errors || []).slice(0, 20).join('\n'));
+                $res.show().css('color', nErr ? 'var(--imp-warn)' : 'var(--imp-success)');
+                refreshStoredResult('#imp-ghost-delete-result');
 
                 // Only rows that were actually deleted should disappear — an
                 // attempted-but-rejected row (e.g. "real file with content,
@@ -5697,21 +6311,114 @@
                     if (m) failedIds[m[1]] = true;
                 });
                 ghostSelected.clear();
+                var remaining = 0;
                 $('#imp-ghost-list .imp-ghost-check').each(function() {
                     var id = parseInt($(this).data('id'), 10);
                     if (attemptedIds.indexOf(id) !== -1 && !failedIds[id]) {
-                        $(this).closest('.imp-ghost-row').fadeOut(300, function() { $(this).remove(); });
+                        $(this).closest('.imp-ghost-row').remove();
+                    } else {
+                        // Rejected rows stay in the list, but are no longer selected.
+                        $(this).prop('checked', false);
+                        remaining++;
                     }
                 });
-                $('#imp-ghost-scan-result').text((($('#imp-ghost-list .imp-ghost-row').length) - data.deleted) + ' ' + (L.remaining_label || 'remaining') + '.');
+                $('#imp-ghost-scan-result').data('kind', 'ghost_remaining').data('count', remaining)
+                    .show().css('color', remaining ? 'var(--imp-warn)' : 'var(--imp-success)');
+                refreshStoredResult('#imp-ghost-scan-result');
+                if (!remaining) { $('#imp-ghost-list').hide(); $('#imp-ghost-actions').hide(); }
                 updateGhostToolbar();
                 markDashboardDirty();
             }, function(err) {
-                $btn.prop('disabled', false).text('🗑 ' + uiText('delete_ghosts', 'Delete selected'));
+                setGhostDeleteLabel($btn);
                 $res.show().css('color', 'var(--imp-danger)').text((L.error_prefix || 'Error: ') + err);
             });
         });
     }
+
+    // ================================================================
+    // REMEMBERED CHOICES (per user, saved in the database)
+    // Every control that holds a user choice is saved when it changes, restored
+    // on the next visit, and kept in sync with the other controls that mean the
+    // same thing (e.g. the quality slider of the Optimize tab and of the image
+    // window are ONE setting).
+    // ================================================================
+    var UI_PREFS = [
+        { key: 'opt_format',    type: 'select', sel: ['#imp-format', '#imp-modal-format'] },
+        { key: 'opt_quality',   type: 'range',  sel: ['#imp-quality', '#imp-modal-quality'], label: ['#imp-quality-val', '#imp-modal-quality-val'] },
+        { key: 'opt_replace',   type: 'check',  sel: ['#imp-replace', '#imp-modal-replace'] },
+        { key: 'pdf_quality',   type: 'select', sel: ['#imp-pdf-quality'] },
+        { key: 'pdf_replace',   type: 'check',  sel: ['#imp-pdf-replace'] },
+        { key: 'orphan_limit',  type: 'select', sel: ['#imp-orphan-limit'] },
+        { key: 'alt_used_only', type: 'check',  sel: ['#imp-alt-used-only'] },
+        { key: 'seo_sort',      type: 'select', sel: ['#imp-seo-sort'] }
+    ];
+    var prefsPending = {};
+    var prefsTimer = null;
+
+    function prefControlValue(def, selector) {
+        var $el = $(selector);
+        if (def.type === 'check') { return $el.is(':checked') ? 1 : 0; }
+        return $el.val();
+    }
+
+    // Puts a value into one control without firing its change handlers.
+    function setPrefControl(def, selector, value) {
+        var $el = $(selector);
+        if (!$el.length) { return; }
+        if (def.type === 'check') {
+            $el.prop('checked', !!parseInt(value, 10) || value === true);
+        } else if (def.type === 'range') {
+            $el.val(value);
+            var idx = def.sel.indexOf(selector);
+            if (def.label && def.label[idx]) { $(def.label[idx]).text(value); }
+        } else {
+            var $opt = $el.find('option').filter(function() { return this.value === String(value); });
+            if (!$opt.length || $opt.prop('disabled')) { return; }
+            $el.val(String(value));
+            refreshImpCustomSelects(selector);
+        }
+    }
+
+    function initPrefs() {
+        var saved = (TSOIMMA && $.isPlainObject(TSOIMMA.prefs)) ? TSOIMMA.prefs : {};
+        // Until the admin picks their own format/quality, start from the values saved in
+        // Auto-optimize, so the same setting never shows 85 in one place and 82 in another.
+        var auto = (TSOIMMA && $.isPlainObject(TSOIMMA.auto_defaults)) ? TSOIMMA.auto_defaults : {};
+        var start = {};
+        if (auto.format)  { start.opt_format  = auto.format; }
+        if (auto.quality) { start.opt_quality = auto.quality; }
+        saved = $.extend({}, start, saved);
+
+        UI_PREFS.forEach(function(def) {
+            // 1) restore what was saved last time
+            if (Object.prototype.hasOwnProperty.call(saved, def.key)) {
+                def.sel.forEach(function(selector) { setPrefControl(def, selector, saved[def.key]); });
+            }
+            // 2) save on every change and keep the twin controls in sync
+            $(document).on('change input', def.sel.join(','), function() {
+                var value = prefControlValue(def, this);
+                def.sel.forEach(function(selector) {
+                    if (!$(this).is(selector)) { setPrefControl(def, selector, value); }
+                }, this);
+                prefsPending[def.key] = value;
+                clearTimeout(prefsTimer);
+                prefsTimer = setTimeout(flushPrefs, 450);
+            });
+        });
+    }
+
+    function flushPrefs() {
+        var pending = prefsPending;
+        prefsPending = {};
+        if ($.isEmptyObject(pending)) { return; }
+        // Silent on purpose: a failed save must never interrupt what the admin is doing.
+        ajax('tsoimma_save_ui_prefs', { prefs: pending }, function() {}, function() {});
+    }
+
+    // Auto-optimize settings are saved as soon as they change (no need to find the
+    // Save button). Skipped while the saved values are being loaded into the form.
+    var autoAutosaveReady = false;
+    var autoAutosaveTimer = null;
 
     function loadAutoSettings() {
         ajax('tsoimma_get_auto_settings', {}, function(data) {
@@ -5726,6 +6433,8 @@
             $('#imp-auto-fill-alt').prop('checked', !!data.fill_alt_on_upload);
             $('#imp-auto-skip-kb').val(data.skip_small_kb || 0);
             updateAutoToggleUI(!!data.enabled);
+            // Arm autosave only after the change events fired by filling the form.
+            setTimeout(function() { autoAutosaveReady = true; }, 0);
         });
     }
 
@@ -5836,8 +6545,13 @@
                 size_restored: uiText('action_size_restored', 'Size restored'),
                 url_fix: uiText('action_url_fix', 'URLs fixed'),
                 url_remove: uiText('action_url_remove', 'URLs removed'),
-                url_restore: uiText('action_url_restore', 'URLs restored')
+                url_restore: uiText('action_url_restore', 'URLs restored'),
+                url_backup_delete: uiText('action_url_backup_delete', 'Backup deleted'),
+                repair_paths: uiText('action_repair_paths', 'Paths repaired'),
+                repair_mime: uiText('action_repair_mime', 'MIME types repaired'),
+                ghost_delete: uiText('action_ghost_delete', 'Ghosts deleted')
             };
+            var repairTypes = { url_fix: '🔗', url_remove: '🧹', url_restore: '♻️', url_backup_delete: '🗑️', repair_paths: '🔧', repair_mime: '🔧', ghost_delete: '🗑️' };
             var d    = item.details || {};
             var details = '';
             if (d.savings_pct)  details += '<span class="imp-history-savings">-' + d.savings_pct + '%</span> (' + formatBytes(d.savings_bytes || 0) + ')';
@@ -5900,12 +6614,16 @@
                 details += '<span style="font-size:11px;color:var(--imp-text-muted)">' +
                     escHtml(uiText('hist_detached_from', 'Unlinked from')) + ' ' + escHtml(d.old_parent_title || ('#' + d.old_parent_id)) +
                     '</span>';
-            } else if (item.action_type === 'url_fix' || item.action_type === 'url_remove' || item.action_type === 'url_restore') {
-                var uBits = ['<strong>' + (d.count || 0) + ' ' + escHtml(uiText('hist_url_count', 'URLs')) + '</strong>'];
+            } else if (repairTypes[item.action_type]) {
+                // Repairs-tab rows: one row per run, with a count and the first names.
+                var isUrlRow = item.action_type.indexOf('url_') === 0;
+                var uBits = ['<strong>' + (d.count || 0) + ' ' + escHtml((d.count || 0) === 1 ? (isUrlRow ? uiText('hist_url_one', 'URL') : uiText('hist_att_one', 'attachment')) : (isUrlRow ? uiText('hist_url_count', 'URLs') : uiText('hist_att_count', 'attachments'))) + '</strong>'];
                 if (d.skipped) uBits.push(d.skipped + ' ' + escHtml(uiText('hist_skipped', 'skipped')));
                 var uList = '';
                 if (d.pairs && d.pairs.length) uList = d.pairs.map(function(p) { return escHtml(p[0]) + ' \u2192 ' + escHtml(p[1]); }).join('<br>');
                 else if (d.files && d.files.length) uList = d.files.map(escHtml).join('<br>');
+                var shown = (d.pairs && d.pairs.length) || (d.files && d.files.length) || 0;
+                if (uList && (d.count || 0) > shown) uList += '<br>' + escHtml(uiText('hist_more', '+{n} more').replace('{n}', (d.count || 0) - shown));
                 if (d.backup) uBits.push(escHtml(uiText('hist_backup', 'Backup')) + ': ' + escHtml(d.backup));
                 details += '<span style="display:block;font-size:11px;line-height:1.4">' + uBits.join(' · ') + (uList ? '<br><span style="color:var(--imp-text-muted)">' + uList + '</span>' : '') + '</span>';
             } else if (item.action_type === 'delete') {
@@ -5917,10 +6635,10 @@
                     '</span>';
             }
             if (!details) details = '<span style="color:var(--imp-text-muted)">—</span>';
-            var displayFile = d.filename || (d.new_filename || '—');
+            var displayFile = d.filename || d.new_filename || (d.pairs && d.pairs[0] && d.pairs[0][1]) || (d.files && d.files[0]) || d.backup || '—';
             var thumb = item.thumb
                 ? '<img class="imp-thumb-sm" src="' + escHtml(item.thumb) + '" data-full-url="' + escHtml(item.full_url || item.thumb) + '" data-filename="' + escHtml(displayFile !== '—' ? displayFile : '') + '" alt="">'
-                : '<span style="font-size:20px">📄</span>';
+                : '<span style="font-size:20px">' + (repairTypes[item.action_type] || '📄') + '</span>';
             var actionLabel = actionLabelMap[item.action_type] || item.action_label || item.action_type || '—';
             var userLabel = (item.user_name === 'Sistema') ? uiText('system_user', 'System') : (item.user_name || '');
             html += '<tr><td>' + thumb + '</td><td style="font-family:var(--imp-mono);font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escHtml(displayFile) + '">' + escHtml(displayFile) + '</td><td><span class="imp-history-action ' + escHtml(item.action_type) + '">' + escHtml(actionLabel) + '</span></td><td style="max-width:220px">' + details + '</td><td style="font-size:12px;color:var(--imp-text-muted)">' + escHtml(userLabel) + '</td><td style="font-size:12px;color:var(--imp-text-muted);white-space:nowrap">' + escHtml(item.created_at_h) + '</td></tr>';
@@ -5956,11 +6674,15 @@
         var urlIssues       = [];
         var urlSelected     = new Set();
         var urlRemoveSelected = new Set();
+        var urlBackupItems  = null;
 
         // ---- Removal backups (undo for "Remove from content") ----
         function renderUrlBackups(items) {
-            var panel = $('#imp-url-backups-panel');
-            if (!items || !items.length) { panel.hide(); return; }
+            urlBackupItems = items || [];
+            if (!items || !items.length) {
+                $('#imp-url-backups-list').html('<p class="imp-panel-desc" style="margin:0;">' + escHtml(uiText('url_backups_empty', 'No removal backups yet.')) + '</p>');
+                return;
+            }
             var html = '<div class="imp-history-table-container"><table class="imp-history-table"><tbody>';
             items.forEach(function(item) {
                 var label = uiText('url_backups_items', '{urls} URL(s) · {posts} item(s) · {other} field(s)')
@@ -5970,26 +6692,25 @@
                     '<td>' + escHtml(label) + (item.restored ? ' <span class="imp-badge-orphan" style="background:var(--imp-success)">' + escHtml(uiText('url_backups_done_tag', 'restored')) + '</span>' : '') + '</td>' +
                     '<td>' + escHtml(item.size_h) + '</td>' +
                     '<td>' +
-                        '<button type="button" class="imp-btn imp-btn-sm imp-btn-primary imp-url-backup-undo" data-file="' + escHtml(item.file) + '">' + escHtml(uiText('url_backups_undo', 'Undo')) + '</button> ' +
+                        '<button type="button" class="imp-btn imp-btn-sm imp-btn-primary imp-url-backup-undo" data-file="' + escHtml(item.file) + '"' + (item.restored ? ' disabled' : '') + '>' + escHtml(uiText('url_backups_undo', 'Undo')) + '</button> ' +
                         '<button type="button" class="imp-btn imp-btn-sm imp-btn-danger imp-url-backup-delete" data-file="' + escHtml(item.file) + '">' + escHtml(uiText('sizes_backups_delete', 'Delete')) + '</button>' +
                     '</td></tr>';
             });
             html += '</tbody></table></div>';
             $('#imp-url-backups-list').html(html);
-            panel.show();
         }
 
         function loadUrlBackups() {
             ajax('tsoimma_list_url_backups', {}, function(data) { renderUrlBackups(data.items || []); }, function() {});
         }
 
-        $(document).on('click', '.imp-tab[data-tab="urlfixer"]', loadUrlBackups);
+        $(document).on('click', '.imp-tab[data-tab="urlfixer"], .imp-subtab[data-subtab="urls-backups"]', loadUrlBackups);
 
         $(document).on('click', '.imp-url-backup-undo', function() {
             if (!confirm(uiText('confirm_url_restore', 'Undo this removal and put the content back as it was?'))) return;
             var btn = $(this).prop('disabled', true);
             ajax('tsoimma_restore_url_backup', { file: btn.data('file') }, function(data) {
-                var out = '✓ ' + (data.restored || 0) + ' ' + uiText('url_restore_done', 'item(s) restored') +
+                var out = ((data.restored || 0) > 0 ? '✓ ' : '⚠ ') + (data.restored || 0) + ' ' + uiText('url_restore_done', 'item(s) restored') +
                     (data.skipped ? ' (' + data.skipped + ' ' + uiText('url_restore_skipped', 'skipped') + ')' : '') + '.';
                 if (data.errors && data.errors.length) out += '\n' + data.errors.join('\n');
                 alert(out);
@@ -6013,7 +6734,10 @@
         }
 
         refreshUrlFixerUi = function() {
-            if (!$('#tab-urlfixer').hasClass('active') || !$('#imp-url-result').is(':visible')) return;
+            if (!$('#tab-urlfixer').hasClass('active')) return;
+            if (urlBackupItems) renderUrlBackups(urlBackupItems);
+            // Not ":visible": the detector pane is hidden while another sub-tab is open.
+            if ($('#imp-url-result').css('display') === 'none') return;
             renderUrlSummary($('#imp-url-summary').data('summary'));
             if (!urlIssues.length) {
                 $('#imp-url-toolbar').hide();
@@ -6091,7 +6815,7 @@
         });
         $('#imp-fix-urls').on('click', function() {
             if (!urlSelected.size) return;
-            if (!confirm(uiText('fix_selected', 'Fix') + ' ' + urlSelected.size + ' ' + uiText('url_items_suffix', 'URL(s)?'))) return;
+            if (!confirm(uiText('confirm_fix_urls', 'Fix {n} URL(s) in the content?').replace('{n}', urlSelected.size))) return;
             var btn = $(this);
             btn.prop('disabled', true).text(uiText('url_fixing', '⏳ Fixing...'));
             var fixes = [];
@@ -6111,11 +6835,12 @@
                 var fixedUrls = data.fixed_urls || [];
                 urlIssues    = urlIssues.filter(function(i) { return fixedUrls.indexOf(i.old_url) === -1; });
                 urlSelected  = new Set();
+                updateUrlSummaryCounts();
                 renderUrlList();
                 updateUrlToolbar();
                 if (!urlIssues.length) {
                     $('#imp-url-toolbar').hide();
-                    $('#imp-url-list').html('<div class="imp-loading" style="padding:40px 0">✓ ' + uiText('url_all_ok', 'All URLs fixed!') + '</div>');
+                    $('#imp-url-list').html('<div class="imp-loading" style="padding:40px 0">✓ ' + uiText('url_all_ok', 'No broken URLs found!') + '</div>');
                 }
             }, function(err) { btn.prop('disabled', false).text(uiText('fix_selected', '✓ Fix selected')); alert((L.error_prefix || 'Error: ') + err); });
         });
@@ -6130,7 +6855,7 @@
                 btn.prop('disabled', false).text(uiText('remove_selected', '🗑 Remove from content'));
                 var msg = '✓ ' + data.removed + ' ' + uiText('url_removed_ok', 'URL references removed.');
                 if (data.skipped) msg += ' (' + data.skipped + ' ' + uiText('skipped_suffix', 'skipped') + ')';
-                if (data.backup) msg += '\n' + uiText('url_backup_saved', 'Backup saved: you can undo it under "Removal backups".');
+                if (data.backup) msg += '\n' + uiText('url_backup_saved', 'Backup saved: you can undo it in the "Removal backups" sub-tab.');
                 if (data.errors && data.errors.length) msg += '\n' + uiText('errors_label', 'Errors:') + '\n' + data.errors.join('\n');
                 alert(msg);
                 loadUrlBackups();
@@ -6139,12 +6864,7 @@
                 var removedUrls = data.removed_urls || [];
                 urlIssues = urlIssues.filter(function(i) { return removedUrls.indexOf(i.old_url) === -1; });
                 urlRemoveSelected = new Set();
-                var summary = $('#imp-url-summary').data('summary') || {};
-                summary.total = urlIssues.length;
-                summary.fixable = urlIssues.filter(function(i) { return i.has_fix; }).length;
-                summary.removable = urlIssues.filter(function(i) { return !i.has_fix; }).length;
-                $('#imp-url-summary').data('summary', summary);
-                renderUrlSummary(summary);
+                updateUrlSummaryCounts();
                 renderUrlList();
                 updateUrlToolbar();
                 if (!urlIssues.length) {
@@ -6156,6 +6876,16 @@
                 alert((L.error_prefix || 'Error: ') + err);
             });
         });
+
+        // Keeps the summary boxes in step with the rows still in the list.
+        function updateUrlSummaryCounts() {
+            var summary = $('#imp-url-summary').data('summary') || {};
+            summary.total     = urlIssues.length;
+            summary.fixable   = urlIssues.filter(function(i) { return i.has_fix; }).length;
+            summary.removable = urlIssues.filter(function(i) { return !i.has_fix; }).length;
+            $('#imp-url-summary').data('summary', summary);
+            renderUrlSummary(summary);
+        }
 
         function renderUrlList() {
             var html = '';

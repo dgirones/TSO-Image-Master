@@ -2089,6 +2089,68 @@ class TSOIMMA_Optimizer {
     }
 
     /**
+     * Copies a file into the usual backup folder (uploads/tso-image-master/…,
+     * `<name>_tso_im_backup.<ext>`) right before the attachment is deleted.
+     *
+     * An existing backup (e.g. the pre-optimization original) is never
+     * overwritten: a time-stamped name is used instead. The copy is verified
+     * before reporting success.
+     *
+     * @param string $source_path Absolute path of the file to back up.
+     * @return array{ok: bool, path: string, relative_path: string, error: string}
+     */
+    public static function backup_file_before_delete( $source_path ) {
+        $result = array(
+            'ok'            => false,
+            'path'          => '',
+            'relative_path' => '',
+            'error'         => '',
+        );
+
+        $source_path = (string) $source_path;
+        if ( '' === $source_path || ! file_exists( $source_path ) ) {
+            $result['error'] = 'source_missing';
+            return $result;
+        }
+
+        $ext  = strtolower( pathinfo( $source_path, PATHINFO_EXTENSION ) );
+        $dest = self::get_backup_path( $source_path, $ext );
+
+        if ( file_exists( $dest ) ) {
+            $dir  = dirname( $dest );
+            $name = pathinfo( $source_path, PATHINFO_FILENAME );
+            $n    = 1;
+            do {
+                $dest = wp_normalize_path( $dir . '/' . $name . '-deleted-' . wp_date( 'Ymd-His' ) . ( $n > 1 ? '-' . $n : '' ) . '_tso_im_backup.' . $ext );
+                ++$n;
+            } while ( file_exists( $dest ) );
+        }
+
+        if ( ! is_dir( dirname( $dest ) ) && ! wp_mkdir_p( dirname( $dest ) ) ) {
+            $result['error'] = 'mkdir_failed';
+            return $result;
+        }
+
+        if ( class_exists( 'TSOIMMA_Backup_Manager' ) ) {
+            TSOIMMA_Backup_Manager::protect_backup_dirs();
+        }
+
+        if ( ! self::copy_file_validated( $source_path, $dest ) || (int) filesize( $dest ) !== (int) filesize( $source_path ) ) {
+            self::delete_file_if_exists( $dest );
+            $result['error'] = 'copy_failed';
+            return $result;
+        }
+
+        $basedir = wp_normalize_path( trailingslashit( wp_upload_dir()['basedir'] ) );
+        $norm    = wp_normalize_path( $dest );
+
+        $result['ok']            = true;
+        $result['path']          = $norm;
+        $result['relative_path'] = ( 0 === strpos( $norm, $basedir ) ) ? substr( $norm, strlen( $basedir ) ) : wp_basename( $norm );
+        return $result;
+    }
+
+    /**
      * Copy a file and verify the destination is non-empty.
      *
      * @param string $source Source path.

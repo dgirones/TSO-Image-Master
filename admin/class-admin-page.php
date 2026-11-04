@@ -64,6 +64,12 @@ class TSOIMMA_Admin_Page {
             'nonce'    => wp_create_nonce( TSOIMMA_NONCE_AJAX ),
             'site_url' => get_site_url(),
             'webp_ok'  => TSOIMMA_Optimizer::webp_supported() ? '1' : '0',
+            'prefs'    => (object) tsoimma_get_ui_prefs(),
+            // Starting point for format/quality until the admin picks their own (the saved Auto-optimize values).
+            'auto_defaults' => array(
+                'format'  => (string) TSOIMMA_Auto_Optimizer::get_settings()['format'],
+                'quality' => (int) TSOIMMA_Auto_Optimizer::get_settings()['quality'],
+            ),
             'timezone' => self::theme_timezone_string(),
             'lat'      => $theme_coords['lat'],
             'lng'      => $theme_coords['lng'],
@@ -619,7 +625,7 @@ class TSOIMMA_Admin_Page {
                     <span>🤖</span> <span data-i18n="tab_auto"><?php esc_html_e( 'Auto-optimization', 'tso-image-master' ); ?></span>
                 </button>
                 <button class="imp-tab" data-tab="urlfixer" role="tab">
-                    <span>🔗</span> <span data-i18n="tab_urls"><?php esc_html_e( 'URLs', 'tso-image-master' ); ?></span>
+                    <span>🔗</span> <span data-i18n="tab_urls"><?php esc_html_e( 'Repairs', 'tso-image-master' ); ?></span>
                 </button>
                 <button class="imp-tab" data-tab="history" role="tab">
                     <span>📋</span> <span data-i18n="tab_history"><?php esc_html_e( 'History', 'tso-image-master' ); ?></span>
@@ -793,10 +799,20 @@ class TSOIMMA_Admin_Page {
                  TAB: IMATGES ÒRFENES
                  ===================================================== -->
             <div id="tab-orphans" class="imp-tab-content">
+                <div class="imp-subtabs" role="tablist">
+                    <button type="button" class="imp-subtab active" data-subtab="orphans" role="tab" data-i18n="orph_subtab_orphans"><?php esc_html_e( 'Orphan images', 'tso-image-master' ); ?></button>
+                    <button type="button" class="imp-subtab" data-subtab="unattached" role="tab" data-i18n="orph_subtab_unattached"><?php esc_html_e( 'Referenced', 'tso-image-master' ); ?></button>
+                    <button type="button" class="imp-subtab" data-subtab="extra" role="tab" data-i18n="orph_subtab_extra"><?php esc_html_e( 'Extra files', 'tso-image-master' ); ?></button>
+                </div>
+
+                <!-- Les tres capçaleres comparteixen cel·la: l'alçada és sempre la de la més alta i no canvia en canviar de subpestanya -->
+                <div class="imp-subpanel-stack">
+                    <div class="imp-subpanel is-active" data-subpanel="orphans">
                 <div class="imp-panel">
                     <h2 class="imp-panel-title" data-i18n="orphans_title">Trobar Imatges Òrfenes</h2>
                     <p class="imp-panel-desc" data-i18n-html="orphans_desc">Imatges de la biblioteca que <strong>no estan referenciades</strong> a cap article, pàgina, widget ni metadada.</p>
                     <div class="imp-settings-grid">
+                        <button id="imp-scan-orphans" class="imp-btn imp-btn-primary" data-i18n="scan_now">🔍 Escanejar ara</button>
                         <div class="imp-field">
                             <label for="imp-orphan-limit" data-i18n="orphan_limit_label">Imatges a escanejar per lot</label>
                             <?php
@@ -815,9 +831,25 @@ class TSOIMMA_Admin_Page {
                             ?>
                         </div>
                     </div>
-                    <button id="imp-scan-orphans" class="imp-btn imp-btn-primary" data-i18n="scan_now">🔍 Escanejar ara</button>
+                </div>
+                    </div>
+                    <div class="imp-subpanel" data-subpanel="unattached">
+                    <div class="imp-panel">
+                        <h2 class="imp-panel-title" data-i18n="unatt_title">Imatges referenciades</h2>
+                        <p class="imp-panel-desc" data-i18n-html="unatt_desc">Imatges sense entrada pare (o amb el pare esborrat) però que <strong>sí s'usen</strong> en algun lloc, i on. Les orfes de veritat no surten aquí: són a «Imatges òrfenes».<br>Pots eliminar-les d'una en una o per selecció: <strong>abans es fa una còpia de seguretat de l'original, que trobaràs a «Fitxers extra».</strong></p>
+                        <button id="imp-scan-unattached" class="imp-btn imp-btn-primary" data-i18n="unatt_scan">🔍 Analitzar referenciades</button>
+                    </div>
+                    </div>
+                    <div class="imp-subpanel" data-subpanel="extra">
+                <div class="imp-panel">
+                    <h2 class="imp-panel-title" data-i18n="rogue_title">🗂 Fitxers extra a uploads</h2>
+                    <p class="imp-panel-desc" data-i18n-html="rogue_desc">Escaneja fitxers a <code>uploads/</code> que WordPress no té registrats: <strong>còpies de seguretat TSO</strong> (<code>_tso_im_backup</code>), temporals (<code>_tso_im_opt</code>), doble extensió (<code>.jpg.webp</code>), backups antics (<code>.bk</code>), etc. Revisa abans d'eliminar les còpies de seguretat.</p>
+                    <button id="imp-scan-rogue" class="imp-btn imp-btn-primary" data-i18n="scan_rogue">🔍 Escanejar fitxers extra</button>
+                </div>
+                    </div>
                 </div>
 
+                <div id="imp-orphans-pane">
                 <div id="imp-orphans-result" style="display:none;">
                     <div class="imp-toolbar">
                         <div class="imp-toolbar-left">
@@ -838,14 +870,38 @@ class TSOIMMA_Admin_Page {
                     <div class="imp-spinner"></div>
                     <p id="imp-orphans-progress-text" data-i18n="scanning_msg">Escanejant...</p>
                 </div>
+                </div><!-- /#imp-orphans-pane -->
 
-                <!-- SECCIÓ: Fitxers extra a uploads -->
-                <div class="imp-panel" style="margin-top:24px;">
-                    <h2 class="imp-panel-title" data-i18n="rogue_title">🗂 Fitxers extra a uploads</h2>
-                    <p class="imp-panel-desc" data-i18n-html="rogue_desc">Escaneja fitxers a <code>uploads/</code> que WordPress no té registrats: <strong>còpies de seguretat TSO</strong> (<code>_tso_im_backup</code>), temporals (<code>_tso_im_opt</code>), doble extensió (<code>.jpg.webp</code>), backups antics (<code>.bk</code>), etc. Revisa abans d'eliminar les còpies de seguretat.</p>
-                    <button id="imp-scan-rogue" class="imp-btn imp-btn-primary" data-i18n="scan_rogue">🔍 Escanejar fitxers extra</button>
+                <!-- SUBPESTANYA: imatges referenciades sense pare -->
+                <div id="imp-unattached-pane" style="display:none;">
+                    <div id="imp-unattached-result" style="display:none;">
+                        <div class="imp-toolbar">
+                            <div class="imp-toolbar-left">
+                                <button type="button" id="imp-unatt-select-all" class="imp-btn imp-btn-ghost" data-i18n="select_all">Seleccionar tot</button>
+                                <button type="button" id="imp-unatt-deselect" class="imp-btn imp-btn-ghost" data-i18n="deselect">Deseleccionar</button>
+                                <span id="imp-unatt-selected" class="imp-count-badge"></span>
+                            </div>
+                            <div class="imp-toolbar-right">
+                                <span id="imp-unattached-summary" class="imp-count-badge"></span>
+                                <button type="button" id="imp-unatt-attach-selected" class="imp-btn imp-btn-primary" disabled>
+                                    🔗 <span data-i18n="unatt_attach_selected">Adjuntar seleccionades</span>
+                                </button>
+                                <button type="button" id="imp-unatt-delete-selected" class="imp-btn imp-btn-danger" disabled>
+                                    🗑️ <span data-i18n="unatt_delete_selected">Eliminar seleccionades</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="imp-unattached-table-wrap"></div>
+                    </div>
+
+                    <div id="imp-unattached-loading" class="imp-loading-overlay" style="display:none;">
+                        <div class="imp-spinner"></div>
+                        <p id="imp-unattached-progress-text" data-i18n="scanning_msg">Escanejant...</p>
+                    </div>
                 </div>
 
+                <!-- SUBPESTANYA: Fitxers extra a uploads -->
+                <div id="imp-extra-pane" style="display:none;">
                 <div id="imp-rogue-result" style="display:none;">
                     <div class="imp-toolbar">
                         <div class="imp-toolbar-left">
@@ -864,6 +920,7 @@ class TSOIMMA_Admin_Page {
                     <div class="imp-spinner"></div>
                     <p data-i18n="scanning_server_files">Escanejant fitxers del servidor...</p>
                 </div>
+                </div><!-- /#imp-extra-pane -->
             </div>
 
             <!-- =====================================================
@@ -883,7 +940,7 @@ class TSOIMMA_Admin_Page {
                      haver d'anar per FTP. -->
                 <div id="imp-backups-panel" class="imp-panel" style="display:none;margin-bottom:24px;">
                     <h2 class="imp-panel-title" data-i18n="sizes_backups_title">Còpies de seguretat desades</h2>
-                    <p class="imp-panel-desc" data-i18n="sizes_backups_desc">Es desen dins uploads/tso-image-master/ i es netegen soles segons la retenció configurada al Resum.</p>
+                    <p class="imp-panel-desc" data-i18n="sizes_backups_desc">Es desen dins uploads/tso-image-master/. La retenció automàtica del Resum no els elimina: esborra'ls manualment quan ja no els necessitis.</p>
                     <div id="imp-backups-summary" class="imp-text-muted" style="margin-bottom:10px;"></div>
                     <div id="imp-backups-list-wrap"></div>
                 </div>
@@ -1262,30 +1319,6 @@ class TSOIMMA_Admin_Page {
                     <button id="imp-save-auto" class="imp-btn imp-btn-primary" style="margin-top:20px;" data-i18n="save_config">💾 Guardar configuració</button>
                     <span id="imp-auto-saved" style="display:none;margin-left:12px;color:var(--imp-success);font-size:13px;">✅ Guardat!</span>
                     <p class="imp-panel-desc" style="margin-top:14px;margin-bottom:0;" data-i18n-html="auto_history_hint">Les auto-optimitzacions es registren a la pestanya <strong>Historial</strong> (filtre 🤖 Auto-optimitzades).</p>
-                    <div style="margin-top:16px;padding:12px;background:var(--imp-surface2);border:1px solid var(--imp-border);border-radius:var(--imp-radius-sm);">
-                        <p style="font-size:12px;color:var(--imp-text-muted);margin-bottom:8px;" data-i18n-html="repair_images_desc">🔧 <strong style="color:var(--imp-warn);">Reparació d'imatges</strong> — Si tens imatges auto-optimitzades a WebP que no apareixen a SEO &amp; Noms ni a Optimitzar, aquest botó repara el path a la base de dades.</p>
-                        <button id="imp-fix-orphan-meta" class="imp-btn imp-btn-ghost" data-i18n="repair_paths">🔧 Reparar imatges amb path trencat</button>
-                        <span id="imp-fix-orphan-result" style="display:none;margin-left:10px;font-size:13px;"></span>
-                    </div>
-                    <div style="margin-top:10px;padding:10px 14px;background:var(--imp-surface2);border:1px solid var(--imp-border);border-radius:var(--imp-radius-sm);">
-                        <p style="font-size:12px;color:var(--imp-text-muted);margin-bottom:8px;">🔧 <strong style="color:var(--imp-warn);" data-i18n="mime_fix_title">Reparació de mime type</strong> — <span data-i18n="mime_fix_desc">Detecta i repara adjunts amb extensió .webp però mime type incorrecte (image/jpeg). Soluciona imatges invisibles a la biblioteca de medis.</span></p>
-                        <button id="imp-fix-mime-mismatch" class="imp-btn imp-btn-ghost" data-i18n="mime_fix_btn">🔧 Reparar mime types incorrectes</button>
-                        <span id="imp-fix-mime-result" style="display:none;margin-left:10px;font-size:13px;"></span>
-                    </div>
-                    <div style="margin-top:10px;padding:10px 14px;background:var(--imp-surface2);border:1px solid var(--imp-border);border-radius:var(--imp-radius-sm);">
-                        <p style="font-size:12px;color:var(--imp-text-muted);margin-bottom:8px;" data-i18n-html="ghost_delete_desc">🗑️ <strong style="color:var(--imp-danger);">Eliminar adjunts fantasma</strong> — Detecta registres a la BD que apunten a fitxers que <strong>no existeixen físicament</strong> al disc (per exemple: apareix "gastos.webp" a la biblioteca però el fitxer no hi és). Els elimina completament: post, metadata i thumbnails de BD. <em>No toca cap fitxer físic.</em></p>
-                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                            <button id="imp-scan-ghosts" class="imp-btn imp-btn-ghost" data-i18n="scan_ghosts">🔍 Escanejar adjunts fantasma</button>
-                            <span id="imp-ghost-scan-result" style="display:none;font-size:13px;"></span>
-                        </div>
-                        <div id="imp-ghost-list" style="display:none;margin-top:12px;"></div>
-                        <div id="imp-ghost-actions" style="display:none;margin-top:10px;display:none;gap:10px;align-items:center;flex-wrap:wrap;">
-                            <button id="imp-ghost-select-all" class="imp-btn imp-btn-ghost imp-btn-sm" data-i18n="select_all">Seleccionar tots</button>
-                            <button id="imp-ghost-deselect" class="imp-btn imp-btn-ghost imp-btn-sm">Deseleccionar</button>
-                            <button id="imp-delete-ghosts" class="imp-btn imp-btn-danger imp-btn-sm">🗑️ <span data-i18n="delete_selected">Eliminar seleccionats</span></button>
-                            <span id="imp-ghost-delete-result" style="display:none;font-size:13px;margin-left:8px;"></span>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -1316,6 +1349,10 @@ class TSOIMMA_Admin_Page {
                                         array( 'value' => 'url_fix', 'label' => '🔗 URL reparades', 'i18n' => 'filter_url_fix' ),
                                         array( 'value' => 'url_remove', 'label' => '🧹 URL eliminades', 'i18n' => 'filter_url_remove' ),
                                         array( 'value' => 'url_restore', 'label' => '♻️ URL restaurades', 'i18n' => 'filter_url_restore' ),
+                                        array( 'value' => 'url_backup_delete', 'label' => '🗑️ Còpies eliminades', 'i18n' => 'filter_url_backup_delete' ),
+                                        array( 'value' => 'repair_paths', 'label' => '🔧 Paths reparats', 'i18n' => 'filter_repair_paths' ),
+                                        array( 'value' => 'repair_mime', 'label' => '🔧 MIME reparats', 'i18n' => 'filter_repair_mime' ),
+                                        array( 'value' => 'ghost_delete', 'label' => '👻 Fantasmes eliminats', 'i18n' => 'filter_ghost_delete' ),
                                     ),
                                 )
                             );
@@ -1387,51 +1424,101 @@ class TSOIMMA_Admin_Page {
                  TAB: URLs INCONSISTENTS
                  ===================================================== -->
             <div id="tab-urlfixer" class="imp-tab-content">
-                <div class="imp-panel">
-                    <h2 class="imp-panel-title" data-i18n="url_title">🔗 Detector d'URLs Inconsistents</h2>
-                    <p class="imp-panel-desc" data-i18n-html="url_desc">Detecta URLs d'imatges als articles i pàgines que <strong>apunten a fitxers que ja no existeixen</strong> al servidor — habitualment perquè van ser convertits de JPG a WebP. El plugin troba l'alternativa correcta i pot actualitzar els links automàticament a tota la base de dades.</p>
-                    <div class="imp-urlfixer-examples">
-                        <div class="imp-urlfixer-ex">
-                            <span class="imp-urlfixer-ex-bad">imatge-1024x340<strong>.jpg</strong></span>
-                            <span class="imp-urlfixer-ex-arrow">→</span>
-                            <span class="imp-urlfixer-ex-good">imatge-1024x340<strong>.webp</strong></span>
-                            <span class="imp-urlfixer-ex-label" data-i18n="url_obsolete">URL obsoleta → nova correcta</span>
-                        </div>
-                    </div>
-                    <button id="imp-scan-urls" class="imp-btn imp-btn-primary"data-i18n="scan_web">🔍 Escanejar tota la web</button>
+                <div class="imp-subtabs" role="tablist">
+                    <button type="button" class="imp-subtab active" data-subtab="urls-detector" role="tab" data-i18n="url_subtab_detector"><?php esc_html_e( 'Inconsistent URL detector', 'tso-image-master' ); ?></button>
+                    <button type="button" class="imp-subtab" data-subtab="urls-repairs" role="tab" data-i18n="url_subtab_repairs"><?php esc_html_e( 'Repair attachments', 'tso-image-master' ); ?></button>
+                    <button type="button" class="imp-subtab" data-subtab="urls-backups" role="tab" data-i18n="url_subtab_backups"><?php esc_html_e( 'Removal backups', 'tso-image-master' ); ?></button>
                 </div>
 
-                <div id="imp-url-backups-panel" class="imp-panel" style="display:none;">
-                    <h3 class="imp-panel-title" data-i18n="url_backups_title">Còpies de seguretat d'eliminacions</h3>
-                    <p class="imp-panel-desc" data-i18n="url_backups_desc">Cada vegada que elimines referències del contingut es desa una còpia. Pots desfer l'eliminació des d'aquí; els continguts editats després no se sobreescriuen.</p>
-                    <div id="imp-url-backups-list"></div>
-                </div>
-
-                <div id="imp-url-loading" class="imp-loading-overlay" style="display:none;">
-                    <div class="imp-spinner"></div>
-                    <p data-i18n="scanning_posts_pages">Escanejant continguts... pot trigar uns segons.</p>
-                </div>
-
-                <div id="imp-url-result" style="display:none;">
-                    <!-- Resum -->
-                    <div id="imp-url-summary" class="imp-stats-grid" style="margin-bottom:16px;"></div>
-
-                    <!-- Toolbar -->
-                    <div class="imp-toolbar" id="imp-url-toolbar" style="display:none;">
-                        <div class="imp-toolbar-left">
-                            <button id="imp-url-select-all"      class="imp-btn imp-btn-ghost" data-i18n="select_fixable">Seleccionar reparables</button>
-                            <button id="imp-url-select-removable" class="imp-btn imp-btn-ghost" data-i18n="select_removable">Seleccionar eliminables</button>
-                            <button id="imp-url-deselect"        class="imp-btn imp-btn-ghost" data-i18n="deselect">Deseleccionar</button>
+                <!-- SUBPESTANYA: detector d'URLs inconsistents -->
+                <div id="imp-urls-detector-pane" class="imp-urlfix-pane">
+                    <div class="imp-panel">
+                        <h2 class="imp-panel-title" data-i18n="url_title">🔗 Detector d'URLs inconsistents</h2>
+                        <p class="imp-panel-desc" data-i18n-html="url_desc">Detecta URLs d'imatges als articles i pàgines que <strong>apunten a fitxers que ja no existeixen</strong> al servidor — habitualment perquè van ser convertits de JPG a WebP. El plugin troba l'alternativa correcta i pot actualitzar els links automàticament a tota la base de dades.</p>
+                        <div class="imp-urlfixer-examples">
+                            <div class="imp-urlfixer-ex">
+                                <span class="imp-urlfixer-ex-bad">imatge-1024x340<strong>.jpg</strong></span>
+                                <span class="imp-urlfixer-ex-arrow">→</span>
+                                <span class="imp-urlfixer-ex-good">imatge-1024x340<strong>.webp</strong></span>
+                                <span class="imp-urlfixer-ex-label" data-i18n="url_obsolete">URL obsoleta → nova correcta</span>
+                            </div>
                         </div>
-                        <div class="imp-toolbar-right">
-                            <span id="imp-url-count" class="imp-count-badge"></span>
-                            <button id="imp-remove-urls" class="imp-btn imp-btn-danger" data-i18n="remove_selected">🗑 Eliminar del contingut</button>
-                            <button id="imp-fix-urls"    class="imp-btn imp-btn-primary" data-i18n="fix_selected">✅ Reparar seleccionades</button>
-                        </div>
+                        <button id="imp-scan-urls" class="imp-btn imp-btn-primary" data-i18n="scan_web">🔍 Escanejar tota la web</button>
                     </div>
 
-                    <div id="imp-url-list"></div>
-                </div>
+                    <div id="imp-url-loading" class="imp-loading-overlay" style="display:none;">
+                        <div class="imp-spinner"></div>
+                        <p data-i18n="scanning_posts_pages">Escanejant continguts... pot trigar uns segons.</p>
+                    </div>
+
+                    <div id="imp-url-result" style="display:none;">
+                        <!-- Resum -->
+                        <div id="imp-url-summary" class="imp-stats-grid" style="margin-bottom:16px;"></div>
+
+                        <!-- Toolbar -->
+                        <div class="imp-toolbar" id="imp-url-toolbar" style="display:none;">
+                            <div class="imp-toolbar-left">
+                                <button id="imp-url-select-all"      class="imp-btn imp-btn-ghost" data-i18n="select_fixable">Seleccionar reparables</button>
+                                <button id="imp-url-select-removable" class="imp-btn imp-btn-ghost" data-i18n="select_removable">Seleccionar eliminables</button>
+                                <button id="imp-url-deselect"        class="imp-btn imp-btn-ghost" data-i18n="deselect">Deseleccionar</button>
+                            </div>
+                            <div class="imp-toolbar-right">
+                                <span id="imp-url-count" class="imp-count-badge"></span>
+                                <button id="imp-remove-urls" class="imp-btn imp-btn-danger" data-i18n="remove_selected">🗑 Eliminar del contingut</button>
+                                <button id="imp-fix-urls"    class="imp-btn imp-btn-primary" data-i18n="fix_selected">✅ Reparar seleccionades</button>
+                            </div>
+                        </div>
+
+                        <div id="imp-url-list"></div>
+                    </div>
+                </div><!-- /#imp-urls-detector-pane -->
+
+                <!-- SUBPESTANYA: reparacions (imatges, tipus MIME, adjunts fantasma) -->
+                <div id="imp-urls-repairs-pane" class="imp-urlfix-pane" style="display:none;">
+                    <div class="imp-panel">
+                        <h2 class="imp-panel-title" data-i18n="repairs_title">🔧 Reparació d'adjunts</h2>
+                        <p class="imp-panel-desc" data-i18n="repairs_desc">Eines per arreglar adjunts de la biblioteca de medis que s'han quedat amb dades incorrectes després d'optimitzar o convertir imatges.</p>
+                        <div class="imp-repair-list">
+                            <div class="imp-repair-block">
+                                <p class="imp-repair-desc" data-i18n-html="repair_images_desc">🔧 <strong class="imp-repair-title-warn">Reparació d'imatges</strong> — Si tens imatges auto-optimitzades a WebP que no apareixen a SEO &amp; Noms ni a Optimitzar, aquest botó repara el path a la base de dades.</p>
+                                <div class="imp-repair-row">
+                                    <button id="imp-fix-orphan-meta" class="imp-btn imp-btn-ghost" data-i18n="repair_paths">🔧 Reparar imatges amb path trencat</button>
+                                    <span id="imp-fix-orphan-result" class="imp-repair-result" style="display:none;"></span>
+                                </div>
+                            </div>
+                            <div class="imp-repair-block">
+                                <p class="imp-repair-desc">🔧 <strong class="imp-repair-title-warn" data-i18n="mime_fix_title">Reparació de tipus MIME</strong> — <span data-i18n="mime_fix_desc">Detecta i repara adjunts amb extensió .webp però tipus MIME incorrecte (image/jpeg). Soluciona imatges invisibles a la Mediateca.</span></p>
+                                <div class="imp-repair-row">
+                                    <button id="imp-fix-mime-mismatch" class="imp-btn imp-btn-ghost" data-i18n="mime_fix_btn">🔧 Reparar tipus MIME incorrectes</button>
+                                    <span id="imp-fix-mime-result" class="imp-repair-result" style="display:none;"></span>
+                                </div>
+                            </div>
+                            <div class="imp-repair-block">
+                                <p class="imp-repair-desc" data-i18n-html="ghost_delete_desc">🗑️ <strong class="imp-repair-title-danger">Eliminar adjunts fantasma</strong> — Detecta registres a la BD que apunten a fitxers que <strong>no existeixen físicament</strong> al disc (per exemple: apareix "gastos.webp" a la biblioteca però el fitxer no hi és). Els elimina completament: post, metadata i thumbnails de BD. <em>No toca cap fitxer físic.</em></p>
+                                <div class="imp-repair-row">
+                                    <button id="imp-scan-ghosts" class="imp-btn imp-btn-ghost" data-i18n="scan_ghosts">🔍 Escanejar adjunts fantasma</button>
+                                    <span id="imp-ghost-scan-result" class="imp-repair-result" style="display:none;"></span>
+                                </div>
+                                <div id="imp-ghost-list" class="imp-ghost-list" style="display:none;"></div>
+                                <div id="imp-ghost-actions" class="imp-repair-row imp-ghost-actions" style="display:none;">
+                                    <button id="imp-ghost-select-all" class="imp-btn imp-btn-ghost imp-btn-sm" data-i18n="select_all">Seleccionar tots</button>
+                                    <button id="imp-ghost-deselect" class="imp-btn imp-btn-ghost imp-btn-sm" data-i18n="deselect">Deseleccionar</button>
+                                    <button id="imp-delete-ghosts" class="imp-btn imp-btn-danger imp-btn-sm">🗑️ <span data-i18n="delete_ghosts">Eliminar seleccionats</span></button>
+                                    <span id="imp-ghost-delete-result" class="imp-repair-result" style="display:none;"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div><!-- /#imp-urls-repairs-pane -->
+
+                <!-- SUBPESTANYA: còpies de seguretat d'eliminacions -->
+                <div id="imp-urls-backups-pane" class="imp-urlfix-pane" style="display:none;">
+                    <div id="imp-url-backups-panel" class="imp-panel">
+                        <h3 class="imp-panel-title" data-i18n="url_backups_title">Còpies de seguretat d'eliminacions</h3>
+                        <p class="imp-panel-desc" data-i18n="url_backups_desc">Cada vegada que elimines referències del contingut es desa una còpia. Pots desfer l'eliminació des d'aquí; els continguts editats després no se sobreescriuen.</p>
+                        <div id="imp-url-backups-list"></div>
+                    </div>
+                </div><!-- /#imp-urls-backups-pane -->
             </div>
 
             <div id="imp-engine-info-modal" class="imp-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="imp-engine-info-title">

@@ -96,6 +96,18 @@ class TSOIMMA_Backup_Manager {
 				}
 			)
 		);
+		// Backups no attachment points at any more are the only copy of an image
+		// that was deleted (orphans/referenced cleanup): like the size zips,
+		// they are never removed by the automatic retention.
+		$active_backups = TSOIMMA_Rogue_Scanner::get_active_backup_paths();
+		$files          = array_values(
+			array_filter(
+				$files,
+				static function ( $file ) use ( $active_backups ) {
+					return isset( $active_backups[ wp_normalize_path( $file['path'] ) ] );
+				}
+			)
+		);
 		$now   = time();
 
 		if ( $settings['days'] > 0 ) {
@@ -189,6 +201,19 @@ class TSOIMMA_Backup_Manager {
 	}
 
 	/**
+	 * Cleanup after a backup file was removed OUTSIDE this class (e.g. from
+	 * "Extra files"): clears the attachment meta that pointed at it and
+	 * refreshes the Overview counter.
+	 *
+	 * @param string $path Absolute path of the deleted backup.
+	 * @return void
+	 */
+	public static function after_external_delete( $path ) {
+		self::clear_meta_for_backup_path( (string) $path, (string) $path );
+		self::flush_dashboard_backup_stats_cache();
+	}
+
+	/**
 	 * @return void
 	 */
 	private static function flush_dashboard_backup_stats_cache() {
@@ -228,8 +253,30 @@ class TSOIMMA_Backup_Manager {
 		$basedir    = wp_normalize_path( trailingslashit( $upload_dir['basedir'] ) );
 		$baseurl    = trailingslashit( $upload_dir['baseurl'] );
 
+		// Size-cleanup zips are never auto-purged and are the only copy of
+		// what was deleted, so ALL of them are always listed; the cap only
+		// applies to the (possibly thousands of) per-original backups.
+		// Otherwise old zips fall off the list and can't be restored/deleted.
+		$batch_files = array();
+		$other_files = array();
+		foreach ( $files as $f ) {
+			if ( false !== strpos( wp_normalize_path( $f['path'] ), '/size-backups/' ) ) {
+				$batch_files[] = $f;
+			} else {
+				$other_files[] = $f;
+			}
+		}
+		$listed_files = array_merge( $batch_files, array_slice( $other_files, 0, max( 1, (int) $limit ) ) );
+		usort(
+			$listed_files,
+			static function ( $a, $b ) {
+				return $b['mtime'] <=> $a['mtime'];
+			}
+		);
+
+		$active_backups = TSOIMMA_Rogue_Scanner::get_active_backup_paths();
 		$items = array();
-		foreach ( array_slice( $files, 0, max( 1, (int) $limit ) ) as $f ) {
+		foreach ( $listed_files as $f ) {
 			$norm_path = wp_normalize_path( $f['path'] );
 			$rel       = ltrim( str_replace( $basedir, '', $norm_path ), '/' );
 			$is_batch  = ( false !== strpos( $rel, 'size-backups/' ) );
@@ -242,6 +289,7 @@ class TSOIMMA_Backup_Manager {
 				'bytes_h'       => size_format( (int) $f['size'] ),
 				'date'          => wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), (int) $f['mtime'] ),
 				'is_size_batch' => $is_batch,
+				'kind'          => $is_batch ? 'size_batch' : ( isset( $active_backups[ $norm_path ] ) ? 'revert' : 'deleted' ),
 				// A size-cleanup backup is a zip bundling one file per
 				// deleted attachment; a regular optimizer backup is always
 				// a single original file. Count the zip entries instead of
