@@ -1257,9 +1257,28 @@ class TSOIMMA_Ajax_Handler {
     // ----------------------------------------------------------------
     // Mides que figuren a les metadades però el fitxer no existeix
     // ----------------------------------------------------------------
+    /**
+     * Loads the Missing sizes class on demand (an update that replaced this file but not the main plugin file
+     * would otherwise end in "class not found") and says so clearly when the file itself is not on the server.
+     *
+     * @return void
+     */
+    private static function require_missing_sizes_class() {
+        if ( ! class_exists( 'TSOIMMA_Missing_Sizes', false ) ) {
+            $file = TSOIMMA_PLUGIN_DIR . 'includes/class-missing-sizes.php';
+            if ( is_readable( $file ) ) {
+                require_once $file;
+            }
+        }
+        if ( ! class_exists( 'TSOIMMA_Missing_Sizes', false ) ) {
+            wp_send_json_error( __( 'The file includes/class-missing-sizes.php is missing from the plugin folder: upload the complete update.', 'tso-image-master' ) );
+        }
+    }
+
     public static function handle_tso_im_find_missing_sizes() {
         tsoimma_verify_ajax_nonce();
         self::require_admin();
+        self::require_missing_sizes_class();
 
         // A PHP error here used to surface only as an opaque "500": report its message instead.
         try {
@@ -1284,6 +1303,7 @@ class TSOIMMA_Ajax_Handler {
     public static function handle_tso_im_repair_missing_sizes() {
         tsoimma_verify_ajax_nonce();
         self::require_admin();
+        self::require_missing_sizes_class();
 
         // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
         @set_time_limit( 300 );
