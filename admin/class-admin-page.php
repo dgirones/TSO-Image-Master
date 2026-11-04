@@ -238,6 +238,7 @@ class TSOIMMA_Admin_Page {
                 'dash_backup_purge_noop'=> __( 'Retention is disabled (0 days and 0 MB). Nothing to purge.', 'tso-image-master' ),
                 'dash_dup_title'        => __( 'Duplicate images', 'tso-image-master' ),
                 'dash_dup_scan'         => __( 'Scan duplicates', 'tso-image-master' ),
+                'dash_dup_desc'         => __( 'Finds identical image files (same content, checked with MD5) registered more than once in the Media Library, which waste disk space. It shows where each copy is used so you can keep one and delete the rest. Nothing is deleted automatically.', 'tso-image-master' ),
                 'dash_dup_none'         => __( 'No duplicate groups found.', 'tso-image-master' ),
                 'dash_dup_groups'       => __( 'duplicate groups', 'tso-image-master' ),
                 'dash_dup_wasted'       => __( 'Wasted space', 'tso-image-master' ),
@@ -1504,10 +1505,9 @@ class TSOIMMA_Admin_Page {
                 <!-- SUBPESTANYA: imatges duplicades -->
                 <div id="imp-urls-duplicates-pane" class="imp-urlfix-pane" style="display:none;">
                     <div class="imp-panel">
-                        <div class="imp-toolbar" style="margin-bottom:12px;">
-                            <h2 class="imp-panel-title" style="margin:0;" data-i18n="dash_dup_title">Imatges duplicades</h2>
-                            <button id="imp-scan-duplicates" class="imp-btn imp-btn-ghost" data-i18n="dash_dup_scan">Escanejar duplicats</button>
-                        </div>
+                        <h2 class="imp-panel-title" data-i18n="dash_dup_title"><?php esc_html_e( 'Duplicate images', 'tso-image-master' ); ?></h2>
+                        <p class="imp-panel-desc" data-i18n="dash_dup_desc"><?php esc_html_e( 'Finds identical image files (same content, checked with MD5) registered more than once in the Media Library, which waste disk space. It shows where each copy is used so you can keep one and delete the rest. Nothing is deleted automatically.', 'tso-image-master' ); ?></p>
+                        <button id="imp-scan-duplicates" class="imp-btn imp-btn-primary" data-i18n="dash_dup_scan"><?php esc_html_e( 'Scan duplicates', 'tso-image-master' ); ?></button>
                         <div id="imp-duplicates-result"></div>
                         <div id="imp-duplicates-list"></div>
                     </div>

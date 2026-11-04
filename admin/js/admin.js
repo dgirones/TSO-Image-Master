@@ -479,6 +479,7 @@
             dash_dup_groups: 'grups de duplicats',
             dash_dup_wasted: 'Espai malgastat',
             dash_dup_explain: 'Cada grup són fitxers idèntics (mateix MD5) registrats més d\'una vegada a la Mediateca. Conserva una entrada i elimina la resta des de la Mediateca de WordPress.',
+            dash_dup_desc: 'Busca fitxers d\'imatge idèntics (mateix contingut, comprovat amb MD5) registrats més d\'una vegada a la Mediateca, que ocupen espai de més. Mostra on s\'usa cada còpia perquè en conservis una i eliminis la resta. No s\'elimina res automàticament.',
             dash_dup_rescan_hint: 'Aquestes dades són de l\'últim escaneig. Si acabes d\'editar un article, torna a prémer «Escanejar duplicats» per veure l\'estat actual.',
             dash_dup_group_label: 'Fitxer idèntic',
             dash_dup_entries: 'entrades',
@@ -883,6 +884,7 @@
             ,dash_dup_groups: 'grupos de duplicados'
             ,dash_dup_wasted: 'Espacio desperdiciado'
             ,dash_dup_explain: 'Cada grupo son archivos idénticos (mismo MD5) registrados más de una vez en la Biblioteca de medios. Conserva una entrada y elimina el resto desde Medios de WordPress.'
+            ,dash_dup_desc: 'Busca fitxers d\'imatge idèntics (mateix contingut, comprovat amb MD5) registrats més d\'una vegada a la Mediateca, que ocupen espai de més. Mostra on s\'usa cada còpia perquè en conservis una i eliminis la resta. No s\'elimina res automàticament.'
             ,dash_dup_rescan_hint: 'Estos datos son del último escaneo. Si acabas de editar una entrada, vuelve a pulsar «Escanear duplicados» para ver el estado actual.'
             ,dash_dup_group_label: 'Archivo idéntico'
             ,dash_dup_entries: 'entradas'
@@ -1284,6 +1286,7 @@
             ,dash_dup_groups: 'duplicate groups'
             ,dash_dup_wasted: 'Wasted space'
             ,dash_dup_explain: 'Each group is identical file content (same MD5) registered more than once in the Media Library. Keep one entry and delete the rest from WordPress Media.'
+            ,dash_dup_desc: 'Finds identical image files (same content, checked with MD5) registered more than once in the Media Library, which waste disk space. It shows where each copy is used so you can keep one and delete the rest. Nothing is deleted automatically.'
             ,dash_dup_rescan_hint: 'This data is from the last scan. If you just edited a post, click "Scan duplicates" again to see the current status.'
             ,dash_dup_group_label: 'Identical file'
             ,dash_dup_entries: 'entries'
@@ -2099,6 +2102,7 @@
             dash_dup_groups: 'grups de duplicats',
             dash_dup_wasted: 'Espai malgastat',
             dash_dup_explain: 'Cada grup són fitxers idèntics (mateix MD5) registrats més d\'una vegada a la Mediateca. Conserva una entrada i elimina la resta des de la Mediateca de WordPress.',
+            dash_dup_desc: 'Busca fitxers d\'imatge idèntics (mateix contingut, comprovat amb MD5) registrats més d\'una vegada a la Mediateca, que ocupen espai de més. Mostra on s\'usa cada còpia perquè en conservis una i eliminis la resta. No s\'elimina res automàticament.',
             dash_dup_rescan_hint: 'Aquestes dades són de l\'últim escaneig. Si acabes d\'editar un article, torna a prémer «Escanejar duplicats» per veure l\'estat actual.',
             dash_dup_group_label: 'Fitxer idèntic',
             dash_dup_entries: 'entrades',

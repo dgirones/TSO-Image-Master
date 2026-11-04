@@ -939,3 +939,6 @@ msgstr "El archivo todavía existe en disco: %s"
 
 msgid "The backup could not be created; nothing was modified."
 msgstr "No se ha podido crear la copia de seguridad; no se ha modificado nada."
+
+msgid "Finds identical image files (same content, checked with MD5) registered more than once in the Media Library, which waste disk space. It shows where each copy is used so you can keep one and delete the rest. Nothing is deleted automatically."
+msgstr "Busca archivos de imagen idénticos (mismo contenido, comprobado con MD5) registrados más de una vez en la Biblioteca de medios, que ocupan espacio de más. Muestra dónde se usa cada copia para que conserves una y elimines el resto. No se elimina nada automáticamente."
