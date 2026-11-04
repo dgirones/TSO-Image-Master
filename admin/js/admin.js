@@ -478,8 +478,38 @@
             dash_dup_none: 'No s\'han trobat grups de duplicats.',
             dash_dup_groups: 'grups de duplicats',
             dash_dup_wasted: 'Espai malgastat',
-            dash_dup_explain: 'Cada grup són fitxers idèntics (mateix MD5) registrats més d\'una vegada a la Mediateca. Conserva una entrada i elimina la resta des de la Mediateca de WordPress.',
+            dash_dup_explain: 'Cada grup són fitxers idèntics (mateix MD5) registrats més d\'una vegada a la Mediateca. Marca els que vols conservar i fusiona o elimina la resta amb els botons de cada grup.',
             dash_dup_desc: 'Busca fitxers d\'imatge idèntics (mateix contingut, comprovat amb MD5) registrats més d\'una vegada a la Mediateca, que ocupen espai de més. Mostra on s\'usa cada còpia perquè en conservis una i eliminis la resta. No s\'elimina res automàticament.',
+            ref_untitled: '(sense títol)',
+            ref_t_cust_logo: 'Logo del lloc (Personalitzador)',
+            ref_t_cust_icon: 'Icona del lloc (Personalitzador)',
+            ref_t_cust_header_image: 'Imatge de capçalera (Personalitzador)',
+            ref_t_cust_background_image: 'Imatge de fons (Personalitzador)',
+            ref_t_theme_file: 'Codi de la plantilla del tema actiu',
+            ref_t_site_option: 'Configuració del tema/lloc (opció: {0})',
+            ref_d_jetpack: 'Jetpack Gallery · ids[]',
+            ref_d_data_id: 'HTML data-id',
+            ref_d_block_image: 'Bloc imatge',
+            ref_d_block_image_class: 'Bloc imatge (classe wp-image)',
+            ref_d_shortcode_ids: 'Shortcode [gallery] · atribut ids=',
+            ref_d_id_content: 'ID al contingut',
+            ref_d_weak_id: 'ID sense confirmar a un bloc (podria ser un atribut desactualitzat o un bloc no relacionat)',
+            ref_d_parent: 'Adjunta a aquest article a la Biblioteca de mitjans — no s\'ha trobat cap referència explícita al contingut, imatge destacada ni camps personalitzats',
+            ref_d_cust_logo: 'Logo del lloc, configurat al Personalitzador (Identitat del lloc)',
+            ref_d_cust_icon: 'Icona del lloc, configurada al Personalitzador (Identitat del lloc)',
+            ref_d_cust_header_image: 'Imatge de capçalera, configurada al Personalitzador',
+            ref_d_cust_background_image: 'Imatge de fons, configurada al Personalitzador',
+            ref_d_theme_file: 'Trobat directament al codi de la plantilla del tema actiu ({0}) — no es pot editar des d\'aquí',
+            ref_d_theme_file_nopath: 'Trobat directament al codi de la plantilla del tema actiu — no es pot editar des d\'aquí',
+            ref_d_site_option: 'Trobat a una opció de configuració del lloc/tema ({0}) — probablement el logo o una altra imatge global del tema',
+            ref_d_site_option_nopath: 'Trobat a una opció de configuració del lloc/tema — probablement el logo o una altra imatge global del tema',
+            ref_d_indirect_name: 'Coincidència de nom de fitxer (aquest ID no és al codi)',
+            ref_d_indirect_name_url: 'Coincidència de nom/URL (aquest ID no és al codi)',
+            ref_d_post_uses: 'El post usa #{0}; #{1} no hi és al codi',
+            ref_d_post_uses_ids: 'El post usa #{0} (ids[]); #{1} no hi és al codi',
+            dash_dup_scan_expired: 'L\'escaneig s\'ha interromput (les dades temporals han caducat). Torna a escanejar.',
+            dash_dup_scan_failed: 'No s\'ha pogut escanejar els duplicats.',
+            dash_dup_more_groups: 'Mostrant {0} de {1} grups, els que més espai malgasten. Resol-los i torna a escanejar per veure la resta.',
             dash_dup_rescan_hint: 'Aquestes dades són de l\'últim escaneig. Si acabes d\'editar un article, torna a prémer «Escanejar duplicats» per veure l\'estat actual.',
             dash_dup_group_label: 'Fitxer idèntic',
             dash_dup_entries: 'entrades',
@@ -883,8 +913,38 @@
             ,dash_dup_none: 'No se han encontrado grupos de duplicados.'
             ,dash_dup_groups: 'grupos de duplicados'
             ,dash_dup_wasted: 'Espacio desperdiciado'
-            ,dash_dup_explain: 'Cada grupo son archivos idénticos (mismo MD5) registrados más de una vez en la Biblioteca de medios. Conserva una entrada y elimina el resto desde Medios de WordPress.'
+            ,dash_dup_explain: 'Cada grupo son archivos idénticos (mismo MD5) registrados más de una vez en la Biblioteca de medios. Marca los que quieres conservar y fusiona o elimina el resto con los botones de cada grupo.'
             ,dash_dup_desc: 'Busca archivos de imagen idénticos (mismo contenido, comprobado con MD5) registrados más de una vez en la Biblioteca de medios, que ocupan espacio de más. Muestra dónde se usa cada copia para que conserves una y elimines el resto. No se elimina nada automáticamente.'
+            ,ref_untitled: '(sin título)'
+            ,ref_t_cust_logo: 'Logo del sitio (Personalizador)'
+            ,ref_t_cust_icon: 'Icono del sitio (Personalizador)'
+            ,ref_t_cust_header_image: 'Imagen de cabecera (Personalizador)'
+            ,ref_t_cust_background_image: 'Imagen de fondo (Personalizador)'
+            ,ref_t_theme_file: 'Código de la plantilla del tema activo'
+            ,ref_t_site_option: 'Configuración del tema/sitio (opción: {0})'
+            ,ref_d_jetpack: 'Jetpack Gallery · ids[]'
+            ,ref_d_data_id: 'HTML data-id'
+            ,ref_d_block_image: 'Bloque de imagen'
+            ,ref_d_block_image_class: 'Bloque de imagen (clase wp-image)'
+            ,ref_d_shortcode_ids: 'Shortcode [gallery] · atributo ids='
+            ,ref_d_id_content: 'ID en el contenido'
+            ,ref_d_weak_id: 'ID sin confirmar en un bloque (podría ser un atributo desactualizado o un bloque no relacionado)'
+            ,ref_d_parent: 'Adjunta a esta entrada en la Biblioteca de medios — no se ha encontrado ninguna referencia explícita en el contenido, imagen destacada ni campos personalizados'
+            ,ref_d_cust_logo: 'Logo del sitio, configurado en el Personalizador (Identidad del sitio)'
+            ,ref_d_cust_icon: 'Icono del sitio, configurado en el Personalizador (Identidad del sitio)'
+            ,ref_d_cust_header_image: 'Imagen de cabecera, configurada en el Personalizador'
+            ,ref_d_cust_background_image: 'Imagen de fondo, configurada en el Personalizador'
+            ,ref_d_theme_file: 'Encontrado directamente en el código de la plantilla del tema activo ({0}) — no se puede editar desde aquí'
+            ,ref_d_theme_file_nopath: 'Encontrado directamente en el código de la plantilla del tema activo — no se puede editar desde aquí'
+            ,ref_d_site_option: 'Encontrado en una opción de configuración del sitio/tema ({0}) — probablemente el logo u otra imagen global del tema'
+            ,ref_d_site_option_nopath: 'Encontrado en una opción de configuración del sitio/tema — probablemente el logo u otra imagen global del tema'
+            ,ref_d_indirect_name: 'Coincidencia de nombre de archivo (este ID no está en el código)'
+            ,ref_d_indirect_name_url: 'Coincidencia de nombre/URL (este ID no está en el código)'
+            ,ref_d_post_uses: 'La entrada usa #{0}; #{1} no está en el código'
+            ,ref_d_post_uses_ids: 'La entrada usa #{0} (ids[]); #{1} no está en el código'
+            ,dash_dup_scan_expired: 'El escaneo se ha interrumpido (los datos temporales han caducado). Vuelve a escanear.'
+            ,dash_dup_scan_failed: 'No se han podido escanear los duplicados.'
+            ,dash_dup_more_groups: 'Mostrando {0} de {1} grupos, los que más espacio desperdician. Resuélvelos y vuelve a escanear para ver el resto.'
             ,dash_dup_rescan_hint: 'Estos datos son del último escaneo. Si acabas de editar una entrada, vuelve a pulsar «Escanear duplicados» para ver el estado actual.'
             ,dash_dup_group_label: 'Archivo idéntico'
             ,dash_dup_entries: 'entradas'
@@ -1285,8 +1345,38 @@
             ,dash_dup_none: 'No duplicate groups found.'
             ,dash_dup_groups: 'duplicate groups'
             ,dash_dup_wasted: 'Wasted space'
-            ,dash_dup_explain: 'Each group is identical file content (same MD5) registered more than once in the Media Library. Keep one entry and delete the rest from WordPress Media.'
+            ,dash_dup_explain: 'Each group is identical file content (same MD5) registered more than once in the Media Library. Tick the ones you want to keep and merge or delete the rest with each group\'s buttons.'
             ,dash_dup_desc: 'Finds identical image files (same content, checked with MD5) registered more than once in the Media Library, which waste disk space. It shows where each copy is used so you can keep one and delete the rest. Nothing is deleted automatically.'
+            ,ref_untitled: '(untitled)'
+            ,ref_t_cust_logo: 'Site logo (Customizer)'
+            ,ref_t_cust_icon: 'Site icon (Customizer)'
+            ,ref_t_cust_header_image: 'Header image (Customizer)'
+            ,ref_t_cust_background_image: 'Background image (Customizer)'
+            ,ref_t_theme_file: 'Active theme template code'
+            ,ref_t_site_option: 'Theme/site setting (option: {0})'
+            ,ref_d_jetpack: 'Jetpack Gallery · ids[]'
+            ,ref_d_data_id: 'HTML data-id'
+            ,ref_d_block_image: 'Image block'
+            ,ref_d_block_image_class: 'Image block (wp-image class)'
+            ,ref_d_shortcode_ids: 'Shortcode [gallery] · ids= attribute'
+            ,ref_d_id_content: 'ID in content'
+            ,ref_d_weak_id: 'Unconfirmed ID in a block (could be a stale attribute or an unrelated block)'
+            ,ref_d_parent: 'Attached to this post in the Media Library — no explicit reference found in the content, featured image or custom fields'
+            ,ref_d_cust_logo: 'Site logo, set in the Customizer (Site Identity)'
+            ,ref_d_cust_icon: 'Site icon, set in the Customizer (Site Identity)'
+            ,ref_d_cust_header_image: 'Header image, set in the Customizer'
+            ,ref_d_cust_background_image: 'Background image, set in the Customizer'
+            ,ref_d_theme_file: 'Found directly in the active theme\'s template code ({0}) — it cannot be edited from here'
+            ,ref_d_theme_file_nopath: 'Found directly in the active theme\'s template code — it cannot be edited from here'
+            ,ref_d_site_option: 'Found in a site/theme setting ({0}) — probably the logo or another global theme image'
+            ,ref_d_site_option_nopath: 'Found in a site/theme setting — probably the logo or another global theme image'
+            ,ref_d_indirect_name: 'Filename match (this ID is not in the code)'
+            ,ref_d_indirect_name_url: 'Name/URL match (this ID is not in the code)'
+            ,ref_d_post_uses: 'The post uses #{0}; #{1} is not in the code'
+            ,ref_d_post_uses_ids: 'The post uses #{0} (ids[]); #{1} is not in the code'
+            ,dash_dup_scan_expired: 'The scan was interrupted (its temporary data expired). Scan again.'
+            ,dash_dup_scan_failed: 'Could not scan for duplicates.'
+            ,dash_dup_more_groups: 'Showing {0} of {1} groups, the ones wasting the most space. Resolve them and scan again to see the rest.'
             ,dash_dup_rescan_hint: 'This data is from the last scan. If you just edited a post, click "Scan duplicates" again to see the current status.'
             ,dash_dup_group_label: 'Identical file'
             ,dash_dup_entries: 'entries'
@@ -2101,7 +2191,7 @@
                 dash_dup_none: 'No s\'han trobat grups de duplicats.',
             dash_dup_groups: 'grups de duplicats',
             dash_dup_wasted: 'Espai malgastat',
-            dash_dup_explain: 'Cada grup són fitxers idèntics (mateix MD5) registrats més d\'una vegada a la Mediateca. Conserva una entrada i elimina la resta des de la Mediateca de WordPress.',
+            dash_dup_explain: 'Cada grup són fitxers idèntics (mateix MD5) registrats més d\'una vegada a la Mediateca. Marca els que vols conservar i fusiona o elimina la resta amb els botons de cada grup.',
             dash_dup_desc: 'Busca fitxers d\'imatge idèntics (mateix contingut, comprovat amb MD5) registrats més d\'una vegada a la Mediateca, que ocupen espai de més. Mostra on s\'usa cada còpia perquè en conservis una i eliminis la resta. No s\'elimina res automàticament.',
             dash_dup_rescan_hint: 'Aquestes dades són de l\'últim escaneig. Si acabes d\'editar un article, torna a prémer «Escanejar duplicats» per veure l\'estat actual.',
             dash_dup_group_label: 'Fitxer idèntic',
@@ -3191,8 +3281,10 @@
                         var remaining = $group.find('.imp-dup-item').length;
                         if (remaining === 0) {
                             // Nothing left in this group at all.
-                            $group.fadeOut(200, function() { $group.remove(); });
+                            dupBumpGroupTotal(-1);
+                            $group.fadeOut(200, function() { $group.remove(); dupShowEmptyState(); });
                         } else if (remaining === 1) {
+                            dupBumpGroupTotal(-1);
                             // Only one copy left — it's no longer a "duplicate"
                             // (nothing to merge it with), but it's still a real,
                             // possibly-unused file that may still need
@@ -3204,6 +3296,7 @@
                             $group.find('.imp-dup-merge-row').remove();
                             $group.find('.imp-dup-keep-radio').remove();
                             $group.find('.imp-dup-group-entries-count').text(remaining);
+                            dupShowEmptyState();
                         } else {
                             $group.find('.imp-dup-group-entries-count').text(remaining);
                         }
@@ -3269,7 +3362,8 @@
                 if (skippedCount) {
                     msg += ' · ' + skippedCount + ' ' + uiText('dash_dup_kept_review', 'left untouched (still referenced somewhere the tool could not safely rewrite — review manually)');
                 }
-                $('#imp-duplicates-result').prepend('<div class="imp-dup-merge-result">' + escHtml(msg) + '</div>');
+                // The rescan below rebuilds the result area, so the summary is shown by it (not lost).
+                dupPendingNotice = msg;
                 scanDuplicatesBatch(0, true);
             }, function(err) {
                 $btn.prop('disabled', false).text(originalLabel);
@@ -3280,21 +3374,54 @@
         loadBackupRetention();
     }
 
+    var dupPendingNotice = '';
+
+    // Adjust the "N duplicate groups" counter after an in-place delete (no rescan).
+    function dupBumpGroupTotal(delta) {
+        var $n = $('#imp-dup-group-total');
+        if ($n.length) {
+            $n.text(Math.max(0, (parseInt($n.text(), 10) || 0) + delta));
+        }
+    }
+
+    // Nothing is left to review (every group was resolved in place): say so instead of leaving a blank area.
+    function dupShowEmptyState() {
+        var anyDuplicate = $('#imp-duplicates-list .imp-dup-group').filter(function() {
+            return $(this).find('.imp-dup-item').length > 1;
+        }).length;
+        if (!anyDuplicate && !$('#imp-dup-empty').length) {
+            $('#imp-duplicates-result').append('<p id="imp-dup-empty" style="color:var(--imp-success);">✓ ' + escHtml(uiText('dash_dup_none', 'No duplicate groups found.')) + '</p>');
+        }
+    }
+
     function scanDuplicatesBatch(afterId, reset) {
         var $btn = $('#imp-scan-duplicates');
         var scannedLabel = uiText('scanning_msg', 'Scanning...');
-        $('#imp-duplicates-result').html(
-            '<div class="imp-dup-scan-progress">' +
-            '<div class="imp-loading" id="imp-dup-scan-text">' + escHtml(scannedLabel) + '</div>' +
-            '<div class="imp-progress-bar" style="margin-top:10px;"><div class="imp-progress-fill" id="imp-dup-scan-fill" style="width:0%"></div></div>' +
-            '</div>'
-        );
+        $btn.prop('disabled', true);
+        if (reset) {
+            $('#imp-duplicates-list').empty();
+        }
+        // Build the progress bar once: re-rendering it on every batch reset it to 0% each time.
+        if (reset || !$('#imp-dup-scan-fill').length) {
+            $('#imp-duplicates-result').html(
+                '<div class="imp-dup-scan-progress">' +
+                '<div class="imp-loading" id="imp-dup-scan-text">' + escHtml(scannedLabel) + '</div>' +
+                '<div class="imp-progress-bar" style="margin-top:10px;"><div class="imp-progress-fill" id="imp-dup-scan-fill" style="width:0%"></div></div>' +
+                '</div>'
+            );
+        }
 
         ajax('tsoimma_scan_duplicates', {
             after_id: afterId || 0,
             batch: 100,
             reset: reset ? 1 : 0
         }, function(data) {
+            if (data.error) {
+                $btn.prop('disabled', false);
+                var errKey = data.error === 'scan_expired' ? 'dash_dup_scan_expired' : 'dash_dup_scan_failed';
+                $('#imp-duplicates-result').html('<div class="imp-error">' + escHtml(uiText(errKey, 'Could not scan for duplicates.')) + '</div>');
+                return;
+            }
             var total   = parseInt(data.total, 10) || 0;
             var scanned = parseInt(data.scanned, 10) || 0;
             var pct     = total > 0 ? Math.min(100, Math.round(scanned / total * 100)) : 0;
@@ -3310,22 +3437,50 @@
             }
 
             $btn.prop('disabled', false);
+            var notice = dupPendingNotice ? '<div class="imp-dup-merge-result">' + escHtml(dupPendingNotice) + '</div>' : '';
+            dupPendingNotice = '';
             if (!data.group_count) {
-                $('#imp-duplicates-result').html('<p style="color:var(--imp-success);">✓ ' + uiText('dash_dup_none', 'No duplicate groups found.') + '</p>');
+                $('#imp-duplicates-result').html(notice + '<p style="color:var(--imp-success);">✓ ' + escHtml(uiText('dash_dup_none', 'No duplicate groups found.')) + '</p>');
                 return;
             }
+            var groups    = data.groups || [];
+            var moreNote  = (data.group_count > groups.length)
+                ? '<p class="imp-dup-intro">' + escHtml(dupFill(uiText('dash_dup_more_groups', 'Showing {0} of {1} groups, the ones wasting the most space. Resolve them and scan again to see the rest.'), [groups.length, data.group_count])) + '</p>'
+                : '';
             $('#imp-duplicates-result').html(
-                '<p><strong>' + data.group_count + ' ' + uiText('dash_dup_groups', 'duplicate groups') +
-                '</strong> · ' + uiText('dash_dup_wasted', 'Wasted space') + ': ' + escHtml(data.wasted_h || '0 B') +
-                ' · ' + escHtml(data.scanned || 0) + ' ' + uiText('dash_scanned', 'scanned') + '</p>' +
-                '<p class="imp-dup-intro">' + uiText('dash_dup_explain', 'Each group is identical file content registered more than once in the Media Library.') + '</p>' +
-                '<p class="imp-dup-intro" style="opacity:.75;">' + uiText('dash_dup_rescan_hint', 'This data is from the last scan. If you just edited a post, click "Scan duplicates" again to see the current status.') + '</p>'
+                notice +
+                '<p><strong><span id="imp-dup-group-total">' + (parseInt(data.group_count, 10) || 0) + '</span> ' + escHtml(uiText('dash_dup_groups', 'duplicate groups')) +
+                '</strong> · ' + escHtml(uiText('dash_dup_wasted', 'Wasted space')) + ': ' + escHtml(data.wasted_h || '0 B') +
+                ' · ' + escHtml(String(data.scanned || 0)) + ' ' + escHtml(uiText('dash_scanned', 'scanned')) + '</p>' +
+                moreNote +
+                '<p class="imp-dup-intro">' + escHtml(uiText('dash_dup_explain', 'Each group is identical file content (same MD5) registered more than once in the Media Library. Tick the ones you want to keep and merge or delete the rest with each group\'s buttons.')) + '</p>' +
+                '<p class="imp-dup-intro" style="opacity:.75;">' + escHtml(uiText('dash_dup_rescan_hint', 'This data is from the last scan. If you just edited a post, click "Scan duplicates" again to see the current status.')) + '</p>'
             );
-            renderDuplicateGroups(data.groups || []);
+            renderDuplicateGroups(groups);
         }, function(err) {
             $btn.prop('disabled', false);
             $('#imp-duplicates-result').html('<div class="imp-error">' + escHtml(err) + '</div>');
         }, 180000);
+    }
+
+    // Reference texts come from the server as Catalan text plus a language-independent code: translate the code.
+    function dupFill(text, args) {
+        (args || []).forEach(function(a, i) { text = text.split('{' + i + '}').join(a); });
+        return text;
+    }
+    function refDetailText(ref) {
+        if (ref && ref.detail_key) {
+            var t = uiText('ref_d_' + ref.detail_key, '');
+            if (t) return dupFill(t, ref.detail_args);
+        }
+        return (ref && ref.detail) || '';
+    }
+    function refTitleText(ref) {
+        if (ref && ref.title_key) {
+            var t = uiText(ref.title_key === 'untitled' ? 'ref_untitled' : 'ref_t_' + ref.title_key, '');
+            if (t) return dupFill(t, ref.title_args);
+        }
+        return (ref && ref.title) || '';
     }
 
     function renderDuplicateUsedIn(item) {
@@ -3348,9 +3503,11 @@
                 escHtml(uiText('dash_dup_used_direct', 'Used in content')) + ':</span> ';
             direct.forEach(function(ref) {
                 var editUrl = ref.edit_url || (TSOIMMA.site_url + '/wp-admin/post.php?post=' + ref.id + '&action=edit');
-                var detail  = ref.detail ? (' · ' + ref.detail + ' · #' + item.id) : (' · #' + item.id);
+                var refDetail = refDetailText(ref);
+                var refTitle  = refTitleText(ref);
+                var detail  = refDetail ? (' · ' + refDetail + ' · #' + item.id) : (' · #' + item.id);
                 html += '<a href="' + escHtml(editUrl) + '" target="_blank" rel="noopener" class="imp-dup-ref-link imp-dup-ref-direct" title="' +
-                    escHtml(ref.title || '') + '">' + escHtml(ref.title || ('#' + ref.id)) + escHtml(detail) + '</a> ';
+                    escHtml(refTitle) + '">' + escHtml(refTitle || ('#' + ref.id)) + escHtml(detail) + '</a> ';
             });
             html += '</div>';
         }
@@ -3361,10 +3518,10 @@
                 escHtml(uiText('dash_dup_used_indirect', 'Filename match only (this ID is not in the code)')) + ':</span><ul class="imp-dup-indirect-list">';
             indirect.forEach(function(ref) {
                 html += '<li>';
-                if (ref.detail) {
-                    html += escHtml(ref.detail) + ' — ';
+                if (refDetailText(ref)) {
+                    html += escHtml(refDetailText(ref)) + ' — ';
                 }
-                html += escHtml(ref.title || ('#' + ref.id));
+                html += escHtml(refTitleText(ref) || ('#' + ref.id));
                 if (ref.active_attachment_id) {
                     html += ' · ' + escHtml(uiText('dash_dup_active_id', 'Active ID in post')) + ' #' + ref.active_attachment_id;
                 }
@@ -3437,12 +3594,12 @@
     function renderDuplicateGroups(groups) {
         var $list = $('#imp-duplicates-list');
         $list.empty();
-        groups.slice(0, 20).forEach(function(group, groupIndex) {
+        groups.forEach(function(group, groupIndex) {
             var itemCount = (group.items || []).length;
-            var header = uiText('dash_dup_group_label', 'Identical file') + ' #' + (groupIndex + 1) +
+            var header = escHtml(uiText('dash_dup_group_label', 'Identical file')) + ' #' + (groupIndex + 1) +
                 ' · ' + escHtml(group.size_h || '') +
-                ' · <span class="imp-dup-group-entries-count">' + itemCount + '</span> ' + uiText('dash_dup_entries', 'entries') +
-                ' · ' + escHtml(group.wasted_h || '') + ' ' + uiText('dash_dup_wasted_in_group', 'wasted in this group');
+                ' · <span class="imp-dup-group-entries-count">' + itemCount + '</span> ' + escHtml(uiText('dash_dup_entries', 'entries')) +
+                ' · ' + escHtml(group.wasted_h || '') + ' ' + escHtml(uiText('dash_dup_wasted_in_group', 'wasted in this group'));
             var itemIds = (group.items || []).map(function(it) { return it.id; }).join(',');
             var html = '<div class="imp-dup-group" data-group-index="' + groupIndex + '" data-item-ids="' + escHtml(itemIds) + '">' +
                 '<div class="imp-dup-group-header"><strong>' + header + '</strong>' +
@@ -5857,7 +6014,7 @@
             var editUrl = p.edit_url || (TSOIMMA.site_url + '/wp-admin/post.php?post=' + p.id + '&action=edit');
             html += '<a href="' + escHtml(editUrl) + '" target="_blank" rel="noopener" class="imp-used-in-item" style="opacity:.7;">' +
                 '<span class="imp-used-in-type">?</span>' +
-                '<span class="imp-used-in-item-title">' + escHtml(p.title || ('#' + p.id)) + (p.detail ? ' · ' + escHtml(p.detail) : '') + '</span>' +
+                '<span class="imp-used-in-item-title">' + escHtml(refTitleText(p) || ('#' + p.id)) + (refDetailText(p) ? ' · ' + escHtml(refDetailText(p)) : '') + '</span>' +
                 '<span style="color:var(--imp-text-muted);font-size:10px;">↗</span>' +
                 '</a>';
         });

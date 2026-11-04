@@ -140,6 +140,7 @@ On Repairs > Duplicate images, **Scan duplicates** groups Media Library files wi
 For releases before 2.0.0, see CHANGELOG.txt in the plugin folder.
 
 = 2.1.2 =
+* Fixed: Duplicate images review: the scan keeps only IDs in its temporary data and details only the 20 groups with most wasted space (with a note when there are more), a scan whose data expired now asks to start again instead of returning partial results, the merge summary is no longer erased by the rescan, the progress bar no longer resets each batch, the merge no longer rewrites file names that only contain the retired one, where-used texts are translated to CA/ES/EN, error messages are styled, and the layout is fixed on mobile.
 * Improved: Duplicate images moved from Overview to a new sub-tab in Repairs, and the "Largest images" shortcut was removed from Overview.
 * Improved: SEO & Names now has one criterion for badges and order, weighted by how much Google and Bing rely on each element: missing alt, generic alt, alt written like a file name, generic or non-slug file name, and missing title; each card shows a colour-coded badge per gap, and "Needs SEO first" sorts by that score.
 

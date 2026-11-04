@@ -9,6 +9,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TSOIMMA_Duplicate_Finder {
 
 	const USED_IN_PREVIEW_LIMIT = 8;
+	const MAX_GROUPS_SHOWN      = 20;
 	const SCAN_BATCH_SIZE       = 100;
 	const TRANSIENT_PREFIX      = 'tsoimma_dup_scan_';
 
@@ -43,6 +44,16 @@ class TSOIMMA_Duplicate_Finder {
 		}
 
 		$state = get_transient( $key );
+		if ( ! $reset && ! is_array( $state ) ) {
+			// The partial scan (kept 15 minutes) is gone: continuing would silently drop every group found so far.
+			return array(
+				'done'    => true,
+				'error'   => 'scan_expired',
+				'groups'  => array(),
+				'scanned' => 0,
+				'total'   => 0,
+			);
+		}
 		if ( ! is_array( $state ) ) {
 			$state = array(
 				'after_id' => 0,
@@ -60,9 +71,7 @@ class TSOIMMA_Duplicate_Finder {
 		}
 
 		$after_id  = $reset ? 0 : max( (int) $state['after_id'], absint( $after_id ) );
-		$upload_dir = wp_upload_dir();
-		$basedir    = wp_normalize_path( trailingslashit( $upload_dir['basedir'] ) );
-		$ids        = self::get_image_attachment_ids_batch( $after_id, $batch );
+		$ids = self::get_image_attachment_ids_batch( $after_id, $batch );
 
 		foreach ( $ids as $attachment_id ) {
 			$attachment_id = absint( $attachment_id );
@@ -79,15 +88,17 @@ class TSOIMMA_Duplicate_Finder {
 				continue;
 			}
 
+			// Only IDs are kept while scanning (the transient must stay small on big libraries);
+			// item details are built later, just for the groups that are shown.
 			if ( ! isset( $state['groups'][ $hash ] ) ) {
 				$state['groups'][ $hash ] = array(
-					'hash'  => $hash,
-					'size'  => filesize( $file_path ),
-					'items' => array(),
+					'hash' => $hash,
+					'size' => (int) filesize( $file_path ),
+					'ids'  => array(),
 				);
 			}
 
-			$state['groups'][ $hash ]['items'][] = self::build_item_stub( $attachment_id, $file_path, $basedir );
+			$state['groups'][ $hash ]['ids'][] = $attachment_id;
 		}
 
 		$done = empty( $ids ) || count( $ids ) < $batch;
@@ -125,9 +136,7 @@ class TSOIMMA_Duplicate_Finder {
 			'groups'   => array(),
 		);
 
-		$upload_dir = wp_upload_dir();
-		$basedir    = wp_normalize_path( trailingslashit( $upload_dir['basedir'] ) );
-		$ids        = get_posts(
+		$ids = get_posts(
 			array(
 				'post_type'      => 'attachment',
 				'post_mime_type' => 'image',
@@ -153,13 +162,13 @@ class TSOIMMA_Duplicate_Finder {
 
 			if ( ! isset( $state['groups'][ $hash ] ) ) {
 				$state['groups'][ $hash ] = array(
-					'hash'  => $hash,
-					'size'  => filesize( $file_path ),
-					'items' => array(),
+					'hash' => $hash,
+					'size' => (int) filesize( $file_path ),
+					'ids'  => array(),
 				);
 			}
 
-			$state['groups'][ $hash ]['items'][] = self::build_item_stub( $attachment_id, $file_path, $basedir );
+			$state['groups'][ $hash ]['ids'][] = $attachment_id;
 			++$state['scanned'];
 		}
 
@@ -227,32 +236,57 @@ class TSOIMMA_Duplicate_Finder {
 			array_filter(
 				$groups,
 				function ( $group ) {
-					return isset( $group['items'] ) && count( $group['items'] ) > 1;
+					return isset( $group['ids'] ) && count( $group['ids'] ) > 1;
 				}
 			)
 		);
 
-		foreach ( $duplicate_groups as $group_index => $group ) {
-			$items       = array();
-			$sibling_ids = array();
-			foreach ( $group['items'] as $stub ) {
-				if ( ! empty( $stub['id'] ) ) {
-					$sibling_ids[] = absint( $stub['id'] );
+		// Totals cover every duplicate group; only the biggest ones are expanded below.
+		$wasted          = 0;
+		$duplicate_files = 0;
+		foreach ( $duplicate_groups as $index => $group ) {
+			$count                                    = count( $group['ids'] );
+			$duplicate_groups[ $index ]['wasted_bytes'] = (int) $group['size'] * ( $count - 1 );
+			$wasted                                  += $duplicate_groups[ $index ]['wasted_bytes'];
+			$duplicate_files                         += $count;
+		}
+
+		usort(
+			$duplicate_groups,
+			function ( $a, $b ) {
+				$waste_diff = (int) $b['wasted_bytes'] <=> (int) $a['wasted_bytes'];
+				if ( 0 !== $waste_diff ) {
+					return $waste_diff;
 				}
+				return count( $b['ids'] ) <=> count( $a['ids'] );
+			}
+		);
+
+		$group_count = count( $duplicate_groups );
+		$shown       = array_slice( $duplicate_groups, 0, self::MAX_GROUPS_SHOWN );
+
+		$upload_dir = wp_upload_dir();
+		$basedir    = wp_normalize_path( trailingslashit( $upload_dir['basedir'] ) );
+
+		foreach ( $shown as $group_index => $group ) {
+			$stubs       = array();
+			$sibling_ids = array_map( 'absint', $group['ids'] );
+			foreach ( $sibling_ids as $attachment_id ) {
+				$file_path = get_attached_file( $attachment_id );
+				if ( ! $file_path || ! is_file( $file_path ) ) {
+					continue;
+				}
+				$stubs[] = self::build_item_stub( $attachment_id, $file_path, $basedir );
 			}
 
-			foreach ( $group['items'] as $item ) {
-				$items[] = self::enrich_item_usage( $item, $sibling_ids );
+			$items = array();
+			foreach ( $stubs as $stub ) {
+				$items[] = self::enrich_item_usage( $stub, $sibling_ids );
 			}
 
-			// Show the copy that's genuinely used in content first — a user
-			// scanning the group visually should see the one to keep at a
-			// glance, not have to read every card to find it buried further
-			// down. This also fixes the "Keep this one" radio defaulting to
-			// whichever copy the scan happened to list first, which could
-			// be the wrong one to keep. array_multisort with a decorated
-			// index keeps ties (e.g. two "safe to delete" copies) in their
-			// original relative order.
+			// Show the copy that's genuinely used in content first, so the
+			// "Keep this one" checkbox defaults to the right copy. A decorated
+			// index keeps ties in their original relative order.
 			$sort_priority = array();
 			$sort_index    = array();
 			foreach ( $items as $i => $item ) {
@@ -261,31 +295,13 @@ class TSOIMMA_Duplicate_Finder {
 			}
 			array_multisort( $sort_priority, SORT_ASC, $sort_index, SORT_ASC, $items );
 
-			$item_count = count( $items );
-			$group_size = isset( $group['size'] ) ? (int) $group['size'] : 0;
-			$wasted     = $item_count > 1 ? $group_size * ( $item_count - 1 ) : 0;
+			$group_size = (int) $group['size'];
 
-			$duplicate_groups[ $group_index ]['items']          = $items;
-			$duplicate_groups[ $group_index ]['size_h']         = size_format( $group_size );
-			$duplicate_groups[ $group_index ]['wasted_bytes']   = $wasted;
-			$duplicate_groups[ $group_index ]['wasted_h']       = size_format( $wasted );
-			$duplicate_groups[ $group_index ]['same_filename']  = self::group_has_same_filename( $items );
-		}
-
-		usort(
-			$duplicate_groups,
-			function ( $a, $b ) {
-				$waste_diff = (int) ( $b['wasted_bytes'] ?? 0 ) <=> (int) ( $a['wasted_bytes'] ?? 0 );
-				if ( 0 !== $waste_diff ) {
-					return $waste_diff;
-				}
-				return count( $b['items'] ) <=> count( $a['items'] );
-			}
-		);
-
-		$wasted = 0;
-		foreach ( $duplicate_groups as $group ) {
-			$wasted += (int) ( $group['wasted_bytes'] ?? 0 );
+			unset( $shown[ $group_index ]['ids'] );
+			$shown[ $group_index ]['items']         = $items;
+			$shown[ $group_index ]['size_h']        = size_format( $group_size );
+			$shown[ $group_index ]['wasted_h']      = size_format( (int) $group['wasted_bytes'] );
+			$shown[ $group_index ]['same_filename'] = self::group_has_same_filename( $items );
 		}
 
 		$scanned = isset( $state['scanned'] ) ? (int) $state['scanned'] : 0;
@@ -293,16 +309,10 @@ class TSOIMMA_Duplicate_Finder {
 
 		return array(
 			'done'            => true,
-			'groups'          => $duplicate_groups,
-			'group_count'     => count( $duplicate_groups ),
-			'duplicate_files' => array_sum(
-				array_map(
-					function ( $group ) {
-						return isset( $group['items'] ) ? count( $group['items'] ) : 0;
-					},
-					$duplicate_groups
-				)
-			),
+			'groups'          => $shown,
+			'group_count'     => $group_count,
+			'groups_shown'    => count( $shown ),
+			'duplicate_files' => $duplicate_files,
 			'wasted_bytes'    => $wasted,
 			'wasted_h'        => size_format( $wasted ),
 			'scanned'         => $scanned,
@@ -407,12 +417,13 @@ class TSOIMMA_Duplicate_Finder {
 				}
 				if ( TSOIMMA_Image_Manager::post_content_contains_attachment_id( $post_id, $sibling_id ) ) {
 					$indirect[ $index ]['active_attachment_id'] = $sibling_id;
-					/* translators: 1: attachment ID used in content, 2: duplicate attachment ID */
-					$indirect[ $index ]['detail'] = sprintf(
+					$indirect[ $index ]['detail']      = sprintf(
 						'El post usa #%1$d; #%2$d no hi és al codi',
 						$sibling_id,
 						$attachment_id
 					);
+					$indirect[ $index ]['detail_key']  = 'post_uses';
+					$indirect[ $index ]['detail_args'] = array( $sibling_id, $attachment_id );
 					break;
 				}
 			}
@@ -750,7 +761,13 @@ class TSOIMMA_Duplicate_Finder {
 		$old_filename = $old_url ? wp_basename( $old_url ) : '';
 		$new_filename = $new_url ? wp_basename( $new_url ) : '';
 		if ( $old_filename && $new_filename && $old_filename !== $new_filename ) {
-			$content = str_replace( $old_filename, $new_filename, $content );
+			// Whole file names only: a plain str_replace() would also rewrite "mi-foto.jpg" when retiring "foto.jpg",
+			// or a longer name that merely contains it.
+			$content = preg_replace(
+				'~(?<![A-Za-z0-9_\-.])' . preg_quote( $old_filename, '~' ) . '(?![A-Za-z0-9_\-]|\.[A-Za-z0-9])~',
+				str_replace( array( '\\', '$' ), array( '\\\\', '\\$' ), $new_filename ),
+				$content
+			);
 		}
 
 		if ( $content === $original ) {
