@@ -396,6 +396,7 @@
     color: var(--imp-text-muted); font-size: 12px; padding: 4px 12px;
     border-radius: 20px; font-weight: 500;
 }
+.imp-count-badge:empty { display: none; }
 
 /* ===== BUTTONS ===== */
 .imp-btn {

@@ -239,15 +239,16 @@ class TSOIMMA_Image_Manager {
      * @param string               $name  Option name.
      * @param array<int, string>   $map   Output map.
      * @param int                  $depth Recursion guard.
+     * @param string|int|null      $key   Array key that holds $data (null for the option value itself).
      * @return void
      */
-    private static function collect_ids_from_tree( $data, $name, array &$map, $depth = 0 ) {
+    private static function collect_ids_from_tree( $data, $name, array &$map, $depth = 0, $key = null ) {
         if ( $depth > 6 ) {
             return;
         }
         if ( is_array( $data ) || is_object( $data ) ) {
-            foreach ( (array) $data as $item ) {
-                self::collect_ids_from_tree( $item, $name, $map, $depth + 1 );
+            foreach ( (array) $data as $item_key => $item ) {
+                self::collect_ids_from_tree( $item, $name, $map, $depth + 1, $item_key );
             }
             return;
         }
@@ -257,9 +258,41 @@ class TSOIMMA_Image_Manager {
         } elseif ( is_string( $data ) && ctype_digit( $data ) && strlen( $data ) < 12 ) {
             $int = (int) $data;
         }
-        if ( null !== $int && $int > 0 && ! isset( $map[ $int ] ) ) {
-            $map[ $int ] = $name;
+        if ( null === $int || $int <= 0 || isset( $map[ $int ] ) ) {
+            return;
         }
+        if ( ! self::option_number_may_be_attachment_id( $name, $key, $depth ) ) {
+            return;
+        }
+        $map[ $int ] = $name;
+    }
+
+    /**
+     * Whether a plain number found in an option can be an attachment ID.
+     *
+     * A bare number is ambiguous: WordPress core stores plenty of settings that are numbers (posts_per_rss = 10,
+     * posts_per_page, thumbnail_size_w = 150, medium_size_w = 300...), so an image with ID 10, 150 or 300 used to look
+     * "used by a theme option". A top-level numeric option only counts when its name talks about media, and inside a
+     * settings array a key that names a count or a size (per_page, width, limit...) is ignored.
+     *
+     * @param string          $option_name Option name.
+     * @param string|int|null $key         Array key holding the number (null for a top-level value).
+     * @param int             $depth       Depth inside the option value (0 = the option itself).
+     * @return bool
+     */
+    private static function option_number_may_be_attachment_id( $option_name, $key, $depth ) {
+        // Names of counts, sizes and other plain settings: never an attachment ID.
+        $setting = '/(per_page|per_rss|per_row|count|number|num$|limit|offset|column|cols?$|width|height|size|_w$|_h$|depth|days|interval|timeout|delay|speed|priority|order|version|zoom|quality|opacity|margin|padding|radius|font|length|max|min|rows?$|page$|pages$|paged|id_base)/i';
+
+        if ( 0 === (int) $depth ) {
+            $name = (string) $option_name;
+            return ! preg_match( $setting, $name )
+                && preg_match( '/(logo|icon|image|img|thumb|avatar|background|header|banner|favicon|media|photo|picture|cover|attachment)/i', $name );
+        }
+        if ( is_string( $key ) && '' !== $key && ! ctype_digit( $key ) ) {
+            return ! preg_match( $setting, $key );
+        }
+        return true;
     }
 
     /**
