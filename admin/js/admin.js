@@ -6814,7 +6814,8 @@
             if (item.action_type === 'dup_merge_rewrite') {
                 var rewriteBits = [];
                 if (d.post_title) rewriteBits.push('<strong>' + escHtml(d.post_title) + '</strong>' + (d.post_id ? ' #' + d.post_id : ''));
-                if (d.detail) rewriteBits.push(escHtml(d.detail));
+                // New rows carry a language-independent code (translated now); older rows keep their stored text.
+                if (refDetailText(d)) rewriteBits.push(escHtml(refDetailText(d)));
                 rewriteBits.push(escHtml(uiText('hist_merged_into', 'Merged into')) + ' ' + escHtml(d.keep_filename || ('#' + d.keep_id)));
                 details += '<span style="display:block;font-size:11px;line-height:1.4">' + rewriteBits.join(' · ') + '</span>';
             } else if (item.action_type === 'dup_merge_delete') {

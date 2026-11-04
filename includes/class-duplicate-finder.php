@@ -642,6 +642,10 @@ class TSOIMMA_Duplicate_Finder {
 								'keep_filename' => basename( $keep_file ),
 								'how'           => $how,
 								'detail'        => isset( $ref['detail'] ) ? (string) $ref['detail'] : '',
+								// Language-independent code + arguments: the History tab translates them when shown
+								// (the plain 'detail' above stays as the fallback for rows logged before this existed).
+								'detail_key'    => isset( $ref['detail_key'] ) ? sanitize_key( (string) $ref['detail_key'] ) : '',
+								'detail_args'   => isset( $ref['detail_args'] ) && is_array( $ref['detail_args'] ) ? array_map( 'sanitize_text_field', array_map( 'strval', $ref['detail_args'] ) ) : array(),
 							)
 						);
 					}
