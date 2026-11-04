@@ -5,7 +5,7 @@ Tags: image optimization, webp, avif, media library, pdf compression
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.1.1
+Stable tag: 2.1.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -139,6 +139,9 @@ On Overview, **Scan duplicates** groups Media Library files with the same MD5 ha
 
 For releases before 2.0.0, see CHANGELOG.txt in the plugin folder.
 
+= 2.1.2 =
+* Improved: SEO & Names now has one criterion for badges and order, weighted by how much Google and Bing rely on each element: missing alt, generic alt, alt written like a file name, generic or non-slug file name, and missing title; each card shows a colour-coded badge per gap, and "Needs SEO first" sorts by that score.
+
 = 2.1.1 =
 * Improved: The "URLs" tab is now called "Repairs" and has three sub-tabs: the inconsistent URL detector and the attachment repairs (broken paths, mime types, ghost attachments), moved from Auto-optimization, and a third one with the removal backups; the tab bar stays on one line.
 * Fixed: Repairs tab: texts of the repair tools and their messages are translated, MIME and ghost repairs report errors, the summary updates after fixing URLs, and restored backups can no longer be undone twice.
@@ -152,15 +155,3 @@ For releases before 2.0.0, see CHANGELOG.txt in the plugin folder.
 * Fixed: Image Sizes works with capital-letter size names, the backups list shows every size zip, the Space column matches what is really freed, and zips no longer fail when two images share a size file.
 * Improved: Image Sizes scans and deletes faster on big libraries (batched scan with progress, cache purged once); thumbnail, medium and large are never deletable.
 * Fixed: Your choices (quality, format, replace original, PDF quality, batch size, SEO filters) are remembered per user, the 24-hour "Extra files" delete list works with Redis/Memcached, and buttons and sub-tab headers line up.
-
-= 2.0.9 =
-* Improved: New plugin description that highlights automatic WebP/AVIF/JPG/PNG conversion, PDF compression and library repair tools.
-* Fixed: URL Detector now repairs old links (e.g. .png) of images that were converted and later renamed, instead of offering to delete them.
-
-= 2.0.8 =
-* Fixed: URL Detector "Remove from content" no longer deletes other images in the same block or link; it can also repair links of renamed images.
-* Fixed: Uploading and renaming images is much faster (one database scan instead of hundreds).
-* New: History records old and new alt/title, URL Detector actions, links updated on rename and deleted images.
-* Improved: SEO tab lists images that need SEO first, asks to remove hyphens from the alt text (one-click button) and fixes the "SEO" button.
-* Improved: Orphan images are labelled and listed last in SEO and Optimize; "Extra files" ignores other TSO plugins' backups (Swiss Knife).
-
