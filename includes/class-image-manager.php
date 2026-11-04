@@ -1295,7 +1295,7 @@ class TSOIMMA_Image_Manager {
             // gallery-plugin shortcodes using the same "ids" attribute
             // convention) — a comma-separated list inside quotes, not a
             // JSON array, so the "ids":[...] pattern above doesn't catch it.
-            '/\bids\s*=\s*(["\'])[^"\']*(?<!\d)' . preg_quote( $id, '/' ) . '(?!\d)[^"\']*\1/',
+            '/\b(?:ids|include)\s*=\s*(["\'])[^"\']*(?<!\d)' . preg_quote( $id, '/' ) . '(?!\d)[^"\']*\1/',
         );
 
         foreach ( $patterns as $pattern ) {

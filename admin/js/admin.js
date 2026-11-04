@@ -288,7 +288,8 @@
             ur_nav_menu: 'Element d\'un menú',
             ur_termmeta_id: 'Imatge d\'una categoria o terme (ID)',
             ur_usermeta_id: 'Imatge d\'un usuari (ID)',
-            ur_index_match: 'Coincidència de nom a l\'índex ràpid (opcions o tema)',
+            ur_content_ids: 'ID dins el contingut de',
+            ur_index_match: 'Coincidència de nom o d\'ID a l\'índex ràpid (contingut, opcions o tema): no s\'ha pogut concretar on',
             ur_postmeta_url: 'Camp personalitzat de',
             ur_postmeta_id: 'Camp de',
             ur_post_content: 'Dins el contingut de',
@@ -629,7 +630,8 @@
             ur_nav_menu: 'Elemento de un menú',
             ur_termmeta_id: 'Imagen de una categoría o término (ID)',
             ur_usermeta_id: 'Imagen de un usuario (ID)',
-            ur_index_match: 'Coincidencia de nombre en el índice rápido (opciones o tema)',
+            ur_content_ids: 'ID dentro del contenido de',
+            ur_index_match: 'Coincidencia de nombre o de ID en el índice rápido (contenido, opciones o tema): no se ha podido concretar dónde',
             ur_postmeta_url: 'Campo personalizado de',
             ur_postmeta_id: 'Campo de',
             ur_post_content: 'Dentro del contenido de',
@@ -1061,7 +1063,8 @@
             ur_nav_menu: 'Menu item',
             ur_termmeta_id: 'Category or term image (ID)',
             ur_usermeta_id: 'User image (ID)',
-            ur_index_match: 'File name match in the quick index (options or theme)',
+            ur_content_ids: 'ID inside the content of',
+            ur_index_match: 'File name or ID match in the quick index (content, options or theme): the exact place could not be determined',
             ur_postmeta_url: 'Custom field of',
             ur_postmeta_id: 'Field of',
             ur_post_content: 'Inside the content of',
@@ -4653,27 +4656,34 @@
         });
     }
 
+    // Inline message above the list (works on mobile, unlike a long alert()).
+    function unattNotice(lines, isError) {
+        var $n = $('#imp-unattached-notice');
+        if (!lines || !lines.length) { $n.empty(); return; }
+        $n.html('<div class="' + (isError ? 'imp-error' : 'imp-notice-ok') + '">' + lines.map(escHtml).join('<br>') + '</div>');
+    }
+
     // Gives each image a parent: attaches it to the post where it is used
     // (same as "Attach" in the Media Library), so it stops being listed here.
     function attachUnattached(ids) {
         ajax('tsoimma_attach_unattached', { ids: ids }, function(data) {
             var attached    = data.attached || [];
             var attachedIds = attached.map(function(a) { return a.id; });
-            var out = '';
+            var okLines = [];
             if (attached.length) {
-                out = uiText('unatt_attached_ok', '✓ {n} image(s) attached.').replace('{n}', attached.length) + '\n' +
-                    attached.map(function(a) { return 'ID ' + a.id + ' → ' + (a.post_title || ('#' + a.post_id)); }).join('\n');
-            }
-            if (data.errors && data.errors.length) {
-                out += (out ? '\n\n' : '') + (L.errors_label || 'Errors:') + '\n' +
-                    data.errors.map(function(e) { return 'ID ' + e.id + ': ' + e.error; }).join('\n');
+                okLines.push(uiText('unatt_attached_ok', '✓ {n} image(s) attached.').replace('{n}', attached.length));
+                attached.forEach(function(a) { okLines.push('ID ' + a.id + ' → ' + (a.post_title || ('#' + a.post_id))); });
             }
             // Only drop the ones the server really attached.
             state.unattached.items = state.unattached.items.filter(function(i) { return attachedIds.indexOf(i.id) === -1; });
             attachedIds.forEach(function(id) { state.unattachedSelected.delete(id); });
             renderUnattached();
-            if (out) { alert(out); }
-        }, function(err) { alert((L.error_prefix || 'Error: ') + err); });
+            unattNotice(okLines, false);
+            if (data.errors && data.errors.length) {
+                var errLines = [(L.errors_label || 'Errors:')].concat(data.errors.map(function(e) { return 'ID ' + e.id + ': ' + e.error; }));
+                $('#imp-unattached-notice').append('<div class="imp-error">' + errLines.map(escHtml).join('<br>') + '</div>');
+            }
+        }, function(err) { unattNotice([(L.error_prefix || 'Error: ') + err], true); });
     }
 
     // Selected ids whose row is in the given state: "fix" rows can only be
@@ -4697,27 +4707,29 @@
         ajax('tsoimma_delete_unattached', { ids: ids }, function(data) {
             var deleted    = data.deleted || [];
             var deletedIds = deleted.map(function(d) { return d.id; });
-            var out = '';
+            var okLines = [];
             if (deleted.length) {
-                out = uiText('unatt_deleted_ok', '✓ {n} image(s) deleted.').replace('{n}', deleted.length);
-            }
-            if (data.errors && data.errors.length) {
-                out += (out ? '\n\n' : '') + (L.errors_label || 'Errors:') + '\n' +
-                    data.errors.map(function(e) { return 'ID ' + e.id + ': ' + e.error; }).join('\n');
+                okLines.push(uiText('unatt_deleted_ok', '✓ {n} image(s) deleted.').replace('{n}', deleted.length));
             }
             // Only drop the ones the server really deleted.
             state.unattached.items = state.unattached.items.filter(function(i) { return deletedIds.indexOf(i.id) === -1; });
             deletedIds.forEach(function(id) { state.unattachedSelected.delete(id); });
             renderUnattached();
             markDashboardDirty();
-            if (out) { alert(out); }
-        }, function(err) { alert((L.error_prefix || 'Error: ') + err); });
+            unattNotice(okLines, false);
+            if (data.errors && data.errors.length) {
+                var errLines = [(L.errors_label || 'Errors:')].concat(data.errors.map(function(e) { return 'ID ' + e.id + ': ' + e.error; }));
+                $('#imp-unattached-notice').append('<div class="imp-error">' + errLines.map(escHtml).join('<br>') + '</div>');
+            }
+        }, function(err) { unattNotice([(L.error_prefix || 'Error: ') + err], true); });
     }
 
     function scanUnattached(offset, accumulated) {
         var batch = 100;
+        $('#imp-scan-unattached').prop('disabled', true);
         $('#imp-unattached-loading').show();
         $('#imp-unattached-result').hide();
+        if (offset === 0) { unattNotice(null); }
         ajax('tsoimma_find_unattached', { limit: batch, offset: offset }, function(data) {
             accumulated = accumulated.concat(data.items || []);
             var scanned = offset + (data.scanned || 0);
@@ -4727,20 +4739,24 @@
                 return;
             }
             $('#imp-unattached-loading').hide();
+            $('#imp-scan-unattached').prop('disabled', false);
             state.unattached.items = accumulated;
             state.unattachedSelected.clear();
             renderUnattached();
             $('#imp-unattached-result').show();
         }, function(err) {
             $('#imp-unattached-loading').hide();
-            alert(uiText('error_prefix', 'Error: ') + err);
+            $('#imp-scan-unattached').prop('disabled', false);
+            $('#imp-unattached-result').show();
+            unattNotice([uiText('error_prefix', 'Error: ') + err], true);
         });
     }
 
     // Where the image is used, as concrete as the server could determine.
     function unattachedReasonHtml(item) {
-        var kind = String(item.reason || '').split(':')[0];
         var rp   = item.ref_post;
+        // The place that really uses it (e.g. a gallery by ID) can differ from the first reason the scan met.
+        var kind = String((rp && rp.kind) || item.reason || '').split(':')[0];
         var ro   = item.ref_option;
         var link = function(url, text) {
             return url ? '<a href="' + escHtml(url) + '" target="_blank" rel="noopener">' + escHtml(text) + '</a>' : escHtml(text);
@@ -4756,11 +4772,13 @@
                 label = uiText('ur_field_of', 'Field "{key}" of').replace('{key}', rp.meta_field);
             } else if (kind === 'site_editor') {
                 label = uiText('ur_template', 'Template or pattern:');
+            } else if (kind === 'post_content_id') {
+                label = uiText('ur_content_ids', 'ID inside the content of');
             } else {
                 label = uiText('ur_content_of', 'Inside the content of');
             }
             return escHtml(label) + ' ' + link(rp.edit_url || rp.view_url, title) +
-                muted((rp.type || '') + ' #' + parseInt(rp.id, 10)) +
+                muted((rp.type_label || rp.type || '') + ' #' + parseInt(rp.id, 10)) +
                 (item.state === 'doubtful' ? ' <span class="imp-text-muted">⚠ ' + escHtml(uiText('unatt_weak_hint', 'only the ID number matches: it may not be a real use')) + '</span>' : '');
         }
 
@@ -4802,7 +4820,7 @@
             return;
         }
 
-        var html = '<div class="imp-history-table-container"><table class="imp-history-table"><thead><tr>' +
+        var html = '<div class="imp-history-table-container"><table class="imp-history-table imp-unatt-table"><thead><tr>' +
             '<th></th><th></th><th>ID</th>' +
             '<th>' + escHtml(uiText('unatt_col_file', 'File')) + '</th>' +
             '<th>' + escHtml(uiText('unatt_col_parent', 'Parent')) + '</th>' +
@@ -4841,13 +4859,13 @@
                 actionCell = '<span class="imp-text-muted" style="font-size:12px">✓ ' + escHtml(uiText('unatt_no_attach', 'In use')) + '</span>';
             }
             return '<tr>' +
-                '<td>' + checkCell + '</td>' +
-                '<td>' + (item.thumb ? '<img class="imp-thumb-sm imp-unatt-thumb" loading="lazy" src="' + escHtml(cacheBustUrl(item.thumb, item.id)) + '" data-full-url="' + escHtml(item.url || item.thumb) + '" alt="">' : '') + '</td>' +
-                '<td>' + idCell + '</td>' +
-                '<td style="font-family:var(--imp-mono);font-size:12px">' + escHtml(item.filename) + '</td>' +
-                '<td>' + escHtml(parentTxt) + '</td>' +
-                '<td class="imp-unatt-ref">' + unattachedReasonHtml(item) + '</td>' +
-                '<td style="white-space:nowrap">' + actionCell + '</td>' +
+                '<td class="imp-unatt-c-cb">' + checkCell + '</td>' +
+                '<td class="imp-unatt-c-thumb">' + (item.thumb ? '<img class="imp-thumb-sm imp-unatt-thumb" loading="lazy" src="' + escHtml(cacheBustUrl(item.thumb, item.id)) + '" data-full-url="' + escHtml(item.url || item.thumb) + '" alt="">' : '') + '</td>' +
+                '<td class="imp-unatt-c-id">' + idCell + '</td>' +
+                '<td class="imp-unatt-c-file" style="font-family:var(--imp-mono);font-size:12px">' + escHtml(item.filename) + '</td>' +
+                '<td class="imp-unatt-c-parent">' + escHtml(parentTxt) + '</td>' +
+                '<td class="imp-unatt-ref imp-unatt-c-ref">' + unattachedReasonHtml(item) + '</td>' +
+                '<td class="imp-unatt-c-act" style="white-space:nowrap">' + actionCell + '</td>' +
                 '</tr>';
         };
         if (doubtful.length) {

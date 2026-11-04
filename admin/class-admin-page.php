@@ -865,6 +865,7 @@ class TSOIMMA_Admin_Page {
                 <!-- SUBPESTANYA: imatges referenciades sense pare -->
                 <div id="imp-unattached-pane" style="display:none;">
                     <div id="imp-unattached-result" style="display:none;">
+                        <div id="imp-unattached-notice"></div>
                         <div class="imp-toolbar">
                             <div class="imp-toolbar-left">
                                 <button type="button" id="imp-unatt-select-all" class="imp-btn imp-btn-ghost" data-i18n="select_all">Seleccionar tot</button>

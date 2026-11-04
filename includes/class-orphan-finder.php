@@ -281,6 +281,12 @@ class TSOIMMA_Orphan_Finder {
 
         // phpcs:enable
 
+        // 11. Referenced by ID inside post content ([gallery ids=""], image/gallery blocks, wp-image-N):
+        // no URL or file name appears there, so none of the searches above can see it.
+        if ( ! $skip_posts && self::find_content_id_post( $attachment_id ) > 0 ) {
+            return 'post_content_id';
+        }
+
         return '';
     }
 
@@ -723,6 +729,10 @@ class TSOIMMA_Orphan_Finder {
             $item['state']        = $class['state'];
             $item['reason']       = $reason;
             $item['ref_post']     = $class['weak_ref'] ? $class['weak_ref'] : self::find_reference_post( $id, $reason );
+            if ( ! $item['ref_post'] && $class['attach_to'] ) {
+                // The reason was found elsewhere (index, option...) but a post really uses it: show that post.
+                $item['ref_post'] = $class['attach_to'];
+            }
             $item['attach_to']    = $class['attach_to'];
             $item['ref_option']   = self::find_reference_option( $id, $reason );
             $item['ref_theme_file'] = ( 'theme_file' === $reason && class_exists( 'TSOIMMA_Image_Manager' ) )
@@ -739,33 +749,106 @@ class TSOIMMA_Orphan_Finder {
 
     /**
      * Entrada a la qual té sentit adjuntar la imatge: la primera entrada o
-     * pàgina PÚBLICA que l'usa DE VERITAT (primer com a imatge destacada, després
-     * dins del contingut, després en un camp amb la seva URL).
+     * pàgina que l'usa DE VERITAT (primer com a imatge destacada, després dins
+     * del contingut per URL, després en un camp amb la seva URL i, finalment,
+     * dins del contingut per ID: galeria [gallery ids=""], blocs, wp-image-N).
+     *
+     * Es prefereix un tipus de contingut PÚBLIC (entrada, pàgina, producte...). Si
+     * només l'usa un tipus no públic però editable al tauler (una diapositiva
+     * d'un slider, per exemple), s'adjunta a aquest: és un pare vàlid.
      *
      * @param int $attachment_id Attachment ID.
-     * @return array|null array{id:int,title:string,type:string}
+     * @return array|null array{id:int,title:string,type:string,type_label:string,kind:string,meta_field:string,edit_url:string,view_url:string}
      */
     private static function find_attach_target( $attachment_id ) {
-        foreach ( array( 'postmeta_id', 'post_content', 'postmeta_url' ) as $kind ) {
-            $ref = self::find_reference_post( $attachment_id, $kind );
-            if ( ! $ref ) {
-                continue;
-            }
-            // A number that merely equals the image ID in a random custom field
-            // (a counter, a rating...) is not a use. Only the featured image counts.
-            if ( 'postmeta_id' === $kind && '_thumbnail_id' !== $ref['meta_field'] ) {
-                continue;
-            }
-            $type = get_post_type_object( $ref['type'] );
-            if ( $type && ! empty( $type->public ) ) {
-                return array(
-                    'id'    => (int) $ref['id'],
-                    'title' => (string) $ref['title'],
-                    'type'  => (string) $ref['type'],
+        $fallback = null;
+
+        foreach ( array( 'postmeta_id', 'post_content', 'postmeta_url', 'post_content_id' ) as $kind ) {
+            $exclude = array();
+            // A few candidates per kind: the first one found may be a type that cannot be a parent.
+            for ( $i = 0; $i < 10; $i++ ) {
+                $ref = self::find_reference_post( $attachment_id, $kind, $exclude );
+                if ( ! $ref ) {
+                    break;
+                }
+                $exclude[] = (int) $ref['id'];
+
+                // A number that merely equals the image ID in a random custom field
+                // (a counter, a rating...) is not a use. Only the featured image counts.
+                if ( 'postmeta_id' === $kind && '_thumbnail_id' !== $ref['meta_field'] ) {
+                    continue;
+                }
+
+                $type = get_post_type_object( $ref['type'] );
+                if ( ! $type ) {
+                    continue; // Type not registered (plugin off): it cannot be edited.
+                }
+
+                $target = array(
+                    'id'         => (int) $ref['id'],
+                    'title'      => (string) $ref['title'],
+                    'type'       => (string) $ref['type'],
+                    'type_label' => (string) $ref['type_label'],
+                    'kind'       => $kind,
+                    'meta_field' => (string) $ref['meta_field'],
+                    'edit_url'   => (string) $ref['edit_url'],
+                    'view_url'   => (string) $ref['view_url'],
                 );
+                if ( ! empty( $type->public ) ) {
+                    return $target;
+                }
+                if ( null === $fallback && ! empty( $type->show_ui ) ) {
+                    $fallback = $target;
+                }
             }
         }
-        return null;
+
+        return $fallback;
+    }
+
+    /**
+     * ID del primer post (no exclòs) que referencia l'adjunt PER ID dins del
+     * contingut: galeria [gallery ids="1,2"] / include="", blocs d'imatge i
+     * galeria, wp-image-N i data-id. La cerca per URL no ho veu mai: aquestes
+     * imatges no hi apareixen amb el seu nom de fitxer.
+     *
+     * @param int   $attachment_id Attachment ID.
+     * @param int[] $exclude       Post IDs to skip.
+     * @return int Post ID or 0.
+     */
+    private static function find_content_id_post( $attachment_id, array $exclude = array() ) {
+        global $wpdb;
+
+        $attachment_id = (int) $attachment_id;
+        if ( $attachment_id <= 0 ) {
+            return 0;
+        }
+        $not_in = empty( $exclude ) ? '' : ' AND p.ID NOT IN (' . implode( ',', array_map( 'intval', $exclude ) ) . ')';
+
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $candidates = $wpdb->get_col( $wpdb->prepare(
+            "SELECT p.ID FROM {$wpdb->posts} p
+             WHERE p.post_content LIKE %s
+             AND ( p.post_content LIKE %s OR p.post_content LIKE %s OR p.post_content LIKE %s OR p.post_content LIKE %s OR p.post_content LIKE %s OR p.post_content LIKE %s )
+             AND p.post_status NOT IN ('trash','auto-draft') AND p.post_type NOT IN ('attachment','revision','nav_menu_item'){$not_in}
+             ORDER BY ( p.post_type = 'page' ) DESC, p.ID ASC
+             LIMIT 60",
+            '%' . $wpdb->esc_like( (string) $attachment_id ) . '%',
+            '%' . $wpdb->esc_like( 'ids=' ) . '%',
+            '%' . $wpdb->esc_like( 'include=' ) . '%',
+            '%' . $wpdb->esc_like( '"ids"' ) . '%',
+            '%' . $wpdb->esc_like( 'wp-image-' ) . '%',
+            '%' . $wpdb->esc_like( 'data-id=' ) . '%',
+            '%' . $wpdb->esc_like( '<!-- wp:' ) . '%'
+        ) );
+        // phpcs:enable
+
+        foreach ( (array) $candidates as $candidate ) {
+            if ( TSOIMMA_Image_Manager::post_content_contains_attachment_id( (int) $candidate, $attachment_id ) ) {
+                return (int) $candidate;
+            }
+        }
+        return 0;
     }
 
     /**
@@ -913,12 +996,14 @@ class TSOIMMA_Orphan_Finder {
      * @param string $reason        Motiu retornat per get_reference_reason().
      * @return array|null array{id:int,title:string,type:string,meta_field:string,edit_url:string,view_url:string}
      */
-    private static function find_reference_post( $attachment_id, $reason ) {
+    private static function find_reference_post( $attachment_id, $reason, array $exclude = array() ) {
         global $wpdb;
 
-        if ( ! in_array( $reason, array( 'post_content', 'postmeta_url', 'postmeta_id', 'site_editor' ), true ) ) {
+        if ( ! in_array( $reason, array( 'post_content', 'postmeta_url', 'postmeta_id', 'site_editor', 'post_content_id' ), true ) ) {
             return null;
         }
+        // Integers only (cast), so it is safe to build into the queries below.
+        $not_in = empty( $exclude ) ? '' : ' AND p.ID NOT IN (' . implode( ',', array_map( 'intval', $exclude ) ) . ')';
 
         $patterns = self::get_search_patterns( $attachment_id );
         if ( count( $patterns ) < 2 ) {
@@ -929,12 +1014,15 @@ class TSOIMMA_Orphan_Finder {
         $post_id  = 0;
         $meta_key = '';
 
-        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-        if ( 'post_content' === $reason ) {
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        if ( 'post_content_id' === $reason ) {
+            $post_id = self::find_content_id_post( $attachment_id, $exclude );
+        } elseif ( 'post_content' === $reason ) {
             $post_id = (int) $wpdb->get_var( $wpdb->prepare(
                 "SELECT p.ID FROM {$wpdb->posts} p
                  WHERE ( p.post_content LIKE %s OR p.post_content LIKE %s OR p.post_excerpt LIKE %s OR p.post_excerpt LIKE %s )
-                 AND p.post_status NOT IN ('trash','auto-draft') AND p.post_type NOT IN ('attachment','revision','nav_menu_item')
+                 AND p.post_status NOT IN ('trash','auto-draft') AND p.post_type NOT IN ('attachment','revision','nav_menu_item'){$not_in}
+                 ORDER BY ( p.post_type = 'page' ) DESC, p.ID ASC
                  LIMIT 1",
                 $p1, $p2, $p1, $p2
             ) );
@@ -951,7 +1039,7 @@ class TSOIMMA_Orphan_Finder {
                 "SELECT p.ID AS post_id, pm.meta_key FROM {$wpdb->postmeta} pm
                  INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
                  WHERE ( pm.meta_value LIKE %s OR pm.meta_value LIKE %s ) AND pm.post_id <> %d
-                 AND p.post_status NOT IN ('trash','auto-draft') AND p.post_type NOT IN ('attachment','revision','nav_menu_item')
+                 AND p.post_status NOT IN ('trash','auto-draft') AND p.post_type NOT IN ('attachment','revision','nav_menu_item'){$not_in}
                  LIMIT 1",
                 $p1, $p2, $attachment_id
             ) );
@@ -964,7 +1052,7 @@ class TSOIMMA_Orphan_Finder {
                 "SELECT p.ID AS post_id, pm.meta_key FROM {$wpdb->postmeta} pm
                  INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
                  WHERE pm.meta_value = %s AND pm.post_id <> %d
-                 AND p.post_status NOT IN ('trash','auto-draft') AND p.post_type NOT IN ('revision','nav_menu_item')
+                 AND p.post_status NOT IN ('trash','auto-draft') AND p.post_type NOT IN ('revision','nav_menu_item'){$not_in}
                  ORDER BY ( pm.meta_key = '_thumbnail_id' ) DESC
                  LIMIT 1",
                 (string) $attachment_id, $attachment_id
@@ -987,10 +1075,14 @@ class TSOIMMA_Orphan_Finder {
             $view_url  = $permalink ? esc_url_raw( $permalink ) : '';
         }
 
+        $post_type_obj = get_post_type_object( (string) get_post_type( $post_id ) );
+
         return array(
             'id'       => $post_id,
             'title'    => get_the_title( $post_id ),
             'type'     => get_post_type( $post_id ),
+            'type_label' => $post_type_obj && ! empty( $post_type_obj->labels->singular_name ) ? (string) $post_type_obj->labels->singular_name : (string) get_post_type( $post_id ),
+            'kind'     => $reason,
             'meta_field' => $meta_key,
             'edit_url' => $edit_link ? esc_url_raw( $edit_link ) : '',
             'view_url' => $view_url,
