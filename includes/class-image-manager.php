@@ -851,14 +851,14 @@ class TSOIMMA_Image_Manager {
             $real_ext    = self::mime_to_ext( $real_mime );
             $alt_text    = (string) get_post_meta( $post->ID, '_wp_attachment_image_alt', true );
 
+            $audit = self::seo_audit( $alt_text, $post->post_title, basename( $file_path ?? '' ), $post->ID );
+
             $items[] = [
                 'id'           => $post->ID,
                 'title'        => $post->post_title,
                 'alt'          => $alt_text,
-                // One criterion for every image: present, not a camera/number placeholder and
-                // not written like a file name (hyphens/underscores, no spaces).
-                'alt_ok'       => ! TSOIMMA_Dashboard::is_placeholder_alt( $alt_text ) && ! TSOIMMA_Dashboard::is_hyphenated_alt( $alt_text ),
-                'alt_hyphen'   => TSOIMMA_Dashboard::is_hyphenated_alt( $alt_text ),
+                'alt_ok'       => ! array_intersect( $audit['issues'], array( 'alt_missing', 'alt_generic', 'alt_hyphen' ) ),
+                'alt_hyphen'   => in_array( 'alt_hyphen', $audit['issues'], true ),
                 'caption'      => $post->post_excerpt,
                 'description'  => $post->post_content,
                 'filename'     => basename( $file_path ?? '' ),
@@ -869,7 +869,10 @@ class TSOIMMA_Image_Manager {
                 'mime'         => $real_mime,
                 'ext'          => strtoupper( $real_ext ),
                 'date'         => get_the_date( 'd/m/Y', $post->ID ),
-                'slug_ok'      => self::is_seo_filename( basename( $file_path ?? '' ) ),
+                'slug_ok'      => ! array_intersect( $audit['issues'], array( 'name_generic', 'name_format' ) ),
+                // Single source of truth for the SEO badges and the "needs SEO first" order.
+                'seo_issues'   => $audit['issues'],
+                'seo_score'    => $audit['score'],
             ];
         }
 
@@ -890,25 +893,13 @@ class TSOIMMA_Image_Manager {
         // Ordenar per filesize si cal
         if ( $fetch_all ) {
             if ( 'seo' === $sort ) {
-                // SEO tab: images that still need SEO work first (no alt > alt like a file name > file name), the OK ones last.
-                $seo_score = static function ( $item ) {
-                    $score = 0;
-                    if ( '' === trim( (string) $item['alt'] ) ) {
-                        $score += 4;
-                    } elseif ( empty( $item['alt_ok'] ) ) {
-                        $score += 2;
-                    }
-                    if ( empty( $item['slug_ok'] ) ) {
-                        $score += 1;
-                    }
-                    return $score;
-                };
-                usort( $items, function( $a, $b ) use ( $seo_score ) {
+                // SEO tab: most search-relevant gaps first (see seo_audit() weights); orphans last, then biggest file.
+                usort( $items, function( $a, $b ) {
                     $diff = (int) $a['is_orphan'] <=> (int) $b['is_orphan'];
                     if ( 0 !== $diff ) {
                         return $diff;
                     }
-                    $diff = $seo_score( $b ) <=> $seo_score( $a );
+                    $diff = (int) $b['seo_score'] <=> (int) $a['seo_score'];
                     return 0 !== $diff ? $diff : ( $b['filesize_raw'] <=> $a['filesize_raw'] );
                 } );
             } else {
@@ -1684,6 +1675,90 @@ class TSOIMMA_Image_Manager {
         }
         $parts = array_map( 'rawurlencode', explode( '/', $rel_path ) );
         return implode( '/', $parts );
+    }
+
+    /**
+     * SEO weights per missing/weak element, ordered by how much Google and Bing rely on it.
+     *
+     * - Alt text is the primary image signal for Google Images / Bing Visual Search and the core accessibility
+     *   requirement (WCAG 1.1.1): missing is the worst, a camera/number placeholder is almost as bad, an alt
+     *   written like a file name (hyphens) is a weak signal.
+     * - The file name is a secondary ranking signal (Google image guidelines): a generic one (IMG_1234) gives no
+     *   information, a non-slug one (spaces, accents, capitals) is merely untidy and URL-encoded.
+     * - Title is only a minor hint. Caption and description are optional and never flagged.
+     *
+     * @return array<string,int>
+     */
+    public static function seo_issue_weights() {
+        return array(
+            'alt_missing'  => 100,
+            'alt_generic'  => 80,
+            'alt_hyphen'   => 50,
+            'name_generic' => 40,
+            'name_format'  => 25,
+            'title_missing' => 10,
+        );
+    }
+
+    /**
+     * Audit the SEO-relevant fields of one image (one criterion shared by badges, hints and sorting).
+     *
+     * @param string $alt           Alt text.
+     * @param string $title         Attachment title.
+     * @param string $filename      File name with extension.
+     * @param int    $attachment_id Attachment ID.
+     * @return array{issues:string[],score:int} Issue codes (most important first) and total weight.
+     */
+    public static function seo_audit( $alt, $title, $filename, $attachment_id ) {
+        $weights = self::seo_issue_weights();
+        $issues  = array();
+        $alt     = trim( (string) $alt );
+        $stem    = pathinfo( (string) $filename, PATHINFO_FILENAME );
+
+        if ( '' === $alt ) {
+            $issues[] = 'alt_missing';
+        } elseif ( TSOIMMA_Dashboard::is_placeholder_alt( $alt ) || TSOIMMA_Dashboard::is_weak_alt( $alt, $attachment_id ) ) {
+            $issues[] = 'alt_generic';
+        } elseif ( TSOIMMA_Dashboard::is_hyphenated_alt( $alt ) ) {
+            $issues[] = 'alt_hyphen';
+        }
+
+        if ( '' !== $stem ) {
+            if ( self::is_generic_filename( $stem ) ) {
+                $issues[] = 'name_generic';
+            } elseif ( ! self::is_seo_filename( $filename ) ) {
+                $issues[] = 'name_format';
+            }
+        }
+
+        $title = trim( (string) $title );
+        if ( '' === $title || TSOIMMA_Dashboard::is_placeholder_alt( $title ) ) {
+            $issues[] = 'title_missing';
+        }
+
+        $score = 0;
+        foreach ( $issues as $code ) {
+            $score += $weights[ $code ];
+        }
+
+        return array(
+            'issues' => $issues,
+            'score'  => $score,
+        );
+    }
+
+    /**
+     * File name stem that says nothing about the picture (IMG_1234, 20230101_123456, image-3, screenshot...).
+     *
+     * @param string $stem File name without extension.
+     * @return bool
+     */
+    public static function is_generic_filename( $stem ) {
+        $stem = trim( (string) $stem );
+        if ( preg_match( '/^[\d\s._-]+$/', $stem ) ) {
+            return true;
+        }
+        return (bool) preg_match( '/^(img|dsc|dscn|dscf|pict|photo|foto|image|imagen|imatge|pic|screenshot|captura|whatsapp[-_ ]image|untitled|sin[-_ ]titulo|sense[-_ ]titol)([-_ .]*[\d][\d\s._-]*)?$/i', $stem );
     }
 
     /**

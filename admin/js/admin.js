@@ -307,6 +307,19 @@
             sort_size: '📦 Ordenar per pes (major primer)',
             sort_seo: '🏷️ Primer les que necessiten SEO',
             badge_orphan: 'ORFENA',
+            seo_b_alt_missing: 'SENSE ALT',
+            seo_t_alt_missing: 'Cap text alternatiu: Google i Bing no poden entendre la imatge i no és accessible.',
+            seo_b_alt_generic: 'ALT GENÈRIC',
+            seo_t_alt_generic: 'L\'alt és un placeholder (IMG_1234, només números o el nom del fitxer): no descriu la imatge.',
+            seo_b_alt_hyphen: 'ALT AMB GUIONS',
+            seo_t_alt_hyphen: 'L\'alt sembla un nom de fitxer (guions o guions baixos): escriu una frase natural.',
+            seo_b_name_generic: 'NOM GENÈRIC',
+            seo_t_name_generic: 'El nom del fitxer no diu res de la imatge (IMG_1234, un número, «image»…): reanomena\'l amb paraules clau.',
+            seo_b_name_format: 'NOM NO SEO',
+            seo_t_name_format: 'El nom del fitxer té majúscules, espais, accents o símbols: reanomena\'l a format slug.',
+            seo_b_title_missing: 'SENSE TÍTOL',
+            seo_t_title_missing: 'La imatge no té títol descriptiu (senyal menor).',
+            seo_t_ok: 'Alt i nom de fitxer correctes.',
             sort_date: '📅 Ordenar per data de creació',
             sort_modified: '✏️ Ordenar per data de modificació',
             modal_rename: 'Reanomenar',
@@ -607,6 +620,19 @@
             sort_size: '📦 Ordenar por peso (mayor primero)',
             sort_seo: '🏷️ Primero las que necesitan SEO',
             badge_orphan: 'HUÉRFANA',
+            seo_b_alt_missing: 'SIN ALT',
+            seo_t_alt_missing: 'Sin texto alternativo: Google y Bing no pueden entender la imagen y no es accesible.',
+            seo_b_alt_generic: 'ALT GENÉRICO',
+            seo_t_alt_generic: 'El alt es un placeholder (IMG_1234, solo números o el nombre del archivo): no describe la imagen.',
+            seo_b_alt_hyphen: 'ALT CON GUIONES',
+            seo_t_alt_hyphen: 'El alt parece un nombre de archivo (guiones o guiones bajos): escribe una frase natural.',
+            seo_b_name_generic: 'NOMBRE GENÉRICO',
+            seo_t_name_generic: 'El nombre del archivo no dice nada de la imagen (IMG_1234, un número, «image»…): renómbralo con palabras clave.',
+            seo_b_name_format: 'NOMBRE NO SEO',
+            seo_t_name_format: 'El nombre del archivo tiene mayúsculas, espacios, acentos o símbolos: renómbralo a formato slug.',
+            seo_b_title_missing: 'SIN TÍTULO',
+            seo_t_title_missing: 'La imagen no tiene título descriptivo (señal menor).',
+            seo_t_ok: 'Alt y nombre de archivo correctos.',
             sort_date: '📅 Ordenar por fecha de creación',
             sort_modified: '✏️ Ordenar por fecha de modificación',
             modal_rename: 'Renombrar',
@@ -996,6 +1022,19 @@
             sort_size: '📦 Sort by size (largest first)',
             sort_seo: '🏷️ Needs SEO first',
             badge_orphan: 'ORPHAN',
+            seo_b_alt_missing: 'NO ALT',
+            seo_t_alt_missing: 'No alt text: Google and Bing cannot understand the image and it is not accessible.',
+            seo_b_alt_generic: 'GENERIC ALT',
+            seo_t_alt_generic: 'The alt is a placeholder (IMG_1234, only numbers or the file name): it does not describe the image.',
+            seo_b_alt_hyphen: 'ALT HYPHENS',
+            seo_t_alt_hyphen: 'The alt looks like a file name (hyphens or underscores): write a natural phrase.',
+            seo_b_name_generic: 'GENERIC NAME',
+            seo_t_name_generic: 'The file name says nothing about the image (IMG_1234, a number, «image»…): rename it with keywords.',
+            seo_b_name_format: 'NAME NOT SEO',
+            seo_t_name_format: 'The file name has capitals, spaces, accents or symbols: rename it to a slug.',
+            seo_b_title_missing: 'NO TITLE',
+            seo_t_title_missing: 'The image has no descriptive title (minor signal).',
+            seo_t_ok: 'Alt text and file name are correct.',
             sort_date: '📅 Sort by creation date',
             sort_modified: '✏️ Sort by modification date',
             modal_rename: 'Rename',
@@ -5416,26 +5455,44 @@
         });
     }
 
+    // Badge severity follows how much Google/Bing rely on each element (see TSOIMMA_Image_Manager::seo_audit()).
+    var SEO_BADGE_LEVEL = {
+        alt_missing: 'crit', alt_generic: 'crit',
+        alt_hyphen: 'high',
+        name_generic: 'mid', name_format: 'mid',
+        title_missing: 'low'
+    };
+
     function renderSeoGrid(items) {
         var grid = $('#imp-seo-grid');
         grid.empty();
         if (!items.length) { grid.html('<div class="imp-loading">' + (L.no_images || 'No images.') + '</div>'); return; }
         items.forEach(function(item) {
             var ext    = item.ext || item.mime.replace('image/', '').toUpperCase();
-            var seoOk  = item.slug_ok && (item.alt_ok === true || (item.alt_ok !== false && item.alt && String(item.alt).trim()));
-            var seoCls = seoOk ? 'imp-badge-seo-ok' : 'imp-badge-seo-bad';
-            var seoTxt = seoOk ? 'SEO ✓' : 'SEO ✗';
-            var card   = $('<div class="imp-image-card" data-id="' + item.id + '" style="cursor:pointer;"></div>');
-            card.append('<div class="imp-card-badges"><span class="' + seoCls + '">' + seoTxt + '</span>' + (item.is_orphan ? ' <span class="imp-badge-orphan">' + escHtml(uiText('badge_orphan', 'ORPHAN')) + '</span>' : '') + '</div>');
+            var issues = $.isArray(item.seo_issues) ? item.seo_issues : [];
+            var badges = '';
+            if (!issues.length) {
+                badges = '<span class="imp-badge-seo-ok" title="' + escHtml(uiText('seo_t_ok', '')) + '">SEO ✓</span>';
+            } else {
+                issues.forEach(function(code) {
+                    badges += '<span class="imp-badge-seo-' + (SEO_BADGE_LEVEL[code] || 'mid') + '" title="' +
+                        escHtml(uiText('seo_t_' + code, '')) + '">' + escHtml(uiText('seo_b_' + code, code)) + '</span>';
+                });
+            }
+            if (item.is_orphan) {
+                badges += '<span class="imp-badge-orphan">' + escHtml(uiText('badge_orphan', 'ORPHAN')) + '</span>';
+            }
+            var card = $('<div class="imp-image-card" data-id="' + item.id + '" style="cursor:pointer;"></div>');
+            card.append('<div class="imp-card-badges">' + badges + '</div>');
             card.append('<img class="imp-card-thumb" src="' + escHtml(cacheBustUrl(item.thumb || '', item.id)) + '" alt="' + escHtml(item.title) + '" loading="lazy">');
-            var altWarn = (item.alt_ok === false || (!item.alt && item.alt_ok !== true)) ? '<div style="font-size:10px;color:var(--imp-warn);margin-top:4px;">⚠ ' + (item.alt_hyphen ? (L.alt_hyphen_text || 'Alt text: remove the hyphens for SEO') : (L.no_alt_text || 'No alt text')) + '</div>' : '';
+            var hint = issues.length ? '<div class="imp-seo-hint imp-seo-hint-' + (SEO_BADGE_LEVEL[issues[0]] || 'mid') + '">⚠ ' + escHtml(uiText('seo_t_' + issues[0], '')) + '</div>' : '';
             card.append(
                 '<div class="imp-card-info">' +
                 '<div class="imp-card-name">' + escHtml(item.filename) + '</div>' +
                 '<div class="imp-card-meta">' +
                 '<span class="imp-card-size">' + escHtml(item.filesize) + '</span>' +
                 '<span class="imp-card-format">' + escHtml(ext) + '</span>' +
-                '</div>' + altWarn + '</div>'
+                '</div>' + hint + '</div>'
             );
             card.append('<button class="imp-card-edit-btn" data-id="' + item.id + '">✏ SEO</button>');
             grid.append(card);
