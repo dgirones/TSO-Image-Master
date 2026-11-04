@@ -1003,6 +1003,7 @@ class TSOIMMA_Image_Manager {
                 $found[ $row->ID ] = [
                     'id'      => (int) $row->ID,
                     'title'   => $row->post_title ?: '(sense títol)',
+                    'title_key' => $row->post_title ? '' : 'untitled',
                     'type'    => $row->post_type,
                     'status'  => $row->post_status,
                     'url'     => get_permalink( $row->ID ),
@@ -1123,6 +1124,7 @@ class TSOIMMA_Image_Manager {
             $found['tsoimma_customizer_logo'] = array(
                 'id'       => 0,
                 'title'    => 'Logo del lloc (Personalitzador)',
+                'title_key' => 'cust_logo',
                 'type'     => 'customizer',
                 'status'   => 'publish',
                 'url'      => admin_url( 'customize.php?autofocus[control]=custom_logo' ),
@@ -1136,6 +1138,7 @@ class TSOIMMA_Image_Manager {
             $found['tsoimma_customizer_icon'] = array(
                 'id'       => 0,
                 'title'    => 'Icona del lloc (Personalitzador)',
+                'title_key' => 'cust_icon',
                 'type'     => 'customizer',
                 'status'   => 'publish',
                 'url'      => admin_url( 'customize.php?autofocus[control]=site_icon' ),
@@ -1161,6 +1164,7 @@ class TSOIMMA_Image_Manager {
                     $found[ 'tsoimma_customizer_' . $mod_key ] = array(
                         'id'       => 0,
                         'title'    => $mod_label,
+                        'title_key' => 'cust_' . $mod_key,
                         'type'     => 'customizer',
                         'status'   => 'publish',
                         'url'      => admin_url( 'customize.php' ),
@@ -1182,6 +1186,7 @@ class TSOIMMA_Image_Manager {
                 $found['tsoimma_theme_file'] = array(
                     'id'         => 0,
                     'title'      => 'Codi de la plantilla del tema actiu',
+                    'title_key'  => 'theme_file',
                     'type'       => 'theme_file',
                     'status'     => 'publish',
                     'url'        => admin_url( 'theme-editor.php' ),
@@ -1221,6 +1226,8 @@ class TSOIMMA_Image_Manager {
             $found['tsoimma_option_' . $option_match] = array(
                 'id'          => 0,
                 'title'       => 'Configuració del tema/lloc (opció: ' . $option_match . ')',
+                'title_key'   => 'site_option',
+                'title_args'  => array( $option_match ),
                 'type'        => 'site_option',
                 'status'      => 'publish',
                 'url'         => admin_url( 'options-general.php' ),
@@ -1238,6 +1245,7 @@ class TSOIMMA_Image_Manager {
                 $found[ $parent_id ] = [
                     'id'      => $parent_id,
                     'title'   => $parent->post_title ?: '(sense títol)',
+                    'title_key' => $parent->post_title ? '' : 'untitled',
                     'type'    => $parent->post_type,
                     'status'  => $parent->post_status,
                     'url'     => get_permalink( $parent_id ),
@@ -1335,6 +1343,19 @@ class TSOIMMA_Image_Manager {
      * @param int $attachment_id Attachment ID.
      * @return array<string, mixed>
      */
+    /**
+     * Key/arguments of the last describe_* call (lets the report expose a translatable code next to the text).
+     *
+     * @var string
+     */
+    private static $last_usage_key = 'id_content';
+
+    /** @var string */
+    private static $last_indirect_key = 'indirect_name';
+
+    /** @var array<int, mixed> */
+    private static $last_indirect_args = array();
+
     public static function get_attachment_reference_report( $attachment_id ) {
         $attachment_id = absint( $attachment_id );
         $refs          = self::get_used_in_posts( $attachment_id );
@@ -1388,17 +1409,39 @@ class TSOIMMA_Image_Manager {
                 : ( isset( $ref['url'] ) ? (string) $ref['url'] : admin_url( 'customize.php' ) );
             $ref['highlight_id'] = $attachment_id;
             $ref['parent_only']  = $parent_only;
-            $ref['detail']       = $is_direct
-                ? ( $is_customizer
-                    ? self::describe_customizer_reference( $how )
-                    : ( $is_theme_file
-                        ? self::describe_theme_file_reference( isset( $ref['theme_file'] ) ? (string) $ref['theme_file'] : '' )
-                        : ( $is_site_option
-                            ? self::describe_site_option_reference( isset( $ref['option_name'] ) ? (string) $ref['option_name'] : '' )
-                            : ( $parent_only ? self::describe_attachment_parent_reference() : self::describe_attachment_usage_in_post( $post_id, $attachment_id ) ) ) ) )
-                : ( $weak_only
-                    ? self::describe_weak_id_reference()
-                    : self::describe_indirect_reference( $post_id, $attachment_id, $how ) );
+            $detail_args = array();
+            if ( $is_direct ) {
+                if ( $is_customizer ) {
+                    $ref['detail']      = self::describe_customizer_reference( $how );
+                    $detail_key         = false !== strpos( $how, 'icona' ) ? 'cust_icon' : ( false !== strpos( $how, 'header_image' ) ? 'cust_header_image' : ( false !== strpos( $how, 'background_image' ) ? 'cust_background_image' : 'cust_logo' ) );
+                } elseif ( $is_theme_file ) {
+                    $theme_file         = isset( $ref['theme_file'] ) ? (string) $ref['theme_file'] : '';
+                    $ref['detail']      = self::describe_theme_file_reference( $theme_file );
+                    $detail_key         = '' !== $theme_file ? 'theme_file' : 'theme_file_nopath';
+                    $detail_args        = array( $theme_file );
+                } elseif ( $is_site_option ) {
+                    $option_name        = isset( $ref['option_name'] ) ? (string) $ref['option_name'] : '';
+                    $ref['detail']      = self::describe_site_option_reference( $option_name );
+                    $detail_key         = '' !== $option_name ? 'site_option' : 'site_option_nopath';
+                    $detail_args        = array( $option_name );
+                } elseif ( $parent_only ) {
+                    $ref['detail']      = self::describe_attachment_parent_reference();
+                    $detail_key         = 'parent';
+                } else {
+                    $ref['detail']      = self::describe_attachment_usage_in_post( $post_id, $attachment_id );
+                    $detail_key         = self::$last_usage_key;
+                }
+            } elseif ( $weak_only ) {
+                $ref['detail']          = self::describe_weak_id_reference();
+                $detail_key             = 'weak_id';
+            } else {
+                $ref['detail']          = self::describe_indirect_reference( $post_id, $attachment_id, $how );
+                $detail_key             = self::$last_indirect_key;
+                $detail_args            = self::$last_indirect_args;
+            }
+            // Language-independent code + arguments: the admin UI translates them (the text above is Catalan only).
+            $ref['detail_key']  = $detail_key;
+            $ref['detail_args'] = $detail_args;
 
             if ( $is_direct ) {
                 $ref['match'] = 'direct';
@@ -1435,23 +1478,29 @@ class TSOIMMA_Image_Manager {
         $content = (string) get_post_field( 'post_content', $post_id );
         $id      = (string) absint( $attachment_id );
 
+        self::$last_usage_key = 'jetpack';
         if ( preg_match( '/wp:jetpack\/tiled-gallery/', $content )
             && preg_match( '/"ids"\s*:\s*\[[^\]]*(?<![0-9])' . preg_quote( $id, '/' ) . '(?![0-9])[^\]]*\]/', $content ) ) {
             return 'Jetpack Gallery · ids[]';
         }
         if ( preg_match( '/\bdata-id="' . preg_quote( $id, '/' ) . '"/', $content ) ) {
+            self::$last_usage_key = 'data_id';
             return 'HTML data-id';
         }
         if ( preg_match( '/wp:image[^>]*"id"\s*:\s*' . preg_quote( $id, '/' ) . '\b/', $content ) ) {
+            self::$last_usage_key = 'block_image';
             return 'Bloc imatge';
         }
         if ( preg_match( '/\bwp-image-' . preg_quote( $id, '/' ) . '\b/', $content ) ) {
+            self::$last_usage_key = 'block_image_class';
             return 'Bloc imatge (classe wp-image)';
         }
         if ( preg_match( '/\bids\s*=\s*(["\'])[^"\']*(?<!\d)' . preg_quote( $id, '/' ) . '(?!\d)[^"\']*\1/', $content ) ) {
+            self::$last_usage_key = 'shortcode_ids';
             return 'Shortcode [gallery] · atribut ids=';
         }
 
+        self::$last_usage_key = 'id_content';
         return 'ID al contingut';
     }
 
@@ -1549,8 +1598,11 @@ class TSOIMMA_Image_Manager {
      */
     private static function describe_indirect_reference( $post_id, $attachment_id, $how ) {
         unset( $how );
+        self::$last_indirect_args = array();
+        self::$last_indirect_key  = 'indirect_name';
         $filename = basename( (string) get_attached_file( $attachment_id ) );
         if ( '' === $filename ) {
+            self::$last_indirect_key = 'indirect_name_url';
             return 'Coincidència de nom/URL (aquest ID no és al codi)';
         }
 
@@ -1562,7 +1614,8 @@ class TSOIMMA_Image_Manager {
                 }
                 $embedded_file = get_attached_file( $embedded_id );
                 if ( $embedded_file && basename( $embedded_file ) === $filename ) {
-                    /* translators: 1: attachment ID used in content, 2: duplicate attachment ID */
+                    self::$last_indirect_key  = 'post_uses';
+                    self::$last_indirect_args = array( $embedded_id, $attachment_id );
                     return sprintf( 'El post usa #%1$d; #%2$d no hi és al codi', $embedded_id, $attachment_id );
                 }
             }
@@ -1576,7 +1629,8 @@ class TSOIMMA_Image_Manager {
                 }
                 $embedded_file = get_attached_file( $embedded_id );
                 if ( $embedded_file && basename( $embedded_file ) === $filename ) {
-                    /* translators: 1: attachment ID used in content, 2: duplicate attachment ID */
+                    self::$last_indirect_key  = 'post_uses_ids';
+                    self::$last_indirect_args = array( $embedded_id, $attachment_id );
                     return sprintf( 'El post usa #%1$d (ids[]); #%2$d no hi és al codi', $embedded_id, $attachment_id );
                 }
             }

@@ -186,6 +186,7 @@
     border-radius: var(--imp-radius); padding: 24px; margin-bottom: 20px;
 }
 .imp-panel-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+.imp-panel #imp-duplicates-result:not(:empty) { margin-top: 20px; }
 .imp-panel-desc  { color: var(--imp-text-muted); font-size: 14px; margin-bottom: 20px; line-height: 1.6; }
 
 /* ===== SETTINGS GRID ===== */
@@ -1207,6 +1208,12 @@
 .imp-alt-used { font-size: 11px; color: var(--imp-text-muted); white-space: nowrap; }
 
 .imp-dup-scan-progress { margin-top: 8px; }
+.imp-dup-scan-progress .imp-loading { padding: 4px 0; text-align: left; }
+.imp-error {
+    margin: 0 0 10px; padding: 8px 12px; border-radius: var(--imp-radius-sm);
+    background: rgba(255,77,109,.12); border: 1px solid rgba(255,77,109,.4);
+    color: var(--imp-danger); font-size: 13px; line-height: 1.5;
+}
 .imp-dup-scan-progress .imp-progress-bar {
     height: 8px; background: var(--imp-surface2); border-radius: 999px; overflow: hidden;
 }
@@ -1234,7 +1241,7 @@
     gap: 12px; align-items: start; padding: 12px 0;
     border-top: 1px solid var(--imp-border);
 }
-.imp-dup-item:first-of-type { border-top: 1px solid var(--imp-border); margin-top: 8px; }
+.imp-dup-group-header + .imp-dup-item { margin-top: 8px; }
 .imp-dup-thumb img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; background: var(--imp-surface2); display: block; }
 .imp-dup-title { font-size: 13px; margin-bottom: 4px; word-break: break-word; }
 .imp-dup-meta { font-size: 12px; color: var(--imp-text-muted); line-height: 1.55; }
@@ -1243,7 +1250,7 @@
 .imp-dup-refs-label { color: var(--imp-text-muted); margin-right: 4px; }
 .imp-dup-refs-empty { color: var(--imp-warn); }
 .imp-dup-ref-link {
-    display: inline-block; margin: 2px 6px 2px 0; padding: 3px 10px;
+    display: inline-block; max-width: 100%; margin: 2px 6px 2px 0; padding: 3px 10px; word-break: break-word;
     background: rgba(0, 212, 170, 0.12); border: 1px solid rgba(0, 212, 170, 0.45);
     border-radius: 999px; color: var(--imp-dup-ref-text); text-decoration: none; font-weight: 600;
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
@@ -1306,10 +1313,22 @@
 .imp-dup-indirect-list li { margin-bottom: 4px; }
 .imp-dup-refs-more { color: var(--imp-text-muted); font-size: 11px; margin-top: 6px; }
 .imp-dup-actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; min-width: 148px; }
+.imp-dup-cond-actions { display: flex; flex-direction: column; gap: 6px; }
+.imp-dup-cond-actions:empty { display: none; }
 .imp-dup-actions .imp-btn { text-align: center; white-space: nowrap; }
 @media (max-width: 760px) {
+    .imp-dup-group { padding: 12px; }
     .imp-dup-item { grid-template-columns: 48px minmax(0, 1fr); }
+    .imp-dup-thumb img { width: 48px; height: 48px; }
     .imp-dup-actions { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; min-width: 0; }
+    .imp-dup-actions .imp-btn { white-space: normal; flex: 1 1 calc(50% - 6px); }
+    .imp-dup-keep-radio { flex: 1 1 100%; }
+    .imp-dup-cond-actions { display: contents; }
+    .imp-dup-merge-row { flex-direction: column; align-items: stretch; }
+    .imp-dup-merge-row .imp-btn { width: 100%; }
+    .imp-dup-merge-hint { max-width: none; }
+    .imp-dup-ref-link { white-space: normal; border-radius: 12px; }
+    .imp-dup-indirect-list { margin-left: 16px; }
 }
 .imp-queue-status { margin-bottom: 12px; font-size: 13px; }
 
