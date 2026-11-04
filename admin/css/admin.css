@@ -1235,7 +1235,8 @@
 .imp-dup-keep-radio { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--imp-text-muted); font-weight: 600; cursor: pointer; }
 .imp-dup-keep-radio input[type="radio"],
 .imp-dup-keep-radio input[type="checkbox"] { width: 14px; height: 14px; margin: 0; accent-color: var(--imp-success); cursor: pointer; }
-.imp-dup-merge-result { margin-bottom: 10px; padding: 8px 12px; border-radius: var(--imp-radius-sm); background: rgba(6,214,160,.12); border: 1px solid rgba(6,214,160,.35); color: var(--imp-success); font-size: 12px; }
+.imp-dup-merge-result,
+.imp-notice-ok { margin-bottom: 10px; padding: 8px 12px; border-radius: var(--imp-radius-sm); background: rgba(6,214,160,.12); border: 1px solid rgba(6,214,160,.35); color: var(--imp-success); font-size: 12px; }
 .imp-dup-item {
     display: grid; grid-template-columns: 56px minmax(0, 1fr) auto;
     gap: 12px; align-items: start; padding: 12px 0;
@@ -1792,7 +1793,8 @@
 .imp-subtab.active { background: var(--imp-accent); border-color: var(--imp-accent); color: #fff; }
 .imp-unatt-ref { font-size: 13px; }
 .imp-unatt-ref code { font-family: var(--imp-mono); font-size: 12px; }
-.imp-history-table .imp-thumb-sm.imp-unatt-thumb { width: 48px; height: 48px; }
+/* Whole image (logos are wide): never crop it to a square. */
+.imp-history-table .imp-thumb-sm.imp-unatt-thumb { width: 72px; height: 48px; object-fit: contain; padding: 2px; box-sizing: border-box; border: 1px solid var(--imp-border); }
 
 /* Orphans tab: the three sub-tab headers share one grid cell, so the block
    always has the height of the tallest one and does not jump when switching. */
@@ -1811,6 +1813,33 @@
 .imp-subpanel > .imp-panel { padding: 14px 20px; }
 .imp-subpanel .imp-panel-title { margin-bottom: 4px; }
 .imp-subpanel .imp-panel-desc { margin-bottom: 10px; line-height: 1.5; }
+
+
+/* "Referenced" list: on small screens each row becomes a card instead of a wide scrolling table. */
+#imp-unattached-notice:not(:empty) { margin-bottom: 12px; }
+.imp-unatt-c-parent { white-space: nowrap; }
+@media (max-width: 768px) {
+    .imp-unatt-table { min-width: 0; }
+    .imp-unatt-table thead { display: none; }
+    .imp-unatt-table, .imp-unatt-table tbody { display: block; }
+    .imp-unatt-table tr {
+        display: grid; grid-template-columns: 24px 48px auto minmax(0, 1fr);
+        grid-template-areas: "cb thumb file file" "cb thumb id parent" "ref ref ref ref" "act act act act";
+        gap: 4px 10px; align-items: center; padding: 10px 12px;
+    }
+    .imp-unatt-table tr.imp-unatt-group { display: block; padding: 0; }
+    .imp-unatt-table td { display: block; padding: 0; border: 0; min-width: 0; }
+    .imp-unatt-table tr.imp-unatt-group td { padding: 8px 12px; }
+    .imp-unatt-c-cb { grid-area: cb; }
+    .imp-unatt-c-thumb { grid-area: thumb; }
+    .imp-history-table .imp-thumb-sm.imp-unatt-thumb { width: 48px; }
+    .imp-unatt-c-file { grid-area: file; word-break: break-all; }
+    .imp-unatt-c-id { grid-area: id; }
+    .imp-unatt-c-parent { grid-area: parent; font-size: 12px; color: var(--imp-text-muted); }
+    .imp-unatt-c-ref { grid-area: ref; margin-top: 4px; word-break: break-word; }
+    .imp-unatt-c-act { grid-area: act; white-space: normal !important; }
+    .imp-unatt-c-act .imp-btn { width: 100%; }
+}
 
 /* "Referenced" table: group heading rows. */
 .imp-history-table tr.imp-unatt-group td { background: var(--imp-surface2); font-size: 12px; font-weight: 700; padding: 8px 14px; }
