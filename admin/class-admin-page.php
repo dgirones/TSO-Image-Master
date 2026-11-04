@@ -241,7 +241,6 @@ class TSOIMMA_Admin_Page {
                 'dash_dup_none'         => __( 'No duplicate groups found.', 'tso-image-master' ),
                 'dash_dup_groups'       => __( 'duplicate groups', 'tso-image-master' ),
                 'dash_dup_wasted'       => __( 'Wasted space', 'tso-image-master' ),
-                'dash_heavy_btn'        => __( 'Largest images', 'tso-image-master' ),
                 'auto_skip_kb_label'    => __( 'Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)', 'tso-image-master' ),
                 'auto_fill_alt_label'   => __( 'Fill missing alt text on upload', 'tso-image-master' ),
                 'fmt_avif'              => __( 'AVIF', 'tso-image-master' ),
@@ -701,16 +700,6 @@ class TSOIMMA_Admin_Page {
                     </div>
                     <span id="imp-backup-retention-msg" style="display:none;margin-top:10px;font-size:13px;"></span>
                 </div>
-                </div>
-
-                <div class="imp-panel">
-                    <div class="imp-toolbar" style="margin-bottom:12px;">
-                        <h2 class="imp-panel-title" style="margin:0;" data-i18n="dash_dup_title">Imatges duplicades</h2>
-                        <button id="imp-scan-duplicates" class="imp-btn imp-btn-ghost" data-i18n="dash_dup_scan">Escanejar duplicats</button>
-                        <button id="imp-heavy-images" class="imp-btn imp-btn-ghost imp-dash-jump" data-jump-tab="optimize" data-i18n="dash_heavy_btn">Imatges més pesades</button>
-                    </div>
-                    <div id="imp-duplicates-result"></div>
-                    <div id="imp-duplicates-list"></div>
                 </div>
             </div>
 
@@ -1427,6 +1416,7 @@ class TSOIMMA_Admin_Page {
                 <div class="imp-subtabs" role="tablist">
                     <button type="button" class="imp-subtab active" data-subtab="urls-detector" role="tab" data-i18n="url_subtab_detector"><?php esc_html_e( 'Inconsistent URL detector', 'tso-image-master' ); ?></button>
                     <button type="button" class="imp-subtab" data-subtab="urls-repairs" role="tab" data-i18n="url_subtab_repairs"><?php esc_html_e( 'Repair attachments', 'tso-image-master' ); ?></button>
+                    <button type="button" class="imp-subtab" data-subtab="urls-duplicates" role="tab" data-i18n="dash_dup_title"><?php esc_html_e( 'Duplicate images', 'tso-image-master' ); ?></button>
                     <button type="button" class="imp-subtab" data-subtab="urls-backups" role="tab" data-i18n="url_subtab_backups"><?php esc_html_e( 'Removal backups', 'tso-image-master' ); ?></button>
                 </div>
 
@@ -1510,6 +1500,18 @@ class TSOIMMA_Admin_Page {
                         </div>
                     </div>
                 </div><!-- /#imp-urls-repairs-pane -->
+
+                <!-- SUBPESTANYA: imatges duplicades -->
+                <div id="imp-urls-duplicates-pane" class="imp-urlfix-pane" style="display:none;">
+                    <div class="imp-panel">
+                        <div class="imp-toolbar" style="margin-bottom:12px;">
+                            <h2 class="imp-panel-title" style="margin:0;" data-i18n="dash_dup_title">Imatges duplicades</h2>
+                            <button id="imp-scan-duplicates" class="imp-btn imp-btn-ghost" data-i18n="dash_dup_scan">Escanejar duplicats</button>
+                        </div>
+                        <div id="imp-duplicates-result"></div>
+                        <div id="imp-duplicates-list"></div>
+                    </div>
+                </div><!-- /#imp-urls-duplicates-pane -->
 
                 <!-- SUBPESTANYA: còpies de seguretat d'eliminacions -->
                 <div id="imp-urls-backups-pane" class="imp-urlfix-pane" style="display:none;">

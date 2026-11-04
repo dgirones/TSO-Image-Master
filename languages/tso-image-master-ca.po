@@ -605,9 +605,6 @@ msgstr "grups de duplicats"
 msgid "Wasted space"
 msgstr "Espai malgastat"
 
-msgid "Largest images"
-msgstr "Imatges més pesades"
-
 msgid "Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)"
 msgstr "Ometre auto-optimitzar si WebP/AVIF ≤ (KB, 0 = off)"
 

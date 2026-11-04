@@ -17,7 +17,7 @@ Most image plugins only compress. TSO Image Master also fixes what goes wrong. I
 
 It provides the following features from a single admin screen:
 
-**Overview** — Site health metrics (image count, missing alt, TSO backups, space saved, server engines). Bulk-fill missing or weak alt text. Scan for duplicate image files. Configure backup retention (backups of deleted images are never purged automatically) and watch the background optimize queue.
+**Overview** — Site health metrics (image count, missing alt, TSO backups, space saved, server engines). Bulk-fill missing or weak alt text. Configure backup retention (backups of deleted images are never purged automatically) and watch the background optimize queue.
 
 **Image Optimizer** — Convert images to WebP, AVIF (when GD supports it), JPG, or PNG. Set quality and dimensions, replace originals, and update content links (posts, custom fields, options, widgets and Elementor pages). Bulk optimize runs in the background via WP-Cron (5 images per batch). Choose how many images to show per page (21–105). Requires PHP GD (WebP strongly recommended).
 
@@ -121,7 +121,7 @@ On Overview you can bulk-fill useful alt text for selected images (from title or
 
 = What does the duplicate scanner do? =
 
-On Overview, **Scan duplicates** groups Media Library files with the same MD5 hash so you can spot wasted space. It does not delete files automatically; review groups before removing anything.
+On Repairs > Duplicate images, **Scan duplicates** groups Media Library files with the same MD5 hash so you can spot wasted space. It does not delete files automatically; review groups before removing anything.
 
 == Screenshots ==
 
@@ -140,6 +140,7 @@ On Overview, **Scan duplicates** groups Media Library files with the same MD5 ha
 For releases before 2.0.0, see CHANGELOG.txt in the plugin folder.
 
 = 2.1.2 =
+* Improved: Duplicate images moved from Overview to a new sub-tab in Repairs, and the "Largest images" shortcut was removed from Overview.
 * Improved: SEO & Names now has one criterion for badges and order, weighted by how much Google and Bing rely on each element: missing alt, generic alt, alt written like a file name, generic or non-slug file name, and missing title; each card shows a colour-coded badge per gap, and "Needs SEO first" sorts by that score.
 
 = 2.1.1 =

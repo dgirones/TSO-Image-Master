@@ -521,7 +521,6 @@
             dash_dup_deleting: 'Eliminant...',
             dash_dup_deleted_ok: 'Fitxer eliminat.',
             dash_dup_delete_blocked: 'No eliminat: ha aparegut una referència a aquest fitxer des de l\'últim escaneig. Torna a escanejar per veure l\'ús actual.',
-            dash_heavy_btn: 'Imatges més pesades',
             auto_skip_kb_label: 'Ometre auto-optimitzar si WebP/AVIF ≤ (KB, 0 = off)',
             auto_fill_alt_label: 'Omplir alt absent en pujar',
             fmt_avif: 'AVIF',
@@ -926,7 +925,6 @@
             ,dash_dup_deleting: 'Eliminando...'
             ,dash_dup_deleted_ok: 'Archivo eliminado.'
             ,dash_dup_delete_blocked: 'No eliminado: ha aparecido una referencia a este archivo desde el último escaneo. Vuelve a escanear para ver el uso actual.'
-            ,dash_heavy_btn: 'Imágenes más pesadas'
             ,auto_skip_kb_label: 'Omitir auto-optimizar si WebP/AVIF ≤ (KB, 0 = off)'
             ,auto_fill_alt_label: 'Rellenar alt ausente al subir'
             ,fmt_avif: 'AVIF'
@@ -1328,7 +1326,6 @@
             ,dash_dup_deleting: 'Deleting...'
             ,dash_dup_deleted_ok: 'File deleted.'
             ,dash_dup_delete_blocked: 'Not deleted: a reference to this file appeared since the last scan. Rescan to see current usage.'
-            ,dash_heavy_btn: 'Largest images'
             ,auto_skip_kb_label: 'Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)'
             ,auto_fill_alt_label: 'Fill missing alt text on upload'
             ,fmt_avif: 'AVIF'
@@ -1526,7 +1523,6 @@
                 dash_dup_none: 'No se han encontrado grupos de duplicados.',
                 dash_dup_groups: 'grupos de duplicados',
                 dash_dup_wasted: 'Espacio desperdiciado',
-                dash_heavy_btn: 'Imágenes más pesadas',
                 auto_skip_kb_label: 'Omitir auto-optimizar si WebP/AVIF ≤ (KB, 0 = off)',
                 auto_fill_alt_label: 'Rellenar alt ausente al subir',
                 fmt_avif: 'AVIF',
@@ -1814,7 +1810,6 @@
                 dash_dup_none: 'No duplicate groups found.',
                 dash_dup_groups: 'duplicate groups',
                 dash_dup_wasted: 'Wasted space',
-                dash_heavy_btn: 'Largest images',
                 auto_skip_kb_label: 'Skip auto-optimize if WebP/AVIF ≤ (KB, 0 = off)',
                 auto_fill_alt_label: 'Fill missing alt text on upload',
                 fmt_avif: 'AVIF',
@@ -2146,7 +2141,6 @@
             dash_dup_deleting: 'Eliminant...',
             dash_dup_deleted_ok: 'Fitxer eliminat.',
             dash_dup_delete_blocked: 'No eliminat: ha aparegut una referència a aquest fitxer des de l\'últim escaneig. Torna a escanejar per veure l\'ús actual.',
-            dash_heavy_btn: 'Imatges més pesades',
                 auto_skip_kb_label: 'Ometre auto-optimitzar si WebP/AVIF ≤ (KB, 0 = off)',
                 auto_fill_alt_label: 'Omplir alt absent en pujar',
                 fmt_avif: 'AVIF',
@@ -4453,6 +4447,7 @@
             if ($tab.is('#tab-urlfixer')) {
                 $('#imp-urls-detector-pane').toggle(target === 'urls-detector');
                 $('#imp-urls-repairs-pane').toggle(target === 'urls-repairs');
+                $('#imp-urls-duplicates-pane').toggle(target === 'urls-duplicates');
                 $('#imp-urls-backups-pane').toggle(target === 'urls-backups');
                 return;
             }
