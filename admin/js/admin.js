@@ -884,7 +884,7 @@
             ,dash_dup_groups: 'grupos de duplicados'
             ,dash_dup_wasted: 'Espacio desperdiciado'
             ,dash_dup_explain: 'Cada grupo son archivos idénticos (mismo MD5) registrados más de una vez en la Biblioteca de medios. Conserva una entrada y elimina el resto desde Medios de WordPress.'
-            ,dash_dup_desc: 'Busca fitxers d\'imatge idèntics (mateix contingut, comprovat amb MD5) registrats més d\'una vegada a la Mediateca, que ocupen espai de més. Mostra on s\'usa cada còpia perquè en conservis una i eliminis la resta. No s\'elimina res automàticament.'
+            ,dash_dup_desc: 'Busca archivos de imagen idénticos (mismo contenido, comprobado con MD5) registrados más de una vez en la Biblioteca de medios, que ocupan espacio de más. Muestra dónde se usa cada copia para que conserves una y elimines el resto. No se elimina nada automáticamente.'
             ,dash_dup_rescan_hint: 'Estos datos son del último escaneo. Si acabas de editar una entrada, vuelve a pulsar «Escanear duplicados» para ver el estado actual.'
             ,dash_dup_group_label: 'Archivo idéntico'
             ,dash_dup_entries: 'entradas'
