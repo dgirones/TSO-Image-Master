@@ -75,8 +75,9 @@
             selected: new Set()
         },
         seo: {
-            page: 1, perPage: readStoredPerPage(), search: '', totalPages: 1
+            page: 1, perPage: readStoredPerPage(), search: '', totalPages: 1, items: []
         },
+        dup: { data: null, deleted: {}, groupTotal: 0 },
         orphans: { found: [] },
         unattached: { items: [] },
         unattachedSelected: new Set(),
@@ -2809,6 +2810,11 @@
         // "Referenced" results are built in JS at scan time: repaint them so
         // the table, summary and buttons follow the UI language switch.
         if ($('#imp-unattached-result').is(':visible')) renderUnattached();
+        // SEO cards (badges and hints), duplicate groups, missing sizes and the "orphan" badge are built in JS too.
+        if (state.seo.items.length && $('#imp-seo-grid .imp-image-card').length) renderSeoGrid(state.seo.items);
+        repaintDuplicates();
+        if (typeof window.tsoimmaRefreshMsz === 'function') window.tsoimmaRefreshMsz();
+        $('.imp-badge-orphan').text(uiText('badge_orphan', 'ORPHAN'));
         // Re-render PDF rows/badges in the selected UI language.
         if ($('#tab-pdf').is(':visible')) loadPdfs();
         // Re-render history tables/stats in current UI language.
@@ -3295,6 +3301,7 @@
 
             ajax('tsoimma_dup_detach', { attachment_id: id }, function(data) {
                 var updated = data.item || {};
+                dupRememberItem(updated);
                 var $item = $btn.closest('.imp-dup-item');
                 $item.find('.imp-dup-usedin-wrap').html(renderDuplicateUsedIn(updated));
                 $item.find('.imp-dup-cond-actions').html(renderDuplicateCondActions(updated));
@@ -3320,6 +3327,7 @@
 
             ajax('tsoimma_dup_delete', { attachment_id: id }, function(data) {
                 if (data.deleted) {
+                    state.dup.deleted[id] = true;
                     $('#imp-duplicates-result').prepend('<div class="imp-dup-merge-result">✓ ' + escHtml(uiText('dash_dup_deleted_ok', 'File deleted.')) + '</div>');
                     // Remove just this item in place instead of a full
                     // rescan — rebuilding the whole list (and briefly
@@ -3429,8 +3437,51 @@
 
     var dupPendingNotice = '';
 
+    // Summary block above the duplicate groups (built from the last scan, so it can be repainted).
+    function dupSummaryHtml() {
+        var data     = state.dup.data || {};
+        var shown    = (data.groups || []).length;
+        var moreNote = (data.group_count > shown)
+            ? '<p class="imp-dup-intro">' + escHtml(dupFill(uiText('dash_dup_more_groups', 'Showing {0} of {1} groups, the ones wasting the most space. Resolve them and scan again to see the rest.'), [shown, data.group_count])) + '</p>'
+            : '';
+        return '<p><strong><span id="imp-dup-group-total">' + (state.dup.groupTotal || 0) + '</span> ' + escHtml(uiText('dash_dup_groups', 'duplicate groups')) +
+            '</strong> · ' + escHtml(uiText('dash_dup_wasted', 'Wasted space')) + ': ' + escHtml(data.wasted_h || '0 B') +
+            ' · ' + escHtml(String(data.scanned || 0)) + ' ' + escHtml(uiText('dash_scanned', 'scanned')) + '</p>' +
+            moreNote +
+            '<p class="imp-dup-intro">' + escHtml(uiText('dash_dup_explain', 'Each group is identical file content (same MD5) registered more than once in the Media Library. Tick the ones you want to keep and merge or delete the rest with each group\'s buttons.')) + '</p>' +
+            '<p class="imp-dup-intro" style="opacity:.75;">' + escHtml(uiText('dash_dup_rescan_hint', 'This data is from the last scan. If you just edited a post, click "Scan duplicates" again to see the current status.')) + '</p>';
+    }
+
+    // Groups of the last scan without the files already deleted in place.
+    function dupVisibleGroups() {
+        var data = state.dup.data || {};
+        return (data.groups || []).map(function(g) {
+            return $.extend({}, g, { items: (g.items || []).filter(function(it) { return !state.dup.deleted[it.id]; }) });
+        }).filter(function(g) { return g.items.length > 0; });
+    }
+
+    // Keep the refreshed usage of an item (after "Unlink") so a repaint does not bring the old badge back.
+    function dupRememberItem(updated) {
+        if (!updated || !updated.id || !state.dup.data) { return; }
+        (state.dup.data.groups || []).forEach(function(g) {
+            (g.items || []).forEach(function(it, i) {
+                if (it.id === updated.id) { g.items[i] = $.extend({}, it, updated); }
+            });
+        });
+    }
+
+    // Repaint the duplicates area after a language switch (keeps the confirmation messages already shown).
+    function repaintDuplicates() {
+        if (!state.dup.data || !$('#imp-duplicates-list .imp-dup-group').length) { return; }
+        var $notes = $('#imp-duplicates-result').children('.imp-dup-merge-result, .imp-error').detach();
+        $('#imp-duplicates-result').html(dupSummaryHtml()).prepend($notes);
+        renderDuplicateGroups(dupVisibleGroups());
+        dupShowEmptyState();
+    }
+
     // Adjust the "N duplicate groups" counter after an in-place delete (no rescan).
     function dupBumpGroupTotal(delta) {
+        state.dup.groupTotal = Math.max(0, (state.dup.groupTotal || 0) + delta);
         var $n = $('#imp-dup-group-total');
         if ($n.length) {
             $n.text(Math.max(0, (parseInt($n.text(), 10) || 0) + delta));
@@ -3496,20 +3547,9 @@
                 $('#imp-duplicates-result').html(notice + '<p style="color:var(--imp-success);">✓ ' + escHtml(uiText('dash_dup_none', 'No duplicate groups found.')) + '</p>');
                 return;
             }
-            var groups    = data.groups || [];
-            var moreNote  = (data.group_count > groups.length)
-                ? '<p class="imp-dup-intro">' + escHtml(dupFill(uiText('dash_dup_more_groups', 'Showing {0} of {1} groups, the ones wasting the most space. Resolve them and scan again to see the rest.'), [groups.length, data.group_count])) + '</p>'
-                : '';
-            $('#imp-duplicates-result').html(
-                notice +
-                '<p><strong><span id="imp-dup-group-total">' + (parseInt(data.group_count, 10) || 0) + '</span> ' + escHtml(uiText('dash_dup_groups', 'duplicate groups')) +
-                '</strong> · ' + escHtml(uiText('dash_dup_wasted', 'Wasted space')) + ': ' + escHtml(data.wasted_h || '0 B') +
-                ' · ' + escHtml(String(data.scanned || 0)) + ' ' + escHtml(uiText('dash_scanned', 'scanned')) + '</p>' +
-                moreNote +
-                '<p class="imp-dup-intro">' + escHtml(uiText('dash_dup_explain', 'Each group is identical file content (same MD5) registered more than once in the Media Library. Tick the ones you want to keep and merge or delete the rest with each group\'s buttons.')) + '</p>' +
-                '<p class="imp-dup-intro" style="opacity:.75;">' + escHtml(uiText('dash_dup_rescan_hint', 'This data is from the last scan. If you just edited a post, click "Scan duplicates" again to see the current status.')) + '</p>'
-            );
-            renderDuplicateGroups(groups);
+            state.dup = { data: data, deleted: {}, groupTotal: parseInt(data.group_count, 10) || 0 };
+            $('#imp-duplicates-result').html(notice + dupSummaryHtml());
+            renderDuplicateGroups(dupVisibleGroups());
         }, function(err) {
             $btn.prop('disabled', false);
             $('#imp-duplicates-result').html('<div class="imp-error">' + escHtml(err) + '</div>');
@@ -5688,6 +5728,7 @@
     };
 
     function renderSeoGrid(items) {
+        state.seo.items = items;
         var grid = $('#imp-seo-grid');
         grid.empty();
         if (!items.length) { grid.html('<div class="imp-loading">' + (L.no_images || 'No images.') + '</div>'); return; }
@@ -6549,6 +6590,11 @@
         }
         mszScan.scanned = 0;
         $('#imp-scan-msizes').on('click', function() { mszScan(0, []); });
+        window.tsoimmaRefreshMsz = function() {
+            if (mszItems.length && $('#imp-msizes-list').is(':visible')) { renderMszList(); }
+            refreshStoredResult('#imp-msizes-scan-result');
+            refreshStoredResult('#imp-msizes-repair-result');
+        };
 
         $('#imp-repair-msizes').on('click', function() {
             var $btn = $(this);
