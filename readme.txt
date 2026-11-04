@@ -33,6 +33,8 @@ It provides the following features from a single admin screen:
 
 **Media Library** — Row action and bulk action to queue images for background optimization, plus a short note on the attachment screen.
 
+**Repairs** — Inconsistent URL detector, attachment repairs (broken paths, MIME types, ghost attachments, and image sizes listed in the metadata whose file is missing), duplicate images, and the backups of removals.
+
 **History** — Audit log of optimizations, renames, SEO updates (with field details), PDF compressions, and related actions. Filter by action type, date range, and filename. Configurable automatic cleanup.
 
 **URL Fixer** — Scans public content (posts, pages, and custom post types) for broken image URLs after format conversions (e.g. `.jpg` still referenced after conversion to `.webp`). Renders blocks and shortcodes when needed so embedded images are detected. Finds replacements and updates the database in one click; can also remove broken references when no fix exists.
@@ -140,6 +142,7 @@ On Repairs > Duplicate images, **Scan duplicates** groups Media Library files wi
 For releases before 2.0.0, see CHANGELOG.txt in the plugin folder.
 
 = 2.1.2 =
+* New: Repairs has a "Missing sizes" tool: it finds images whose metadata lists a size (for example medium) whose file is not on disk (the cause of 404s on thumbnails) and repairs them without touching the original: it relinks the size if it exists with another extension, regenerates it if it is still registered, or removes the stale entry. It is the opposite case of the Image Sizes tab, which only counts existing files. Repairs are logged in History.
 * Fixed: Regenerating thumbnails (queue and manual optimization) no longer deletes the old thumbnails first: they are moved aside and put back if the regeneration fails, times out or is cancelled, so the metadata never points to files that are gone (404s on the site and in the admin); converting thumbnails saves the metadata after each size.
 * Fixed: Admin lists no longer request thumbnails that do not exist on disk (a size listed in the metadata whose file is gone, for example after a size cleanup or while thumbnails are regenerated): they fall back to a smaller size or the original, so 404 monitors stop logging them.
 * Fixed: Referenced images: images used by ID inside a post or page (for example a [gallery ids="..."]) are now found and can be attached to it; images used as the featured image of a type that is not public but editable (such as a slider's slides) can be attached too; up to ten candidate posts are checked per image; the "where it is used" text names the real post and its type; results and errors show inline instead of in alerts; the list becomes cards on mobile and the scan button is locked while scanning. The same ID check now also protects those images from being treated as orphans.

@@ -1343,6 +1343,7 @@ class TSOIMMA_Admin_Page {
                                         array( 'value' => 'url_backup_delete', 'label' => '🗑️ Còpies eliminades', 'i18n' => 'filter_url_backup_delete' ),
                                         array( 'value' => 'repair_paths', 'label' => '🔧 Paths reparats', 'i18n' => 'filter_repair_paths' ),
                                         array( 'value' => 'repair_mime', 'label' => '🔧 MIME reparats', 'i18n' => 'filter_repair_mime' ),
+                                        array( 'value' => 'repair_sizes', 'label' => '📐 Mides reparades', 'i18n' => 'filter_repair_sizes' ),
                                         array( 'value' => 'ghost_delete', 'label' => '👻 Fantasmes eliminats', 'i18n' => 'filter_ghost_delete' ),
                                     ),
                                 )
@@ -1497,6 +1498,18 @@ class TSOIMMA_Admin_Page {
                                     <button id="imp-ghost-deselect" class="imp-btn imp-btn-ghost imp-btn-sm" data-i18n="deselect">Deseleccionar</button>
                                     <button id="imp-delete-ghosts" class="imp-btn imp-btn-danger imp-btn-sm">🗑️ <span data-i18n="delete_ghosts">Eliminar seleccionats</span></button>
                                     <span id="imp-ghost-delete-result" class="imp-repair-result" style="display:none;"></span>
+                                </div>
+                            </div>
+                            <div class="imp-repair-block">
+                                <p class="imp-repair-desc" data-i18n-html="msz_desc">📐 <strong class="imp-repair-title-warn">Mides que falten</strong> — Detecta imatges les metadades de les quals llisten una mida (per exemple la «mitjana») però el fitxer ja no és al disc: el web i l'administració en demanen un fitxer que dona 404. Reparar reenllaça la mida si existeix amb una altra extensió, la torna a generar si encara està registrada, o treu l'entrada si ja no cal. <strong>No es toca mai el fitxer original.</strong></p>
+                                <div class="imp-repair-row">
+                                    <button id="imp-scan-msizes" class="imp-btn imp-btn-ghost" data-i18n="msz_scan">🔍 Escanejar mides que falten</button>
+                                    <span id="imp-msizes-scan-result" class="imp-repair-result" style="display:none;"></span>
+                                </div>
+                                <div id="imp-msizes-list" class="imp-ghost-list" style="display:none;"></div>
+                                <div id="imp-msizes-actions" class="imp-repair-row imp-ghost-actions" style="display:none;">
+                                    <button id="imp-repair-msizes" class="imp-btn imp-btn-primary imp-btn-sm" data-i18n="msz_repair">🔧 Reparar</button>
+                                    <span id="imp-msizes-repair-result" class="imp-repair-result" style="display:none;"></span>
                                 </div>
                             </div>
                         </div>

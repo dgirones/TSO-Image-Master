@@ -1255,6 +1255,69 @@ class TSOIMMA_Ajax_Handler {
     }
 
     // ----------------------------------------------------------------
+    // Mides que figuren a les metadades però el fitxer no existeix
+    // ----------------------------------------------------------------
+    public static function handle_tso_im_find_missing_sizes() {
+        tsoimma_verify_ajax_nonce();
+        self::require_admin();
+
+        wp_send_json_success(
+            TSOIMMA_Missing_Sizes::scan_batch(
+                tsoimma_get_ajax_post_int( 'after_id' ),
+                tsoimma_get_ajax_post_int( 'limit', TSOIMMA_Missing_Sizes::SCAN_BATCH )
+            )
+        );
+    }
+
+    public static function handle_tso_im_repair_missing_sizes() {
+        tsoimma_verify_ajax_nonce();
+        self::require_admin();
+
+        // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
+        @set_time_limit( 300 );
+
+        $ids = array_slice( array_values( array_unique( array_filter( array_map( 'absint', tsoimma_get_ajax_post_int_array( 'ids' ) ) ) ) ), 0, TSOIMMA_Missing_Sizes::REPAIR_BATCH );
+        if ( empty( $ids ) ) {
+            wp_send_json_error( __( 'No attachment IDs were specified.', 'tso-image-master' ) );
+        }
+
+        $results     = array();
+        $totals      = array( 'relinked' => 0, 'regenerated' => 0, 'dropped' => 0 );
+        $fixed_files = array();
+        foreach ( $ids as $id ) {
+            $row       = TSOIMMA_Missing_Sizes::repair( $id );
+            $results[] = $row;
+            foreach ( $totals as $key => $unused ) {
+                $totals[ $key ] += (int) $row[ $key ];
+            }
+            if ( $row['ok'] && ( $row['relinked'] + $row['regenerated'] + $row['dropped'] ) > 0 ) {
+                $fixed_files[ (int) $row['id'] ] = $row['filename'];
+            }
+        }
+
+        if ( ! empty( $fixed_files ) ) {
+            TSOIMMA_History::log_url_action(
+                'repair_sizes',
+                array(
+                    'count'       => count( $fixed_files ),
+                    'files'       => array_slice( array_values( $fixed_files ), 0, 20 ),
+                    'relinked'    => $totals['relinked'],
+                    'regenerated' => $totals['regenerated'],
+                    'dropped'     => $totals['dropped'],
+                ),
+                (int) key( $fixed_files )
+            );
+        }
+
+        wp_send_json_success(
+            array(
+                'results' => $results,
+                'totals'  => $totals,
+            )
+        );
+    }
+
+    // ----------------------------------------------------------------
     // Escanejar i corregir URLs inconsistents al contingut
     // ----------------------------------------------------------------
     public static function handle_tso_im_scan_url_issues() {

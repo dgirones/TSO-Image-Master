@@ -649,7 +649,7 @@ class TSOIMMA_History {
      * The optional attachment ID only gives the row a thumbnail (the first affected
      * attachment); it can be 0 when the files no longer exist.
      *
-     * @param string               $action_type    url_fix|url_remove|url_restore|url_backup_delete|repair_paths|repair_mime|ghost_delete.
+     * @param string               $action_type    url_fix|url_remove|url_restore|url_backup_delete|repair_paths|repair_mime|repair_sizes|ghost_delete.
      * @param array<string, mixed> $details        Counts and a short list of names.
      * @param int                  $attachment_id  Optional attachment the row is shown with.
      * @return bool
@@ -1325,6 +1325,7 @@ class TSOIMMA_History {
             'url_backup_delete' => 'Còpia eliminada',
             'repair_paths'      => 'Paths reparats',
             'repair_mime'       => 'MIME reparats',
+            'repair_sizes'      => 'Mides reparades',
             'ghost_delete'      => 'Fantasmes eliminats',
         );
         return isset( $map[ $type ] ) ? $map[ $type ] : $type;
