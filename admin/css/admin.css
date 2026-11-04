@@ -16,6 +16,7 @@
     --imp-danger:     #ff4d6d;
     --imp-warn:       #ffd166;
     --imp-success:    #06d6a0;
+    --imp-seo-high:   #ff8a3d;
     --imp-text:       #e8eaf0;
     --imp-text-muted: #8b90a6;
     --imp-radius:     12px;
@@ -49,6 +50,7 @@
     --imp-danger:     #e11d48;
     --imp-warn:       #b45309;
     --imp-success:    #059669;
+    --imp-seo-high:   #c2410c;
     --imp-text:       #151821;
     --imp-text-muted: #5a6275;
     --imp-shadow:     0 4px 20px rgba(21,24,33,.08);
@@ -512,10 +514,20 @@
 .imp-image-card:hover .imp-card-checkbox { opacity: 1; }
 .imp-card-checkbox.checked::after { content: '✓'; font-weight: 700; }
 
-.imp-card-badges { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; gap: 4px; }
-.imp-badge-orphan  { background: var(--imp-danger); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
-.imp-badge-seo-ok  { background: var(--imp-success); color: #000; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
-.imp-badge-seo-bad { background: var(--imp-warn); color: #000; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
+.imp-card-badges { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; z-index: 2; }
+.imp-card-badges span { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; line-height: 1.3; white-space: nowrap; }
+.imp-badge-orphan   { background: var(--imp-accent); color: #fff; }
+/* SEO severity (most to least important for Google/Bing): crit = alt missing/generic, high = alt like a file name, mid = file name, low = title */
+.imp-badge-seo-ok   { background: var(--imp-success); color: #000; }
+.imp-badge-seo-crit { background: var(--imp-danger); color: #fff; }
+.imp-badge-seo-high { background: var(--imp-seo-high); color: #fff; }
+.imp-badge-seo-mid  { background: var(--imp-warn); color: #000; }
+.imp-badge-seo-low  { background: rgba(139,144,166,.85); color: #fff; }
+.imp-seo-hint { font-size: 10px; margin-top: 4px; line-height: 1.3; }
+.imp-seo-hint-crit { color: var(--imp-danger); }
+.imp-seo-hint-high { color: var(--imp-seo-high); }
+.imp-seo-hint-mid  { color: var(--imp-warn); }
+.imp-seo-hint-low  { color: var(--imp-text-muted); }
 
 .imp-card-edit-btn {
     position: absolute; bottom: 8px; right: 8px;
