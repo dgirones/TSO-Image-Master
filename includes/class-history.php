@@ -1072,7 +1072,7 @@ class TSOIMMA_History {
             'created_at'    => $row->created_at,
             'created_at_h'  => date_i18n( 'd/m/Y H:i', strtotime( $row->created_at ) ),
             'details'       => $d,
-            'thumb'         => wp_get_attachment_image_url( (int) $row->attachment_id, 'thumbnail' ) ?: '',
+            'thumb'         => TSOIMMA_Image_Manager::get_existing_image_url( (int) $row->attachment_id, 'thumbnail' ),
             'full_url'      => wp_get_attachment_image_url( (int) $row->attachment_id, 'full' ) ?: ( wp_get_attachment_url( (int) $row->attachment_id ) ?: '' ),
         );
     }

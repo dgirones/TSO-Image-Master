@@ -811,6 +811,46 @@ class TSOIMMA_Image_Manager {
     }
 
     /**
+     * URL of an image size that really exists on disk (the admin screens show many thumbnails at once).
+     *
+     * wp_get_attachment_image_url() trusts the attachment metadata, which can list a size whose file is gone
+     * (deleted by a size cleanup, or its thumbnails are still being regenerated after a conversion): the browser
+     * then requests a missing file and every 404 monitor logs it. This falls back to a smaller size and then to
+     * the original; when the original is not on this server (offloaded media) it cannot check, so it returns the
+     * normal URL.
+     *
+     * @param int    $attachment_id Attachment ID.
+     * @param string $size          Wanted size name (medium, thumbnail...).
+     * @return string URL or ''.
+     */
+    public static function get_existing_image_url( $attachment_id, $size = 'medium' ) {
+        $attachment_id = absint( $attachment_id );
+        $file          = $attachment_id > 0 ? get_attached_file( $attachment_id ) : false;
+        if ( ! $file || ! is_file( $file ) ) {
+            return (string) wp_get_attachment_image_url( $attachment_id, $size );
+        }
+
+        $meta  = wp_get_attachment_metadata( $attachment_id );
+        $sizes = is_array( $meta ) && ! empty( $meta['sizes'] ) && is_array( $meta['sizes'] ) ? $meta['sizes'] : array();
+        $dir   = trailingslashit( dirname( $file ) );
+
+        foreach ( array_unique( array( (string) $size, 'thumbnail' ) ) as $name ) {
+            if ( 'full' === $name ) {
+                break;
+            }
+            if ( empty( $sizes[ $name ]['file'] ) || ! is_file( $dir . $sizes[ $name ]['file'] ) ) {
+                continue;
+            }
+            $url = wp_get_attachment_image_url( $attachment_id, $name );
+            if ( $url ) {
+                return (string) $url;
+            }
+        }
+
+        return (string) wp_get_attachment_url( $attachment_id );
+    }
+
+    /**
      * Retorna llista paginada d'imatges amb info SEO.
      * $sort: 'date' | 'filesize' | 'modified'
      */
@@ -863,7 +903,6 @@ class TSOIMMA_Image_Manager {
                 'description'  => $post->post_content,
                 'filename'     => basename( $file_path ?? '' ),
                 'url'          => wp_get_attachment_url( $post->ID ),
-                'thumb'        => wp_get_attachment_image_url( $post->ID, 'medium' ),
                 'filesize'     => $raw_size > 0 ? size_format( $raw_size ) : '—',
                 'filesize_raw' => $raw_size,
                 'mime'         => $real_mime,
@@ -915,6 +954,11 @@ class TSOIMMA_Image_Manager {
         } else {
             $total       = (int) $query->found_posts;
             $total_pages = (int) $query->max_num_pages;
+        }
+
+        // Only the visible page gets a thumbnail URL (it checks the files on disk).
+        foreach ( $items as $i => $item ) {
+            $items[ $i ]['thumb'] = self::get_existing_image_url( $item['id'], 'medium' );
         }
 
         return [

@@ -156,7 +156,7 @@ class TSOIMMA_Dashboard {
 				'suggested_alt'  => $suggested_alt,
 				'needs_manual_alt' => '' === trim( $suggested_alt ),
 				'filename'       => $file_path ? basename( $file_path ) : '',
-				'thumb'          => wp_get_attachment_image_url( $attachment_id, 'thumbnail' ),
+				'thumb'          => TSOIMMA_Image_Manager::get_existing_image_url( $attachment_id, 'thumbnail' ),
 				'url'            => wp_get_attachment_image_url( $attachment_id, 'full' ) ?: wp_get_attachment_url( $attachment_id ),
 				'is_used'        => $is_used,
 				'used_in_count'  => $is_used ? 1 : 0,

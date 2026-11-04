@@ -879,7 +879,7 @@ class TSOIMMA_Ajax_Handler {
             'description'      => get_post_field( 'post_content', $id ),
             'filename'         => $file ? basename( $file ) : '',
             'url'              => wp_get_attachment_url( $id ),
-            'thumb'            => wp_get_attachment_image_url( $id, 'medium' ),
+            'thumb'            => TSOIMMA_Image_Manager::get_existing_image_url( $id, 'medium' ),
             'filesize'         => $file && file_exists( $file ) ? filesize( $file ) : 0,
             'filesize_h'       => $file && file_exists( $file ) ? size_format( filesize( $file ) ) : '—',
             'mime'             => $real_mime,
