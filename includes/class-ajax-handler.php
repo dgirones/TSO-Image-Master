@@ -1261,12 +1261,24 @@ class TSOIMMA_Ajax_Handler {
         tsoimma_verify_ajax_nonce();
         self::require_admin();
 
-        wp_send_json_success(
-            TSOIMMA_Missing_Sizes::scan_batch(
+        // A PHP error here used to surface only as an opaque "500": report its message instead.
+        try {
+            $batch = TSOIMMA_Missing_Sizes::scan_batch(
                 tsoimma_get_ajax_post_int( 'after_id' ),
                 tsoimma_get_ajax_post_int( 'limit', TSOIMMA_Missing_Sizes::SCAN_BATCH )
-            )
-        );
+            );
+        } catch ( \Throwable $ex ) {
+            wp_send_json_error(
+                sprintf(
+                    /* translators: %s: error message */
+                    __( 'The scan failed: %s', 'tso-image-master' ),
+                    $ex->getMessage()
+                )
+            );
+            return;
+        }
+
+        wp_send_json_success( $batch );
     }
 
     public static function handle_tso_im_repair_missing_sizes() {
@@ -1285,7 +1297,19 @@ class TSOIMMA_Ajax_Handler {
         $totals      = array( 'relinked' => 0, 'regenerated' => 0, 'dropped' => 0 );
         $fixed_files = array();
         foreach ( $ids as $id ) {
-            $row       = TSOIMMA_Missing_Sizes::repair( $id );
+            try {
+                $row = TSOIMMA_Missing_Sizes::repair( $id );
+            } catch ( \Throwable $ex ) {
+                $row = array(
+                    'id'          => $id,
+                    'ok'          => false,
+                    'error'       => $ex->getMessage(),
+                    'relinked'    => 0,
+                    'regenerated' => 0,
+                    'dropped'     => 0,
+                    'filename'    => '',
+                );
+            }
             $results[] = $row;
             foreach ( $totals as $key => $unused ) {
                 $totals[ $key ] += (int) $row[ $key ];

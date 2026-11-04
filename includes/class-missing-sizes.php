@@ -145,7 +145,9 @@ class TSOIMMA_Missing_Sizes {
 			'id'       => (int) $attachment_id,
 			'filename' => basename( $file ),
 			'missing'  => $missing,
-			'thumb'    => TSOIMMA_Image_Manager::get_existing_image_url( $attachment_id, 'thumbnail' ),
+			'thumb'    => method_exists( 'TSOIMMA_Image_Manager', 'get_existing_image_url' )
+				? TSOIMMA_Image_Manager::get_existing_image_url( $attachment_id, 'thumbnail' )
+				: (string) wp_get_attachment_image_url( $attachment_id, 'thumbnail' ),
 		);
 	}
 
